@@ -27,7 +27,7 @@ Sol/medium 主控負責需求、架構、stage 邊界、整合、驗證與最終
 
 寫入範圍重疊時不得平行派工。視覺與 server state 可以在介面契約固定後分開工作，但最後由主控完成整合驗證。
 
-## Stage 0：Repository hygiene 與測試入口
+## Task 0：Repository hygiene 與測試入口
 
 ### Test-first／驗證基線
 
@@ -67,7 +67,7 @@ git ls-files node_modules
 
 兩個 environment test 在本 stage 建立測試基線；`git ls-files node_modules` 必須沒有輸出。
 
-## Stage 1：建立可測試的 Express app seam
+## Task 1：建立可測試的 Express app seam
 
 ### Test-first
 
@@ -120,7 +120,7 @@ npm start
 
 手動確認 `http://localhost:3000/` 與未知路徑都只有一個 response。
 
-## Stage 2：RoomStore、角色 token 與倒數狀態
+## Task 2：RoomStore、角色 token 與倒數狀態
 
 ### Test-first
 
@@ -156,7 +156,7 @@ npm start
 node --test test/unit/roomStore.test.js
 ```
 
-## Stage 3：建立／加入／恢復房間的 vertical slice
+## Task 3：建立／加入／恢復房間的 vertical slice
 
 ### Test-first
 
@@ -206,7 +206,7 @@ node --test test/integration/roomRoutes.test.js
 
 手動用一般視窗與無痕視窗建立／加入同一房間，refresh 後兩邊角色不可互換。
 
-## Stage 4：GameEngine 契約與主線謎題 1
+## Task 4：GameEngine 契約與主線謎題 1
 
 ### Test-first
 
@@ -252,7 +252,7 @@ node --test test/integration/mainPuzzleOne.test.js
 
 此 stage 結束時，必須能以兩個 browser 完成第一個合作謎題；這是後續內容擴充的 architecture gate。
 
-## Stage 5：完成六個主線謎題與主線聊天室故事
+## Task 5：完成六個主線謎題與主線聊天室故事
 
 ### Test-first
 
@@ -296,7 +296,7 @@ npm run test:integration
 
 手動完成一次不碰支線的主線，確認可在 30–45 分鐘內抵達結局選擇。
 
-## Stage 6：四個隱藏支線與三種結局
+## Task 6：四個隱藏支線與三種結局
 
 ### Test-first
 
@@ -340,7 +340,7 @@ node --test test/unit/sidePuzzles.test.js test/unit/endingEngine.test.js
 npm run test:integration
 ```
 
-## Stage 7：聊天室、revision polling 與 browser client
+## Task 7：聊天室、revision polling 與 browser client
 
 ### Test-first
 
@@ -381,7 +381,7 @@ node --test test/integration/chatAndPolling.test.js
 
 手動關閉其中一個 browser 的 network，恢復後確認訊息、進度與輸入沒有重複或遺失。
 
-## Stage 8：EJS 元件化與研究所終端機視覺
+## Task 8：EJS 元件化與研究所終端機視覺
 
 ### Test-first／視覺驗收先行
 
@@ -442,7 +442,7 @@ npm run test:e2e -- test/e2e/accessibilityAndLayout.spec.js
 
 額外以 1440×900、768×1024、390×844 三種 viewport 手動查看 lobby、waiting、game、evidence、alarm、三種 ending 狀態。
 
-## Stage 9：完整雙人 E2E、legacy 移除與最後驗收
+## Task 9：完整雙人 E2E、legacy 移除與最後驗收
 
 ### Test-first
 
