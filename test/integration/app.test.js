@@ -30,7 +30,7 @@ test('test server requests do not write Morgan access logs', async () => {
   const originalWrite = process.stdout.write;
   process.stdout.write = function captureWrite(chunk, ...args) {
     writes.push(String(chunk));
-    return true;
+    return originalWrite.call(process.stdout, chunk, ...args);
   };
 
   try {
