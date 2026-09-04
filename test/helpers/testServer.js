@@ -5,6 +5,7 @@ function testServer(app) {
     return Promise.reject(new TypeError('Express app must be callable'));
   }
 
+  app.set('env', 'test');
   const server = http.createServer(app);
 
   return new Promise((resolve, reject) => {

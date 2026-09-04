@@ -19,7 +19,9 @@ app.set('view engine', 'ejs');
 
 app.use('/css', express.static(path.join(__dirname, 'public', 'css')));
 app.use('/public', express.static(path.join(__dirname, 'public')));
-app.use(logger('dev'));
+app.use(logger('dev', {
+  skip: (request) => request.app.get('env') === 'test'
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
