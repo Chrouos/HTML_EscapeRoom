@@ -5,6 +5,8 @@ const { RoomError, roomErrors } = require('./roomErrors');
 
 const COUNTDOWN_MS = 45 * 60 * 1000;
 const DEFAULT_ROOM_TTL_MS = 6 * 60 * 60 * 1000;
+const EXPIRED_TOMBSTONE_TTL_MS = 60 * 60 * 1000;
+const MAX_EXPIRED_TOMBSTONES = 1000;
 
 function generateUniqueValue(generator, usedValues) {
   let value;
@@ -17,6 +19,7 @@ function generateUniqueValue(generator, usedValues) {
 function createRoomStore(options = {}) {
   const rooms = new Map();
   const playersByToken = new Map();
+  const expiredRoomTombstones = new Map();
   const now = options.now || (() => Date.now());
   const roomTtlMs = options.roomTtlMs ?? DEFAULT_ROOM_TTL_MS;
   const generateRoomCode = options.generateRoomCode || (() => (
@@ -25,6 +28,39 @@ function createRoomStore(options = {}) {
   const generateToken = options.generateToken || (() => (
     randomBytes(32).toString('base64url')
   ));
+
+  function pruneExpiredTombstones(currentTime) {
+    for (const [roomCode, expiredAt] of expiredRoomTombstones) {
+      if (currentTime - expiredAt >= EXPIRED_TOMBSTONE_TTL_MS) {
+        expiredRoomTombstones.delete(roomCode);
+      }
+    }
+    while (expiredRoomTombstones.size > MAX_EXPIRED_TOMBSTONES) {
+      const oldestRoomCode = expiredRoomTombstones.keys().next().value;
+      expiredRoomTombstones.delete(oldestRoomCode);
+    }
+  }
+
+  function expireRoom(roomCode, room, currentTime) {
+    rooms.delete(roomCode);
+    for (const player of Object.values(room.players)) {
+      if (player && playersByToken.get(player.token)?.roomCode === roomCode) {
+        playersByToken.delete(player.token);
+      }
+    }
+    expiredRoomTombstones.delete(roomCode);
+    expiredRoomTombstones.set(roomCode, currentTime);
+    pruneExpiredTombstones(currentTime);
+  }
+
+  function cleanupExpiredRooms(currentTime) {
+    pruneExpiredTombstones(currentTime);
+    for (const [roomCode, room] of rooms) {
+      if (currentTime - room.createdAt >= roomTtlMs) {
+        expireRoom(roomCode, room, currentTime);
+      }
+    }
+  }
 
   function roomView(room, currentTime = now()) {
     const view = structuredClone(room);
@@ -45,21 +81,30 @@ function createRoomStore(options = {}) {
   }
 
   function getActiveRoom(roomCode, currentTime = now()) {
-    const room = rooms.get(String(roomCode));
+    const code = String(roomCode);
+    pruneExpiredTombstones(currentTime);
+    const room = rooms.get(code);
     if (!room) {
+      if (expiredRoomTombstones.has(code)) {
+        throw new RoomError(roomErrors.ROOM_EXPIRED, 'Room has expired');
+      }
       throw new RoomError(roomErrors.ROOM_NOT_FOUND, 'Room not found');
     }
     if (currentTime - room.createdAt >= roomTtlMs) {
+      expireRoom(code, room, currentTime);
       throw new RoomError(roomErrors.ROOM_EXPIRED, 'Room has expired');
     }
     return room;
   }
 
   function createRoom() {
-    const roomCode = generateUniqueValue(generateRoomCode, rooms);
+    const currentTime = now();
+    cleanupExpiredRooms(currentTime);
+    const roomCode = generateUniqueValue(generateRoomCode, {
+      has: code => rooms.has(code) || expiredRoomTombstones.has(code)
+    });
     const token = generateUniqueValue(generateToken, playersByToken);
 
-    const currentTime = now();
     const room = createRoomState(roomCode, currentTime);
     room.players.A = { token };
     rooms.set(roomCode, room);
@@ -112,8 +157,20 @@ function createRoomStore(options = {}) {
       return roomView(room, currentTime);
     }
 
+    const storeOwnedMetadata = {
+      roomCode: room.roomCode,
+      createdAt: room.createdAt,
+      players: structuredClone(room.players),
+      countdownStartedAt: room.countdownStartedAt,
+      processedActionIds: new Set(room.processedActionIds)
+    };
     const draft = structuredClone(room);
     updater(draft);
+    draft.roomCode = storeOwnedMetadata.roomCode;
+    draft.createdAt = storeOwnedMetadata.createdAt;
+    draft.players = storeOwnedMetadata.players;
+    draft.countdownStartedAt = storeOwnedMetadata.countdownStartedAt;
+    draft.processedActionIds = storeOwnedMetadata.processedActionIds;
     if (actionId !== undefined && actionId !== null) {
       draft.processedActionIds.add(String(actionId));
     }

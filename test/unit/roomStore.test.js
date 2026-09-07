@@ -346,3 +346,108 @@ test('retries a B token that collides with the creator token', () => {
   assert.equal(joined.player.token, 'b-token');
   assert.notEqual(joined.player.token, created.player.token);
 });
+
+test('preserves Store-owned metadata when an updater overwrites it', () => {
+  let currentTime = 1000;
+  const store = createRoomStore({
+    generateRoomCode: () => '123456',
+    generateToken: (() => {
+      const tokens = ['token-a', 'token-b'];
+      return () => tokens.shift();
+    })(),
+    now: () => currentTime
+  });
+  const created = store.createRoom();
+  const joined = store.joinRoom(created.room.roomCode);
+  store.updateRoom(created.room.roomCode, room => {
+    room.mainProgress.push('before-tamper');
+  }, { actionId: 'existing-action' });
+
+  const updated = store.updateRoom(created.room.roomCode, room => {
+    room.roomCode = '999999';
+    room.createdAt = 0;
+    room.players = { A: { token: 'forged-a' }, B: null };
+    room.countdownStartedAt = null;
+    room.processedActionIds.clear();
+    room.mainProgress.push('after-tamper');
+  }, { actionId: 'new-action' });
+
+  assert.equal(updated.roomCode, created.room.roomCode);
+  assert.equal(updated.createdAt, created.room.createdAt);
+  assert.deepEqual(updated.players, joined.room.players);
+  assert.equal(updated.countdownStartedAt, joined.room.countdownStartedAt);
+  assert.equal(store.hasProcessedAction(created.room.roomCode, 'existing-action'), true);
+  assert.equal(store.hasProcessedAction(created.room.roomCode, 'new-action'), true);
+  assert.deepEqual(updated.mainProgress, ['before-tamper', 'after-tamper']);
+});
+
+test('cleans expired room and tokens while retaining ROOM_EXPIRED for one hour', () => {
+  let currentTime = 0;
+  const store = createRoomStore({
+    generateRoomCode: (() => {
+      const roomCodes = ['123456', '123456', '654321'];
+      return () => roomCodes.shift();
+    })(),
+    generateToken: (() => {
+      const tokens = ['token-a', 'token-b', 'token-a', 'token-b', 'token-c'];
+      return () => tokens.shift();
+    })(),
+    now: () => currentTime,
+    roomTtlMs: 100
+  });
+  const expired = store.createRoom();
+  store.joinRoom(expired.room.roomCode);
+  currentTime = 100;
+
+  assert.throws(
+    () => store.getRoom(expired.room.roomCode),
+    error => error.code === 'ROOM_EXPIRED'
+  );
+  assert.throws(
+    () => store.resolvePlayer(expired.room.roomCode, expired.player.token),
+    error => error.code === 'ROOM_EXPIRED'
+  );
+  assert.throws(
+    () => store.resolvePlayer(expired.room.roomCode, 'token-b'),
+    error => error.code === 'ROOM_EXPIRED'
+  );
+
+  currentTime += 60 * 60 * 1000 + 1;
+  assert.throws(
+    () => store.resolvePlayer(expired.room.roomCode, expired.player.token),
+    error => error.code === 'ROOM_NOT_FOUND'
+  );
+
+  const replacement = store.createRoom();
+  assert.equal(replacement.room.roomCode, '123456');
+  assert.equal(replacement.player.token, 'token-a');
+});
+
+test('bounds retained expired-room tombstones to 1000 entries', () => {
+  let currentTime = 0;
+  let roomCodeIndex = 0;
+  let tokenIndex = 0;
+  const store = createRoomStore({
+    generateRoomCode: () => {
+      if (roomCodeIndex < 1001) {
+        return String(roomCodeIndex++).padStart(6, '0');
+      }
+      return roomCodeIndex++ === 1001 ? '000000' : '009999';
+    },
+    generateToken: () => `token-${tokenIndex++}`,
+    now: () => currentTime,
+    roomTtlMs: 100
+  });
+
+  const rooms = Array.from({ length: 1001 }, () => store.createRoom());
+  currentTime = 100;
+  for (const room of rooms) {
+    assert.throws(
+      () => store.getRoom(room.room.roomCode),
+      error => error.code === 'ROOM_EXPIRED'
+    );
+  }
+
+  const replacement = store.createRoom();
+  assert.equal(replacement.room.roomCode, '000000');
+});
