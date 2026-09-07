@@ -7,11 +7,23 @@ router.get('/', (request, response) => {
 });
 
 router.get('/inputRoomNo', (request, response) => {
-  response.render('inputRoomNo', { info: 'This is inputRoomNo' });
+  response.redirect(303, '/');
 });
 
 router.get('/createRoom', (request, response) => {
-  response.render('createRoom2', { info: 'This is createRoom' });
+  response.redirect(303, '/');
+});
+
+router.get('/v2/:roomCode/A', (request, response) => {
+  response.redirect(303, `/rooms/${request.params.roomCode}`);
+});
+
+router.get('/v2/:roomCode/B', (request, response) => {
+  response.redirect(303, `/rooms/${request.params.roomCode}`);
+});
+
+router.get('/v2/:roomCode', (request, response) => {
+  response.redirect(303, `/rooms/${request.params.roomCode}`);
 });
 
 router.post('/PostcreateRoom', (request, response) => {

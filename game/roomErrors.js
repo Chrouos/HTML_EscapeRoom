@@ -2,7 +2,8 @@ const roomErrors = Object.freeze({
   ROOM_NOT_FOUND: 'ROOM_NOT_FOUND',
   ROOM_EXPIRED: 'ROOM_EXPIRED',
   ROOM_FULL: 'ROOM_FULL',
-  INVALID_TOKEN: 'INVALID_TOKEN'
+  INVALID_TOKEN: 'INVALID_TOKEN',
+  TOKEN_CONFLICT: 'TOKEN_CONFLICT'
 });
 
 class RoomError extends Error {

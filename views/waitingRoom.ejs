@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>房間 <%= roomCode %>｜Escape Room</title>
+</head>
+<body>
+    <main>
+        <h1>房間 <%= roomCode %></h1>
+        <% if (error) { %>
+            <section role="alert" aria-labelledby="error-heading">
+                <h2 id="error-heading">無法恢復房間</h2>
+                <p><%= error.message %></p>
+                <a href="/">回到大廳</a>
+            </section>
+        <% } else if (state && state.role) { %>
+            <p>目前角色 <strong>角色 <%= state.role %></strong></p>
+            <p>房間狀態：<%= state.occupancy.ready ? '兩位玩家已就緒' : '等待另一位玩家加入' %></p>
+            <p>終端機已連線。設施正在確認兩位受試者的生命訊號。</p>
+        <% } else { %>
+            <p>等待玩家加入。這個頁面不會替訪客預先選擇角色。</p>
+            <p>目前 <%= state.occupancy.count %> / <%= state.occupancy.capacity %> 位玩家已加入。</p>
+            <% if (canJoin) { %>
+                <form method="post" action="/rooms/join">
+                    <input type="hidden" name="roomCode" value="<%= roomCode %>">
+                    <button type="submit">加入房間（玩家 B）</button>
+                </form>
+            <% } else { %>
+                <p>兩個角色都已有人加入，請使用原本的瀏覽器工作階段。</p>
+            <% } %>
+        <% } %>
+    </main>
+</body>
+</html>

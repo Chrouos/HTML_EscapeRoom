@@ -1,22 +1,30 @@
-<%- include('header'); -%>
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Escape Room｜研究設施大廳</title>
+</head>
+<body>
+    <main id="lobby">
+        <h1>Escape Room</h1>
+        <p>雙人研究設施逃脫遊戲。建立房間後，把六位數房號交給另一位玩家。</p>
 
-<!-- lobby -->
-<header class="masthead">
-    <!-- background -->
-    <div class="container px-4 px-lg-5 d-flex h-100 align-items-center justify-content-center">
-        <div class="d-flex justify-content-center">
-            <div class="text-center">
-                <h1 class="mx-auto my-0 text-uppercase">ESCAPE ROOM</h1>
-                <h2 class="text-white-50 mx-auto mt-2 mb-5">歡迎來到密室逃脫遊戲，這是一款雙人遊戲</h2>
-                <a class="btn btn-outline-light" href="/createRoom">
-                    <font size="5">創建房間</font>
-                </a>
-                <a class="btn btn-outline-light" href="/inputRoomNo">
-                    <font size="5">輸入房號</font>
-                </a>
-            </div>
-        </div>
-    </div>
-</header>
+        <section aria-labelledby="create-heading">
+            <h2 id="create-heading">建立新房間</h2>
+            <form method="post" action="/rooms">
+                <button type="submit">建立房間（玩家 A）</button>
+            </form>
+        </section>
 
-<%- include('footer'); -%>
+        <section aria-labelledby="join-heading">
+            <h2 id="join-heading">加入現有房間</h2>
+            <form method="post" action="/rooms/join">
+                <label for="roomCode">六位數房號</label>
+                <input id="roomCode" name="roomCode" inputmode="numeric" pattern="[0-9]{6}" required>
+                <button type="submit">加入房間（玩家 B）</button>
+            </form>
+        </section>
+    </main>
+</body>
+</html>

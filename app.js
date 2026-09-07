@@ -2,12 +2,18 @@ const path = require('node:path');
 const express = require('express');
 const logger = require('morgan');
 
-const apiRoutes = require('./apiroutes');
+const legacyApiRoutes = require('./apiroutes');
+const { createApiRoutes } = require('./routes/apiRoutes');
+const { createRoomStore } = require('./game/roomStore');
+const { createRoomRoutes } = require('./routes/roomRoutes');
 const v2Routes = require('./v2routes');
 const pageRoutes = require('./routes/pageRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
+const roomStore = createRoomStore();
+
+app.locals.roomStore = roomStore;
 
 app.locals.entries = [
   { roomNo: 1234, user: '上天大人', chatContent: '你們被不小心困在這裡了，請同心協力一起離開！這裡是留言板，好好溝通吧！' },
@@ -25,8 +31,10 @@ app.use(logger('dev', {
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+app.use('/', createRoomRoutes(roomStore));
+app.use('/api', createApiRoutes(roomStore));
 app.use('/', pageRoutes);
-app.use('/api', apiRoutes);
+app.use('/api', legacyApiRoutes);
 app.use('/v2', v2Routes);
 
 app.use('/api', errorHandler.apiNotFoundHandler);
