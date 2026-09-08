@@ -1,30 +1,79 @@
 <!doctype html>
 <html lang="zh-Hant">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Escape Room｜研究設施大廳</title>
-</head>
-<body>
-    <main id="lobby">
-        <h1>Escape Room</h1>
-        <p>雙人研究設施逃脫遊戲。建立房間後，把六位數房號交給另一位玩家。</p>
+<%- include('partials/head', { title: 'ORPHEUS // SUBJECT LINK' }) %>
+<body class="terminal-body">
+    <div class="site-shell">
+        <header class="site-header shell-width">
+            <a class="wordmark" href="/" aria-label="回到 ORPHEUS 入口">
+                <span class="wordmark-main">ORPHEUS</span>
+                <span class="wordmark-sub">SUBJECT LINK / 02</span>
+            </a>
+            <div class="header-readout" aria-label="設施讀值">
+                <span class="readout-dot" aria-hidden="true"></span>
+                <span>FACILITY NODE 07</span>
+                <span class="readout-divider" aria-hidden="true">//</span>
+                <span>STANDBY</span>
+            </div>
+        </header>
 
-        <section aria-labelledby="create-heading">
-            <h2 id="create-heading">建立新房間</h2>
-            <form method="post" action="/rooms">
-                <button type="submit">建立房間（玩家 A）</button>
-            </form>
-        </section>
+        <main id="lobby" class="lobby-shell shell-width">
+            <section class="lobby-intro" aria-labelledby="lobby-title">
+                <p class="eyebrow">RESEARCH FACILITY / ACCESS TERMINAL</p>
+                <h1 id="lobby-title">另一端，有人。<br>你們能一起離開嗎？</h1>
+                <p class="intro-copy">這座研究設施已停止運作，但 ORPHEUS 終端機仍在等待兩位受試者。建立或加入一個房間，開始交換各自看見的線索。</p>
+                <div class="intro-note" role="note">
+                    <span class="note-mark" aria-hidden="true">[!]</span>
+                    <span>兩位玩家將分別接收不同資料。請保留房號，並透過通訊頻道協作。</span>
+                </div>
+                <div class="facility-diagram" aria-hidden="true">
+                    <svg viewBox="0 0 340 220" fill="none">
+                        <path d="M22 24h96v65H22zM222 24h96v65h-96zM115 142h110v58H115z" stroke="currentColor" stroke-width="1"/>
+                        <path d="M70 89v28h100v25M270 89v28H170" stroke="currentColor" stroke-dasharray="3 5"/>
+                        <path d="M12 14h18M12 14v18M328 14h-18M328 14v18M105 210h18M105 210v-18M235 210h-18M235 210v-18" stroke="currentColor" opacity=".4"/>
+                        <circle cx="70" cy="51" r="8" stroke="currentColor"/><circle cx="270" cy="51" r="8" stroke="#dfb974"/>
+                        <circle cx="170" cy="117" r="3" fill="currentColor"/>
+                        <text x="38" y="76">SUBJECT A</text><text x="238" y="76">SUBJECT B</text><text x="137" y="167">ORPHEUS</text><text x="129" y="187" font-size="8">SIGNAL ACTIVE</text>
+                    </svg>
+                </div>
+            </section>
 
-        <section aria-labelledby="join-heading">
-            <h2 id="join-heading">加入現有房間</h2>
-            <form method="post" action="/rooms/join">
-                <label for="roomCode">六位數房號</label>
-                <input id="roomCode" name="roomCode" inputmode="numeric" pattern="[0-9]{6}" required>
-                <button type="submit">加入房間（玩家 B）</button>
-            </form>
-        </section>
-    </main>
+            <section class="lobby-grid" aria-label="房間操作">
+                <article class="terminal-panel lobby-card role-card role-card-a" aria-labelledby="create-heading">
+                    <div class="card-topline">
+                        <span class="role-badge role-badge-a">玩家 A</span>
+                        <span class="panel-index">01 / CREATE</span>
+                    </div>
+                    <h2 id="create-heading">建立研究房間</h2>
+                    <p>由玩家 A 啟動一個新的 SUBJECT LINK，取得六位數房號後交給另一位玩家。</p>
+                    <form method="post" action="/rooms">
+                        <button class="button button-primary" type="submit">建立房間（玩家 A）<span aria-hidden="true">→</span></button>
+                    </form>
+                </article>
+
+                <article class="terminal-panel lobby-card role-card role-card-b" aria-labelledby="join-heading">
+                    <div class="card-topline">
+                        <span class="role-badge role-badge-b">玩家 B</span>
+                        <span class="panel-index">02 / JOIN</span>
+                    </div>
+                    <h2 id="join-heading">加入研究房間</h2>
+                    <p>輸入玩家 A 分享的房號。連線後，你會收到另一組不可見於 A 端的研究資料。</p>
+                    <form method="post" action="/rooms/join">
+                        <label for="roomCode">六位數房號</label>
+                        <div class="input-action-row">
+                            <input id="roomCode" name="roomCode" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" required autocomplete="one-time-code" placeholder="000000">
+                            <button class="button button-secondary" type="submit">加入房間（玩家 B）<span aria-hidden="true">→</span></button>
+                        </div>
+                    </form>
+                </article>
+            </section>
+
+            <section class="lobby-status-band" aria-label="系統提示">
+                <span class="status-key">SYSTEM NOTE</span>
+                <span>建議使用兩個獨立瀏覽器或無痕視窗。伺服器重新啟動後，房間進度會清除。</span>
+            </section>
+        </main>
+
+        <%- include('partials/footer') %>
+    </div>
 </body>
 </html>

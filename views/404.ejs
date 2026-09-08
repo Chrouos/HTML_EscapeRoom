@@ -1,15 +1,10 @@
 <!doctype html>
 <html lang="zh-Hant">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>找不到頁面｜Escape Room</title>
-</head>
-<body>
-    <main>
-        <h1>找不到這個頁面（404）</h1>
-        <p>房間可能不存在、已過期，或網址輸入錯誤。</p>
-        <a href="/">回到大廳</a>
-    </main>
+<%- include('partials/head', { title: '找不到頁面｜ORPHEUS' }) %>
+<body class="terminal-body">
+  <main class="shell-width room-shell"><section class="terminal-panel error-panel">
+    <p class="eyebrow">404 / SIGNAL LOST</p><h1>找不到這個頁面</h1>
+    <p>房間可能不存在、已過期，或網址輸入錯誤。</p><a class="button button-primary" href="/">回到大廳</a>
+  </section></main>
 </body>
 </html>

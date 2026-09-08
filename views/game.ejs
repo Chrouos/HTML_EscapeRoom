@@ -1,0 +1,17 @@
+<section data-game-room="<%= roomCode %>" class="game-shell role-<%= state.role.toLowerCase() %>" aria-label="研究終端">
+  <%- include('partials/statusBar', { roomCode, state }) %>
+  <section data-ending class="ending-panel terminal-panel" aria-label="實驗結局" hidden></section>
+  <div class="game-columns">
+    <%- include('partials/chatPanel') %>
+    <aside class="investigation-column" aria-label="線索與調查">
+      <%- include('partials/puzzlePanel') %>
+      <%- include('partials/evidencePanel') %>
+      <section class="terminal-panel side-panel" aria-labelledby="side-heading">
+        <div class="panel-heading"><span class="panel-index">04 / RECORDS</span><h2 id="side-heading">異常紀錄</h2></div>
+        <p class="muted">不影響主線。值得多看一眼的地方，往往不在指示裡。</p>
+        <div data-sides></div>
+      </section>
+    </aside>
+  </div>
+</section>
+<script src="/public/js/game.js" defer></script>

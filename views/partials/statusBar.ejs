@@ -1,0 +1,7 @@
+<div class="status-bar">
+  <div class="status-identity"><span class="eyebrow">YOUR TERMINAL</span><h1>角色 <%= state.role %></h1></div>
+  <div><span class="status-key">ROOM / 房號</span><strong class="status-value"><%= roomCode %></strong></div>
+  <div class="status-stage"><span class="status-key">EXPERIMENT / 實驗階段</span><strong data-stage class="status-value">設施初始化</strong></div>
+  <div><span class="status-key">CONTAINMENT / 隔離倒數</span><strong data-countdown class="countdown">等待連線</strong></div>
+</div>
+<div class="connection-band"><span class="readout-dot" aria-hidden="true"></span><span data-connection role="status">正在連接終端機</span><span data-occupancy class="muted">房間狀態：<%= state.occupancy.ready ? '兩位玩家已就緒' : '等待另一位玩家加入' %></span></div>

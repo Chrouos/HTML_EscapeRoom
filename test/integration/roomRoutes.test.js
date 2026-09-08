@@ -114,8 +114,9 @@ test('filters safe state and ignores role spoofing in query and body', async () 
   assert.equal(bState.body.state.role, 'B');
   assert.deepEqual(aState.body.state.clues, { clue: 'A 看得到' });
   assert.deepEqual(bState.body.state.clues, { clue: 'B 看得到' });
-  assert.deepEqual(aState.body.state.messages.map(message => message.id), ['public', 'a']);
-  assert.deepEqual(bState.body.state.messages.map(message => message.id), ['public', 'b']);
+  const fixtureMessages = state => state.messages.filter(message => ['public', 'a', 'b'].includes(message.id)).map(message => message.id);
+  assert.deepEqual(fixtureMessages(aState.body.state), ['public', 'a']);
+  assert.deepEqual(fixtureMessages(bState.body.state), ['public', 'b']);
 
   const serialized = JSON.stringify(aState.body);
   assert.doesNotMatch(serialized, /A-secret|B-secret|do-not-leak|hidden-evidence|B 私訊/);

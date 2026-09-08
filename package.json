@@ -8,7 +8,9 @@
     "dev": "nodemon server.js",
     "test:unit": "node --test \"test/unit/**/*.test.js\"",
     "test:integration": "node --test \"test/integration/**/*.test.js\"",
-    "test": "npm run test:unit && npm run test:integration"
+    "test": "npm run test:unit && npm run test:integration",
+    "test:e2e": "playwright test",
+    "check": "npm test && npm run test:e2e"
   },
   "engines": {
     "node": ">=20"
@@ -20,5 +22,8 @@
     "express": "^4.17.2",
     "morgan": "^1.10.0",
     "nodemon": "^2.0.15"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
   }
 }
