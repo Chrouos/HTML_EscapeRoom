@@ -148,6 +148,32 @@ test('returns the same room state for repeated reads and token resolution', () =
   );
 });
 
+test('does not let nested mutations of returned room snapshots alter stored state', () => {
+  const store = createRoomStore({
+    generateRoomCode: () => '123456',
+    generateToken: () => 'token-a',
+    now: () => 1000
+  });
+  const created = store.createRoom();
+  const roomCode = created.room.roomCode;
+
+  const snapshots = [
+    created.room,
+    store.getRoom(roomCode),
+    store.resolvePlayer(roomCode, created.player.token).room
+  ];
+
+  snapshots.forEach((snapshot, index) => {
+    const marker = `snapshot-mutation-${index}`;
+    snapshot.players.A.token = marker;
+    snapshot.mainProgress.push(marker);
+
+    const persisted = store.getRoom(roomCode);
+    assert.equal(persisted.players.A.token, created.player.token);
+    assert.equal(persisted.mainProgress.includes(marker), false);
+  });
+});
+
 test('starts the countdown only after the second player joins', () => {
   const times = [1000, 2000];
   const store = createRoomStore({

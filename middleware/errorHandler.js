@@ -36,7 +36,7 @@ function errorHandler(error, request, response, next) {
     return;
   }
 
-  response.status(status).render('404');
+  response.status(status).render(status >= 500 ? '500' : '404');
 }
 
 module.exports = errorHandler;
