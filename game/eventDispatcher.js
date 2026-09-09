@@ -9,7 +9,31 @@ function actorIdentity(room, role) {
   return player ? { role, playerId: player.playerId } : null;
 }
 
-function resolveContentEvent(draft, event) {
+function readOnlyView(value, seen = new WeakMap()) {
+  if (!value || typeof value !== 'object') return value;
+  if (seen.has(value)) return seen.get(value);
+
+  const view = new Proxy(value, {
+    get(target, property) {
+      if (target instanceof Set) {
+        if (['add', 'clear', 'delete'].includes(property)) {
+          return () => { throw new TypeError('Resolver view is read-only'); };
+        }
+        const member = Reflect.get(target, property, target);
+        return typeof member === 'function' ? member.bind(target) : member;
+      }
+      return readOnlyView(Reflect.get(target, property, target), seen);
+    },
+    set() { throw new TypeError('Resolver view is read-only'); },
+    deleteProperty() { throw new TypeError('Resolver view is read-only'); },
+    defineProperty() { throw new TypeError('Resolver view is read-only'); },
+    setPrototypeOf() { throw new TypeError('Resolver view is read-only'); }
+  });
+  seen.set(value, view);
+  return view;
+}
+
+function resolveContentEvent(draft, resolverDraft, event) {
   if (!event || typeof event !== 'object' || Array.isArray(event)) {
     throw new TypeError('Content event must be an object');
   }
@@ -21,7 +45,7 @@ function resolveContentEvent(draft, event) {
   }
 
   const resolvedText = typeof event.text === 'function'
-    ? event.text(draft)
+    ? event.text(resolverDraft)
     : event.text;
   if (typeof resolvedText !== 'string') {
     throw new TypeError('Content event text must resolve to a string');
@@ -62,7 +86,8 @@ function dispatchProjectionChanges({ before, draft, events = [] }) {
     }
   }
 
-  const resolvedEvents = events.map(event => resolveContentEvent(draft, event));
+  const resolverDraft = readOnlyView(draft);
+  const resolvedEvents = events.map(event => resolveContentEvent(draft, resolverDraft, event));
   for (const resolved of resolvedEvents) {
     appendResolvedContent(draft, resolved);
   }

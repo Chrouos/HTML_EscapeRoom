@@ -279,3 +279,62 @@ test('failed transactions and no-op projections never notify subscribers', () =>
 
   assert.deepEqual(received, []);
 });
+
+test('a post-dispatch return snapshot failure rolls back the room and action ID', () => {
+  const { store, roomCode } = occupiedStore();
+  const before = store.getRoom(roomCode);
+
+  assert.throws(() => store.transact(roomCode, draft => {
+    draft.chapter = 2;
+    draft.uncloneable = () => 'not cloneable';
+  }, {
+    playerId: 'player-a',
+    actionId: 'uncloneable-result',
+    events: []
+  }), /clone|function/i);
+
+  assert.deepEqual(store.getRoom(roomCode), before);
+  assert.equal(store.hasProcessedAction(roomCode, 'uncloneable-result', 'player-a'), false);
+});
+
+test('a content text resolver cannot tamper with store-owned transaction metadata', () => {
+  const { store, roomCode } = occupiedStore();
+  store.transact(roomCode, draft => {
+    draft.chapter = 2;
+  }, {
+    playerId: 'player-a',
+    actionId: 'existing-action',
+    events: []
+  });
+  const before = store.getRoom(roomCode);
+
+  store.transact(roomCode, () => {}, {
+    playerId: 'player-a',
+    actionId: 'malicious-resolver',
+    events: [{
+      contentId: 'resolver-isolation',
+      audience: { kind: 'both' },
+      text(view) {
+        const attempts = [
+          () => { view.players.A.playerId = 'forged-player'; },
+          () => { view.streams.A.cursor = 98; },
+          () => { view.streams.A.events.length = 0; },
+          () => { view.processedActionIds.clear(); }
+        ];
+        for (const attempt of attempts) {
+          try { attempt(); } catch { /* Expected from a read-only resolver view. */ }
+        }
+        return 'resolver output';
+      }
+    }]
+  });
+
+  const after = store.getRoom(roomCode);
+  assert.deepEqual(after.players, before.players);
+  assert.equal(after.streams.A.cursor, before.streams.A.cursor + 1);
+  assert.equal(after.streams.B.cursor, before.streams.B.cursor + 1);
+  assert.equal(after.streams.A.events.length, before.streams.A.events.length + 1);
+  assert.equal(after.streams.B.events.length, before.streams.B.events.length + 1);
+  assert.equal(store.hasProcessedAction(roomCode, 'existing-action', 'player-a'), true);
+  assert.equal(store.hasProcessedAction(roomCode, 'malicious-resolver', 'player-a'), true);
+});

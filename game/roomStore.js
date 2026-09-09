@@ -176,13 +176,20 @@ function createRoomStore(options = {}) {
     return `${String(playerId)}:${String(actionId)}`;
   }
 
-  function restoreStoreOwnedMetadata(draft, room, owned) {
+  function restoreStoreOwnedMetadata(draft, room) {
     draft.roomCode = room.roomCode;
     draft.createdAt = room.createdAt;
-    draft.players = owned.players;
-    draft.streams = owned.streams;
+    draft.players = Object.fromEntries(['A', 'B'].map(role => [
+      role,
+      room.players[role] ? { ...room.players[role] } : null
+    ]));
+    draft.streams = Object.fromEntries(['A', 'B'].map(role => [role, {
+      cursor: room.streams[role].cursor,
+      acknowledgedCursor: room.streams[role].acknowledgedCursor,
+      events: [...room.streams[role].events]
+    }]));
     draft.countdownStartedAt = room.countdownStartedAt;
-    draft.processedActionIds = owned.processedActionIds;
+    draft.processedActionIds = new Set(room.processedActionIds);
   }
 
   function notifySubscribers(roomCode, envelopes) {
@@ -220,22 +227,18 @@ function createRoomStore(options = {}) {
       return roomView(room, currentTime);
     }
 
-    const owned = structuredClone({
-      players: room.players,
-      streams: room.streams,
-      processedActionIds: room.processedActionIds
-    });
     const draft = structuredClone(room);
     updater(draft);
-    restoreStoreOwnedMetadata(draft, room, owned);
+    restoreStoreOwnedMetadata(draft, room);
     const envelopes = dispatchChanges
       ? dispatchProjectionChanges({ before: room, draft, events: options.events || [] })
       : {};
     if (key) draft.processedActionIds.add(key);
     draft.revision = room.revision + 1;
+    const committedView = roomView(draft, currentTime);
     rooms.set(code, draft);
     notifySubscribers(code, envelopes);
-    return roomView(draft, currentTime);
+    return committedView;
   }
 
   function transact(roomCode, updater, options = {}) {
