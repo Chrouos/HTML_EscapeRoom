@@ -102,7 +102,7 @@ test('filters safe state and ignores role spoofing in query and body', async () 
     ];
     room.answers = { main: 'do-not-leak' };
     room.messages = [
-      { id: 'public', text: '公開' },
+      { id: 'public', audience: { kind: 'both' }, text: '公開' },
       { id: 'a', audience: 'A', text: 'A 私訊' },
       { id: 'b', audience: 'B', text: 'B 私訊' }
     ];

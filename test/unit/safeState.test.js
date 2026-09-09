@@ -1,74 +1,154 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { forPlayer } = require('../../game/safeState');
+const { projectForPlayer, stateResponse } = require('../../game/safeState');
 
 function fixtureRoom() {
   return {
     roomCode: '123456',
-    createdAt: 1000,
     players: {
-      A: { token: 'token-a', privateClues: { identity: 'A-only' } },
-      B: { token: 'token-b', privateClues: { identity: 'B-only' }
-      }
+      A: { token: 'token-a', playerId: 'player-a' },
+      B: { token: 'token-b', playerId: 'player-b' }
     },
-    chapter: 2,
-    mainProgress: ['facility-init'],
-    sideEvidence: [
-      { id: 'timestamp', title: '監控時間戳', summary: '兩段記錄不在同一天', discovered: true },
-      { id: 'hidden', title: '未公開證據', summary: 'do-not-leak', discovered: false }
-    ],
-    privateClues: {
-      A: { identity: 'A-only', answer: 'secret-a' },
-      B: { identity: 'B-only', answer: 'secret-b' }
+    streams: {
+      A: { cursor: 4, acknowledgedCursor: 3, events: [{ cursor: 4 }] },
+      B: { cursor: 7, acknowledgedCursor: 6, events: [{ cursor: 7 }] }
     },
-    answers: { facilityInit: 'never-send-this' },
+    publicProgress: { chapter: 2, mainProgress: ['facility-init'] },
     messages: [
-      { id: 'public', text: '公開訊息' },
-      { id: 'a-only', audience: 'A', text: 'A 的訊息' },
-      { id: 'b-only', audience: 'B', text: 'B 的訊息' }
+      { id: 'public', sequence: 10, audience: { kind: 'both' }, text: 'Public message' },
+      { id: 'a-only', sequence: 11, audience: { kind: 'player', playerId: 'player-a' }, text: 'A message' },
+      { id: 'b-only', sequence: 12, audience: { kind: 'role', role: 'guest' }, text: 'B message' }
     ],
+    workstation: {
+      A: { unlockedEntryIds: ['shared', 'a-record'], roleFacts: ['A discovered fact'] },
+      B: { unlockedEntryIds: ['shared', 'b-record'], roleFacts: ['B discovered fact'] }
+    },
+    privateMissions: {
+      A: [{ id: 'mission-a', state: 'offered', audience: { kind: 'player', playerId: 'player-a' } }],
+      B: [{ id: 'mission-b', state: 'locked', audience: { kind: 'player', playerId: 'player-b' } }]
+    },
+    sideEvidence: [
+      { id: 'timestamp', title: 'Timestamp mismatch', summary: 'Two dates', discovered: true },
+      { id: 'hidden', title: 'Hidden evidence', summary: 'do-not-leak', discovered: false }
+    ],
+    ending: null,
+    debrief: null,
     countdownStatus: 'running',
     countdownRemainingMs: 1234,
-    ending: null,
-    revision: 7
+    revision: 99
   };
 }
 
-test('forPlayer returns only the current role safe state', () => {
-  const state = forPlayer(fixtureRoom(), { role: 'A' });
+test('projectForPlayer returns the exact canonical actor projection without transport or delivery metadata', () => {
+  const state = projectForPlayer(fixtureRoom(), { role: 'A', playerId: 'player-a' });
 
-  assert.deepEqual(state.roomCode, '123456');
-  assert.equal(state.role, 'A');
-  assert.deepEqual(state.occupancy, {
-    A: true,
-    B: true,
-    count: 2,
-    capacity: 2,
-    ready: true
-  });
-  assert.deepEqual(state.publicProgress, {
-    chapter: 2,
-    mainProgress: ['facility-init']
-  });
-  assert.deepEqual(state.messages.map(message => message.id), ['public', 'a-only']);
-  assert.deepEqual(state.discoveredEvidence, [
-    { id: 'timestamp', title: '監控時間戳', summary: '兩段記錄不在同一天' }
+  assert.deepEqual(Object.keys(state), [
+    'roomCode',
+    'role',
+    'occupancy',
+    'publicProgress',
+    'intercom',
+    'workstation',
+    'privateMissions',
+    'discoveredEvidence',
+    'ending',
+    'debrief'
   ]);
-  assert.deepEqual(state.countdown, { status: 'running', remainingMs: 1234 });
-  assert.deepEqual(state.clues, { identity: 'A-only' });
-  assert.equal(state.revision, 7);
-  assert.equal(state.ending, null);
+  assert.deepEqual(state.intercom, [
+    { id: 'public', text: 'Public message' },
+    { id: 'a-only', text: 'A message' }
+  ]);
+  assert.deepEqual(state.workstation, {
+    unlockedEntryIds: ['shared', 'a-record'],
+    roleFacts: ['A discovered fact']
+  });
+  assert.deepEqual(state.privateMissions, [{ id: 'mission-a', state: 'offered' }]);
+  assert.deepEqual(state.discoveredEvidence, [
+    { id: 'timestamp', title: 'Timestamp mismatch', summary: 'Two dates' }
+  ]);
 
   const serialized = JSON.stringify(state);
-  assert.doesNotMatch(serialized, /token-a|token-b|never-send-this|secret-a|secret-b|do-not-leak|B-only/);
+  assert.doesNotMatch(serialized, /token|playerId|streams|audience|revision|sequence|cursor|do-not-leak|B discovered fact|mission-b/);
 });
 
-test('forPlayer changes visible clues and audience messages by token-resolved role', () => {
-  const state = forPlayer(fixtureRoom(), { role: 'B' });
+test('a hidden-only mutation leaves the non-recipient canonical response byte-identical', () => {
+  const room = fixtureRoom();
+  const playerB = { role: 'B', playerId: 'player-b' };
+  const before = JSON.stringify(projectForPlayer(room, playerB));
 
-  assert.equal(state.role, 'B');
-  assert.deepEqual(state.clues, { identity: 'B-only' });
-  assert.deepEqual(state.messages.map(message => message.id), ['public', 'b-only']);
-  assert.doesNotMatch(JSON.stringify(state), /A-only|secret-a/);
+  room.workstation.A.roleFacts.push('A hidden mutation');
+  room.privateMissions.A[0].state = 'completed';
+  room.messages.push({
+    id: 'a-hidden',
+    sequence: 13,
+    audience: { kind: 'player', playerId: 'player-a' },
+    text: 'Only A receives this'
+  });
+  room.streams.A.cursor += 1;
+  room.streams.A.events.push({ cursor: 5, audience: { kind: 'player', playerId: 'player-a' } });
+  room.revision += 1;
+
+  assert.equal(JSON.stringify(projectForPlayer(room, playerB)), before);
+});
+
+test('a shared authoritative intercom array requires explicit audiences and selects only the actor', () => {
+  const room = fixtureRoom();
+  room.intercom = [
+    { id: 'both', audience: { kind: 'both' }, text: 'For both' },
+    { id: 'a', audience: { kind: 'role', role: 'host' }, text: 'For A' },
+    { id: 'b', audience: { kind: 'player', playerId: 'player-b' }, text: 'For B' }
+  ];
+
+  assert.deepEqual(
+    projectForPlayer(room, { role: 'A', playerId: 'player-a' }).intercom,
+    [
+      { id: 'both', text: 'For both' },
+      { id: 'a', text: 'For A' }
+    ]
+  );
+});
+
+test('projectForPlayer rejects a role or playerId that does not match an occupied room identity', () => {
+  const room = fixtureRoom();
+
+  assert.throws(
+    () => projectForPlayer(room, { role: 'A', playerId: 'unknown' }),
+    { name: 'TypeError', message: 'Player identity does not match room' }
+  );
+  assert.throws(
+    () => projectForPlayer(room, { role: 'host', playerId: 'player-a' }),
+    { name: 'TypeError', message: 'Player identity does not match room' }
+  );
+});
+
+test('missing or malformed message audiences fail closed', () => {
+  const room = fixtureRoom();
+  room.messages.push({ id: 'implicit-public', text: 'Must not become public' });
+
+  assert.throws(
+    () => projectForPlayer(room, { role: 'A', playerId: 'player-a' }),
+    error => error instanceof TypeError && /Audience/.test(error.message)
+  );
+});
+
+test('stateResponse keeps cursor outside canonical state and recalculates countdown when unchanged', () => {
+  const room = fixtureRoom();
+  const playerA = { role: 'A', playerId: 'player-a' };
+
+  assert.deepEqual(stateResponse(room, playerA, 3), {
+    success: true,
+    unchanged: false,
+    cursor: 4,
+    state: projectForPlayer(room, playerA),
+    countdown: { status: 'running', remainingMs: 1234 }
+  });
+
+  room.countdownRemainingMs = 987;
+  assert.deepEqual(stateResponse(room, playerA, 4), {
+    success: true,
+    unchanged: true,
+    cursor: 4,
+    countdown: { status: 'running', remainingMs: 987 }
+  });
 });

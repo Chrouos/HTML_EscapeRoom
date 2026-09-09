@@ -24,13 +24,19 @@ function act(room, puzzleId, stepId, value, role = 'A') {
 }
 function ready() {
   const room = createRoomState('123456', 0);
-  room.players = { A: { token: 'A-token' }, B: { token: 'B-token' } };
+  room.players = {
+    A: { token: 'A-token', playerId: 'player-a' },
+    B: { token: 'B-token', playerId: 'player-b' }
+  };
   initializeGame(room);
   return room;
 }
 function reachExit(room) {
   for (const [puzzleId, steps] of main) for (const [stepId, value] of steps) {
-    assert.notDeepEqual(forPlayer(room, 'A').clues, forPlayer(room, 'B').clues);
+    assert.notDeepEqual(
+      forPlayer(room, { role: 'A', playerId: 'player-a' }).clues,
+      forPlayer(room, { role: 'B', playerId: 'player-b' }).clues
+    );
     const result = act(room, puzzleId, stepId, value);
     assert.equal(result.publicResult.correct, true, `${puzzleId}/${stepId}`);
   }
@@ -71,7 +77,7 @@ for (const [count, choice, ending] of [[2, 'RESIST', 'resistance'], [4, 'TRUTH',
     act(room, 'main6', 'ending', choice);
     assert.equal(room.ending.id, ending);
     assert.equal(room.mainProgress.length, 6);
-    const state = JSON.stringify(forPlayer(room, 'A'));
+    const state = JSON.stringify(forPlayer(room, { role: 'A', playerId: 'player-a' }));
     assert.doesNotMatch(state, /A-token|B-token|"answer"|"acceptedAnswers"/);
     const messages = room.messages;
     assert.equal(new Set(messages.map(message => message.id)).size, messages.length);
