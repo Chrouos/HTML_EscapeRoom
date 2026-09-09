@@ -1,6 +1,7 @@
 const { randomBytes, randomInt } = require('node:crypto');
 
 const { createRoomState } = require('./createRoomState');
+const { dispatchProjectionChanges } = require('./eventDispatcher');
 const { RoomError, roomErrors } = require('./roomErrors');
 
 const COUNTDOWN_MS = 45 * 60 * 1000;
@@ -21,6 +22,7 @@ function createRoomStore(options = {}) {
   const playersByToken = new Map();
   const playerIds = new Set();
   const expiredRoomTombstones = new Map();
+  const subscribersByRoom = new Map();
   const now = options.now || (() => Date.now());
   const roomTtlMs = options.roomTtlMs ?? DEFAULT_ROOM_TTL_MS;
   const generateRoomCode = options.generateRoomCode || (() => (
@@ -47,6 +49,7 @@ function createRoomStore(options = {}) {
 
   function expireRoom(roomCode, room, currentTime) {
     rooms.delete(roomCode);
+    subscribersByRoom.delete(roomCode);
     for (const player of Object.values(room.players)) {
       if (player && playersByToken.get(player.token)?.roomCode === roomCode) {
         playersByToken.delete(player.token);
@@ -169,45 +172,109 @@ function createRoomStore(options = {}) {
     };
   }
 
-  function updateRoom(roomCode, updater, options = {}) {
+  function actionKey(playerId, actionId) {
+    return `${String(playerId)}:${String(actionId)}`;
+  }
+
+  function restoreStoreOwnedMetadata(draft, room, owned) {
+    draft.roomCode = room.roomCode;
+    draft.createdAt = room.createdAt;
+    draft.players = owned.players;
+    draft.streams = owned.streams;
+    draft.countdownStartedAt = room.countdownStartedAt;
+    draft.processedActionIds = owned.processedActionIds;
+  }
+
+  function notifySubscribers(roomCode, envelopes) {
+    if (Object.keys(envelopes).length === 0) return;
+    const listeners = subscribersByRoom.get(roomCode);
+    if (!listeners) return;
+
+    for (const listener of [...listeners]) {
+      try {
+        listener(structuredClone({ roomCode, envelopes }));
+      } catch {
+        // Subscriber failures are isolated from the already committed transaction.
+      }
+    }
+  }
+
+  function commitTransaction(roomCode, updater, options, dispatchChanges) {
     const code = String(roomCode);
     const currentTime = now();
     const room = getActiveRoom(code, currentTime);
 
-    const actionId = options && options.actionId;
+    if (typeof updater !== 'function') {
+      throw new TypeError('Room transaction updater must be a function');
+    }
+    const actionId = options.actionId;
+    const playerId = options.playerId;
     if (actionId !== undefined && actionId !== null
-      && room.processedActionIds.has(String(actionId))) {
+      && (playerId === undefined || playerId === null || String(playerId).trim() === '')) {
+      throw new TypeError('playerId is required when actionId is provided');
+    }
+    const key = actionId === undefined || actionId === null
+      ? null
+      : actionKey(playerId, actionId);
+    if (key && room.processedActionIds.has(key)) {
       return roomView(room, currentTime);
     }
 
-    const storeOwnedMetadata = {
-      roomCode: room.roomCode,
-      createdAt: room.createdAt,
-      players: structuredClone(room.players),
-      streams: structuredClone(room.streams),
-      countdownStartedAt: room.countdownStartedAt,
-      processedActionIds: new Set(room.processedActionIds)
-    };
+    const owned = structuredClone({
+      players: room.players,
+      streams: room.streams,
+      processedActionIds: room.processedActionIds
+    });
     const draft = structuredClone(room);
     updater(draft);
-    draft.roomCode = storeOwnedMetadata.roomCode;
-    draft.createdAt = storeOwnedMetadata.createdAt;
-    draft.players = storeOwnedMetadata.players;
-    draft.streams = storeOwnedMetadata.streams;
-    draft.countdownStartedAt = storeOwnedMetadata.countdownStartedAt;
-    draft.processedActionIds = storeOwnedMetadata.processedActionIds;
-    if (actionId !== undefined && actionId !== null) {
-      draft.processedActionIds.add(String(actionId));
-    }
+    restoreStoreOwnedMetadata(draft, room, owned);
+    const envelopes = dispatchChanges
+      ? dispatchProjectionChanges({ before: room, draft, events: options.events || [] })
+      : {};
+    if (key) draft.processedActionIds.add(key);
     draft.revision = room.revision + 1;
     rooms.set(code, draft);
+    notifySubscribers(code, envelopes);
     return roomView(draft, currentTime);
   }
 
-  function hasProcessedAction(roomCode, actionId) {
+  function transact(roomCode, updater, options = {}) {
+    return commitTransaction(roomCode, updater, options, true);
+  }
+
+  function updateRoom(roomCode, updater, options = {}) {
+    return commitTransaction(roomCode, updater, {
+      ...options,
+      playerId: options.playerId ?? 'legacy'
+    }, false);
+  }
+
+  function hasProcessedAction(roomCode, actionId, playerId) {
     const currentTime = now();
     const room = getActiveRoom(roomCode, currentTime);
-    return room.processedActionIds.has(String(actionId));
+    if (playerId !== undefined && playerId !== null) {
+      return room.processedActionIds.has(actionKey(playerId, actionId));
+    }
+    const suffix = `:${String(actionId)}`;
+    return room.processedActionIds.has(String(actionId))
+      || [...room.processedActionIds].some(key => key.endsWith(suffix));
+  }
+
+  function subscribe(roomCode, listener) {
+    if (typeof listener !== 'function') {
+      throw new TypeError('Room subscriber must be a function');
+    }
+    const code = String(roomCode);
+    const listeners = subscribersByRoom.get(code) || new Set();
+    listeners.add(listener);
+    subscribersByRoom.set(code, listeners);
+    let active = true;
+    return () => {
+      if (!active) return;
+      active = false;
+      listeners.delete(listener);
+      if (listeners.size === 0) subscribersByRoom.delete(code);
+    };
   }
 
   return {
@@ -215,8 +282,10 @@ function createRoomStore(options = {}) {
     joinRoom,
     getRoom,
     resolvePlayer,
+    transact,
     updateRoom,
-    hasProcessedAction
+    hasProcessedAction,
+    subscribe
   };
 }
 
