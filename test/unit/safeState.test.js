@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { projectForPlayer, stateResponse } = require('../../game/safeState');
+const { projectForPlayer, stateResponse, forPlayer } = require('../../game/safeState');
 
 function fixtureRoom() {
   return {
@@ -72,10 +72,10 @@ test('projectForPlayer returns the exact canonical actor projection without tran
   assert.doesNotMatch(serialized, /token|playerId|streams|audience|revision|sequence|cursor|do-not-leak|B discovered fact|mission-b/);
 });
 
-test('a hidden-only mutation leaves the non-recipient canonical response byte-identical', () => {
+test('a hidden-only mutation leaves the non-recipient state response byte-identical except countdown', () => {
   const room = fixtureRoom();
   const playerB = { role: 'B', playerId: 'player-b' };
-  const before = JSON.stringify(projectForPlayer(room, playerB));
+  const { countdown: beforeCountdown, ...before } = stateResponse(room, playerB, 6);
 
   room.workstation.A.roleFacts.push('A hidden mutation');
   room.privateMissions.A[0].state = 'completed';
@@ -88,8 +88,13 @@ test('a hidden-only mutation leaves the non-recipient canonical response byte-id
   room.streams.A.cursor += 1;
   room.streams.A.events.push({ cursor: 5, audience: { kind: 'player', playerId: 'player-a' } });
   room.revision += 1;
+  room.countdownRemainingMs = 987;
 
-  assert.equal(JSON.stringify(projectForPlayer(room, playerB)), before);
+  const { countdown: afterCountdown, ...after } = stateResponse(room, playerB, 6);
+  assert.equal(JSON.stringify(after), JSON.stringify(before));
+  assert.equal(after.cursor, 7);
+  assert.deepEqual(beforeCountdown, { status: 'running', remainingMs: 1234 });
+  assert.deepEqual(afterCountdown, { status: 'running', remainingMs: 987 });
 });
 
 test('a shared authoritative intercom array requires explicit audiences and selects only the actor', () => {
@@ -118,6 +123,13 @@ test('projectForPlayer rejects a role or playerId that does not match an occupie
   );
   assert.throws(
     () => projectForPlayer(room, { role: 'host', playerId: 'player-a' }),
+    { name: 'TypeError', message: 'Player identity does not match room' }
+  );
+});
+
+test('the transitional forPlayer adapter rejects role-only identity input', () => {
+  assert.throws(
+    () => forPlayer(fixtureRoom(), 'A'),
     { name: 'TypeError', message: 'Player identity does not match room' }
   );
 });

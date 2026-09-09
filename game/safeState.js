@@ -192,16 +192,14 @@ function legacyAudience(audience) {
 
 // Transitional adapter for routes that migrate to stateResponse in Task 5.
 function forPlayer(room, player) {
-  const role = typeof player === 'string' ? player : player && player.role;
+  const role = player && player.role;
   const normalizedRoom = {
     ...room,
     messages: Array.isArray(room.messages)
       ? room.messages.map(message => ({ ...message, audience: legacyAudience(message.audience) }))
       : room.messages
   };
-  const playerId = player && typeof player === 'object' && player.playerId
-    ? player.playerId
-    : normalizedRoom.players && normalizedRoom.players[role] && normalizedRoom.players[role].playerId;
+  const playerId = player && player.playerId;
   const projected = projectForPlayer(normalizedRoom, { role, playerId });
   return {
     ...projected,
