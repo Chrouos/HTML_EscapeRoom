@@ -176,20 +176,27 @@ function createRoomStore(options = {}) {
     return `${String(playerId)}:${String(actionId)}`;
   }
 
-  function restoreStoreOwnedMetadata(draft, room) {
-    draft.roomCode = room.roomCode;
-    draft.createdAt = room.createdAt;
+  function deepFreeze(value) {
+    if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
+    Object.freeze(value);
+    for (const nested of Object.values(value)) deepFreeze(nested);
+    return value;
+  }
+
+  function restoreStoreOwnedMetadata(draft, owned) {
+    draft.roomCode = owned.roomCode;
+    draft.createdAt = owned.createdAt;
     draft.players = Object.fromEntries(['A', 'B'].map(role => [
       role,
-      room.players[role] ? { ...room.players[role] } : null
+      owned.players[role] ? { ...owned.players[role] } : null
     ]));
     draft.streams = Object.fromEntries(['A', 'B'].map(role => [role, {
-      cursor: room.streams[role].cursor,
-      acknowledgedCursor: room.streams[role].acknowledgedCursor,
-      events: [...room.streams[role].events]
+      cursor: owned.streams[role].cursor,
+      acknowledgedCursor: owned.streams[role].acknowledgedCursor,
+      events: [...owned.streams[role].events]
     }]));
-    draft.countdownStartedAt = room.countdownStartedAt;
-    draft.processedActionIds = new Set(room.processedActionIds);
+    draft.countdownStartedAt = owned.countdownStartedAt;
+    draft.processedActionIds = new Set(owned.processedActionIds);
   }
 
   function notifySubscribers(roomCode, envelopes) {
@@ -228,8 +235,17 @@ function createRoomStore(options = {}) {
     }
 
     const draft = structuredClone(room);
+    const owned = {
+      roomCode: draft.roomCode,
+      createdAt: draft.createdAt,
+      players: deepFreeze(draft.players),
+      streams: deepFreeze(draft.streams),
+      countdownStartedAt: draft.countdownStartedAt,
+      processedActionIds: [...draft.processedActionIds]
+    };
+    restoreStoreOwnedMetadata(draft, owned);
     updater(draft);
-    restoreStoreOwnedMetadata(draft, room);
+    restoreStoreOwnedMetadata(draft, owned);
     const envelopes = dispatchChanges
       ? dispatchProjectionChanges({ before: room, draft, events: options.events || [] })
       : {};

@@ -9,28 +9,11 @@ function actorIdentity(room, role) {
   return player ? { role, playerId: player.playerId } : null;
 }
 
-function readOnlyView(value, seen = new WeakMap()) {
-  if (!value || typeof value !== 'object') return value;
-  if (seen.has(value)) return seen.get(value);
-
-  const view = new Proxy(value, {
-    get(target, property) {
-      if (target instanceof Set) {
-        if (['add', 'clear', 'delete'].includes(property)) {
-          return () => { throw new TypeError('Resolver view is read-only'); };
-        }
-        const member = Reflect.get(target, property, target);
-        return typeof member === 'function' ? member.bind(target) : member;
-      }
-      return readOnlyView(Reflect.get(target, property, target), seen);
-    },
-    set() { throw new TypeError('Resolver view is read-only'); },
-    deleteProperty() { throw new TypeError('Resolver view is read-only'); },
-    defineProperty() { throw new TypeError('Resolver view is read-only'); },
-    setPrototypeOf() { throw new TypeError('Resolver view is read-only'); }
+function resolverContext(draft) {
+  return Object.freeze({
+    roomCode: draft.roomCode,
+    chapter: draft.chapter
   });
-  seen.set(value, view);
-  return view;
 }
 
 function resolveContentEvent(draft, resolverDraft, event) {
@@ -86,7 +69,7 @@ function dispatchProjectionChanges({ before, draft, events = [] }) {
     }
   }
 
-  const resolverDraft = readOnlyView(draft);
+  const resolverDraft = resolverContext(draft);
   const resolvedEvents = events.map(event => resolveContentEvent(draft, resolverDraft, event));
   for (const resolved of resolvedEvents) {
     appendResolvedContent(draft, resolved);

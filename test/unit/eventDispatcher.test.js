@@ -338,3 +338,83 @@ test('a content text resolver cannot tamper with store-owned transaction metadat
   assert.equal(store.hasProcessedAction(roomCode, 'existing-action', 'player-a'), true);
   assert.equal(store.hasProcessedAction(roomCode, 'malicious-resolver', 'player-a'), true);
 });
+
+test('resolver context blocks property-descriptor escape and preventExtensions metadata tampering', () => {
+  const { store, roomCode } = occupiedStore();
+  store.transact(roomCode, draft => {
+    draft.chapter = 2;
+  }, { playerId: 'player-a', actionId: 'existing-action', events: [] });
+  const before = store.getRoom(roomCode);
+
+  store.transact(roomCode, () => {}, {
+    playerId: 'player-a',
+    actionId: 'descriptor-escape',
+    events: [{
+      contentId: 'descriptor-escape',
+      audience: { kind: 'both' },
+      text(context) {
+        const players = Object.getOwnPropertyDescriptor(context, 'players')?.value;
+        const streams = Object.getOwnPropertyDescriptor(context, 'streams')?.value;
+        const processed = Object.getOwnPropertyDescriptor(context, 'processedActionIds')?.value;
+        if (players) players.A.playerId = 'descriptor-forged';
+        if (streams) streams.A.cursor = 500;
+        if (processed) processed.clear();
+        Object.preventExtensions(context);
+        return `${context.roomCode}:safe resolver context`;
+      }
+    }]
+  });
+
+  const after = store.getRoom(roomCode);
+  assert.deepEqual(after.players, before.players);
+  assert.equal(after.streams.A.cursor, before.streams.A.cursor + 1);
+  assert.equal(after.streams.B.cursor, before.streams.B.cursor + 1);
+  assert.equal(
+    after.streams.A.events.at(-1).events[0].text,
+    `${roomCode}:safe resolver context`
+  );
+  assert.equal(store.hasProcessedAction(roomCode, 'existing-action', 'player-a'), true);
+  assert.equal(store.hasProcessedAction(roomCode, 'descriptor-escape', 'player-a'), true);
+});
+
+test('a failed resolver transaction cannot mutate nested fields in existing stored envelopes', () => {
+  const { store, roomCode } = occupiedStore();
+  store.transact(roomCode, draft => {
+    draft.chapter = 2;
+  }, {
+    playerId: 'player-a',
+    actionId: 'seed-envelope',
+    events: [{
+      contentId: 'seed-content',
+      audience: { kind: 'both' },
+      text: 'immutable history',
+      payload: { nested: { status: 'original' } }
+    }]
+  });
+  const before = store.getRoom(roomCode);
+  let retainedDraft;
+
+  assert.throws(() => store.transact(roomCode, draft => {
+    retainedDraft = draft;
+  }, {
+    playerId: 'player-a',
+    actionId: 'failed-retained-draft',
+    events: [{
+      contentId: 'failed-content',
+      audience: { kind: 'both' },
+      text() {
+        try {
+          retainedDraft.streams.A.events[0].state.publicProgress.chapter = 999;
+          retainedDraft.streams.A.events[0].events[0].payload.nested.status = 'polluted';
+        } catch { /* Frozen transaction history rejects nested writes. */ }
+        retainedDraft.uncloneable = () => 'force snapshot failure';
+        return 'must roll back';
+      }
+    }]
+  }), /clone|function/i);
+
+  const after = store.getRoom(roomCode);
+  assert.equal(JSON.stringify(after.streams), JSON.stringify(before.streams));
+  assert.deepEqual(after, before);
+  assert.equal(store.hasProcessedAction(roomCode, 'failed-retained-draft', 'player-a'), false);
+});
