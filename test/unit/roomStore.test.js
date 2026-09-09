@@ -11,6 +11,7 @@ test('creates the exact initial room state shape', () => {
     'roomCode',
     'createdAt',
     'players',
+    'streams',
     'chapter',
     'mainProgress',
     'sideEvidence',
@@ -26,6 +27,10 @@ test('creates the exact initial room state shape', () => {
   assert.equal(state.roomCode, '123456');
   assert.equal(state.createdAt, 1000);
   assert.deepEqual(state.players, { A: null, B: null });
+  assert.deepEqual(state.streams, {
+    A: { cursor: 0, acknowledgedCursor: 0, events: [] },
+    B: { cursor: 0, acknowledgedCursor: 0, events: [] }
+  });
   assert.equal(state.chapter, 1);
   assert.deepEqual(state.mainProgress, []);
   assert.deepEqual(state.sideEvidence, []);
@@ -107,6 +112,34 @@ test('assigns the second player to B and rejects a third player as ROOM_FULL', (
   );
 });
 
+test('assigns different opaque player IDs to A and B and resolves them by token', () => {
+  const playerIds = ['opaque-player-a', 'opaque-player-a', 'opaque-player-b'];
+  const store = createRoomStore({
+    generateRoomCode: () => '123456',
+    generateToken: (() => {
+      const tokens = ['token-a', 'token-b'];
+      return () => tokens.shift();
+    })(),
+    generatePlayerId: () => playerIds.shift(),
+    now: () => 1000
+  });
+
+  const created = store.createRoom();
+  const joined = store.joinRoom(created.room.roomCode);
+
+  assert.equal(created.player.playerId, 'opaque-player-a');
+  assert.equal(joined.player.playerId, 'opaque-player-b');
+  assert.notEqual(created.player.playerId, joined.player.playerId);
+  assert.deepEqual(
+    store.resolvePlayer(created.room.roomCode, created.player.token),
+    { role: 'A', playerId: 'opaque-player-a', room: joined.room }
+  );
+  assert.deepEqual(
+    store.resolvePlayer(created.room.roomCode, joined.player.token),
+    { role: 'B', playerId: 'opaque-player-b', room: joined.room }
+  );
+});
+
 test('resolves the role from the join token and ignores a client role claim', () => {
   const store = createRoomStore({
     generateRoomCode: () => '123456',
@@ -165,12 +198,21 @@ test('does not let nested mutations of returned room snapshots alter stored stat
 
   snapshots.forEach((snapshot, index) => {
     const marker = `snapshot-mutation-${index}`;
+    assert.ok(snapshot.streams, 'room snapshot should contain player streams');
     snapshot.players.A.token = marker;
     snapshot.mainProgress.push(marker);
+    snapshot.streams.A.cursor = 99;
+    snapshot.streams.A.acknowledgedCursor = 98;
+    snapshot.streams.A.events.push({ id: marker });
 
     const persisted = store.getRoom(roomCode);
     assert.equal(persisted.players.A.token, created.player.token);
     assert.equal(persisted.mainProgress.includes(marker), false);
+    assert.deepEqual(persisted.streams.A, {
+      cursor: 0,
+      acknowledgedCursor: 0,
+      events: []
+    });
   });
 });
 
@@ -385,6 +427,7 @@ test('preserves Store-owned metadata when an updater overwrites it', () => {
   });
   const created = store.createRoom();
   const joined = store.joinRoom(created.room.roomCode);
+  assert.ok(joined.room.streams, 'room should contain Store-owned player streams');
   store.updateRoom(created.room.roomCode, room => {
     room.mainProgress.push('before-tamper');
   }, { actionId: 'existing-action' });
@@ -392,7 +435,13 @@ test('preserves Store-owned metadata when an updater overwrites it', () => {
   const updated = store.updateRoom(created.room.roomCode, room => {
     room.roomCode = '999999';
     room.createdAt = 0;
-    room.players = { A: { token: 'forged-a' }, B: null };
+    room.players = {
+      A: { token: 'forged-a', playerId: 'forged-player-a' },
+      B: null
+    };
+    room.streams.A.cursor = 99;
+    room.streams.A.acknowledgedCursor = 99;
+    room.streams.A.events.push({ id: 'forged-event' });
     room.countdownStartedAt = null;
     room.processedActionIds.clear();
     room.mainProgress.push('after-tamper');
@@ -401,6 +450,7 @@ test('preserves Store-owned metadata when an updater overwrites it', () => {
   assert.equal(updated.roomCode, created.room.roomCode);
   assert.equal(updated.createdAt, created.room.createdAt);
   assert.deepEqual(updated.players, joined.room.players);
+  assert.deepEqual(updated.streams, joined.room.streams);
   assert.equal(updated.countdownStartedAt, joined.room.countdownStartedAt);
   assert.equal(store.hasProcessedAction(created.room.roomCode, 'existing-action'), true);
   assert.equal(store.hasProcessedAction(created.room.roomCode, 'new-action'), true);

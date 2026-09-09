@@ -7,6 +7,10 @@ function createRoomState(roomCode, createdAt) {
     roomCode,
     createdAt,
     players: { A: null, B: null },
+    streams: {
+      A: { cursor: 0, acknowledgedCursor: 0, events: [] },
+      B: { cursor: 0, acknowledgedCursor: 0, events: [] }
+    },
     chapter: 1,
     mainProgress: [],
     sideEvidence: [],

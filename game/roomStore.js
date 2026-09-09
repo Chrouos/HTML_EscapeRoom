@@ -19,6 +19,7 @@ function generateUniqueValue(generator, usedValues) {
 function createRoomStore(options = {}) {
   const rooms = new Map();
   const playersByToken = new Map();
+  const playerIds = new Set();
   const expiredRoomTombstones = new Map();
   const now = options.now || (() => Date.now());
   const roomTtlMs = options.roomTtlMs ?? DEFAULT_ROOM_TTL_MS;
@@ -26,6 +27,9 @@ function createRoomStore(options = {}) {
     String(randomInt(0, 1000000)).padStart(6, '0')
   ));
   const generateToken = options.generateToken || (() => (
+    randomBytes(32).toString('base64url')
+  ));
+  const generatePlayerId = options.generatePlayerId || (() => (
     randomBytes(32).toString('base64url')
   ));
 
@@ -46,6 +50,7 @@ function createRoomStore(options = {}) {
     for (const player of Object.values(room.players)) {
       if (player && playersByToken.get(player.token)?.roomCode === roomCode) {
         playersByToken.delete(player.token);
+        playerIds.delete(player.playerId);
       }
     }
     expiredRoomTombstones.delete(roomCode);
@@ -104,13 +109,18 @@ function createRoomStore(options = {}) {
       has: code => rooms.has(code) || expiredRoomTombstones.has(code)
     });
     const token = generateUniqueValue(generateToken, playersByToken);
+    const playerId = generateUniqueValue(generatePlayerId, playerIds);
 
     const room = createRoomState(roomCode, currentTime);
-    room.players.A = { token };
+    room.players.A = { token, playerId };
     rooms.set(roomCode, room);
-    playersByToken.set(token, { roomCode, role: 'A' });
+    playerIds.add(playerId);
+    playersByToken.set(token, { roomCode, role: 'A', playerId });
 
-    return { room: roomView(room, currentTime), player: { role: 'A', token } };
+    return {
+      room: roomView(room, currentTime),
+      player: { role: 'A', token, playerId }
+    };
   }
 
   function joinRoom(roomCode) {
@@ -121,13 +131,22 @@ function createRoomStore(options = {}) {
     }
 
     const token = generateUniqueValue(generateToken, playersByToken);
+    const playerId = generateUniqueValue(generatePlayerId, playerIds);
 
-    room.players.B = { token };
+    room.players.B = { token, playerId };
     room.countdownStartedAt = currentTime;
     room.revision += 1;
-    playersByToken.set(token, { roomCode: room.roomCode, role: 'B' });
+    playerIds.add(playerId);
+    playersByToken.set(token, {
+      roomCode: room.roomCode,
+      role: 'B',
+      playerId
+    });
 
-    return { room: roomView(room, currentTime), player: { role: 'B', token } };
+    return {
+      room: roomView(room, currentTime),
+      player: { role: 'B', token, playerId }
+    };
   }
 
   function getRoom(roomCode) {
@@ -143,7 +162,11 @@ function createRoomStore(options = {}) {
     if (!player || player.roomCode !== room.roomCode) {
       throw new RoomError(roomErrors.INVALID_TOKEN, 'Invalid join token');
     }
-    return { role: player.role, room: roomView(room, currentTime) };
+    return {
+      role: player.role,
+      playerId: player.playerId,
+      room: roomView(room, currentTime)
+    };
   }
 
   function updateRoom(roomCode, updater, options = {}) {
@@ -161,6 +184,7 @@ function createRoomStore(options = {}) {
       roomCode: room.roomCode,
       createdAt: room.createdAt,
       players: structuredClone(room.players),
+      streams: structuredClone(room.streams),
       countdownStartedAt: room.countdownStartedAt,
       processedActionIds: new Set(room.processedActionIds)
     };
@@ -169,6 +193,7 @@ function createRoomStore(options = {}) {
     draft.roomCode = storeOwnedMetadata.roomCode;
     draft.createdAt = storeOwnedMetadata.createdAt;
     draft.players = storeOwnedMetadata.players;
+    draft.streams = storeOwnedMetadata.streams;
     draft.countdownStartedAt = storeOwnedMetadata.countdownStartedAt;
     draft.processedActionIds = storeOwnedMetadata.processedActionIds;
     if (actionId !== undefined && actionId !== null) {
