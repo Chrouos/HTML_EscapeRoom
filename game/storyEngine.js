@@ -1,37 +1,41 @@
-function nextSequence(room) {
-  return (Array.isArray(room.messages) ? room.messages : []).reduce((highest, message) => {
-    const sequence = Number(message && message.sequence);
-    return Number.isFinite(sequence) ? Math.max(highest, sequence) : highest;
-  }, 0) + 1;
+const { validateAudience } = require('./audience');
+
+function contentId(item) {
+  return item && (item.contentId ?? item.id);
 }
 
-function appendMessage(room, message) {
-  if (!Array.isArray(room.messages)) {
-    room.messages = [];
+function appendMessage(room, message, pendingEvents = []) {
+  if (!message || typeof message !== 'object' || Array.isArray(message)) {
+    throw new TypeError('Story event must be an object');
   }
+  validateAudience(message.audience);
+  const id = contentId(message);
+  if (typeof id !== 'string' || !id.trim()) throw new TypeError('Story event requires an id');
+  if (typeof message.text !== 'string') throw new TypeError('Story event requires text');
 
-  const existing = room.messages.find(item => item && item.id === message.id);
-  if (existing) {
-    return existing;
-  }
+  const existingMessages = Array.isArray(room.messages) ? room.messages : [];
+  if (existingMessages.some(item => contentId(item) === id)
+    || pendingEvents.some(item => contentId(item) === id)) return null;
 
-  const typedMessage = {
-    id: String(message.id),
-    sequence: message.sequence ?? nextSequence(room),
+  const event = {
+    id,
     type: message.type || 'system',
-    text: String(message.text || ''),
-    audience: message.audience ?? 'public'
+    text: message.text,
+    audience: structuredClone(message.audience)
   };
-  room.messages.push(typedMessage);
-  return typedMessage;
+  if (message.payload !== undefined) event.payload = structuredClone(message.payload);
+  pendingEvents.push(event);
+  return event;
 }
 
-function appendStoryEvents(room, events) {
-  return (Array.isArray(events) ? events : []).map(event => appendMessage(room, event));
+function appendStoryEvents(room, events, pendingEvents = []) {
+  return (Array.isArray(events) ? events : [])
+    .map(event => appendMessage(room, event, pendingEvents))
+    .filter(Boolean);
 }
 
-function appendEvents(room, events) {
-  return appendStoryEvents(room, events);
+function appendEvents(room, events, pendingEvents) {
+  return appendStoryEvents(room, events, pendingEvents);
 }
 
 module.exports = { appendMessage, appendStoryEvents, appendEvents };

@@ -21,16 +21,16 @@ test('zero countdown emits one event and still permits puzzle completion', async
     const url = `${server.baseUrl}/api/rooms/${code}`;
     const before = await (await jar.fetch(`${url}/state`)).json();
     now = 45 * 60 * 1000;
-    const alarm = await (await jar.fetch(`${url}/state?sinceRevision=${before.state.revision}`)).json();
-    assert.equal(alarm.state.countdown.status, 'emergency');
-    assert.equal(alarm.state.messages.filter(message => message.id === 'containment-zero').length, 1);
-    const again = await (await jar.fetch(`${url}/state?sinceRevision=${alarm.state.revision}`)).json();
+    const alarm = await (await jar.fetch(`${url}/state?sinceCursor=${before.cursor}`)).json();
+    assert.equal(alarm.countdown.status, 'emergency');
+    assert.equal(alarm.state.intercom.filter(message => message.contentId === 'containment-zero').length, 1);
+    const again = await (await jar.fetch(`${url}/state?sinceCursor=${alarm.cursor}`)).json();
     assert.equal(again.unchanged, true);
     const solved = await (await jar.fetch(`${url}/actions`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ actionId: 'late', puzzleId: 'main1', stepId: 'identity', value: 'ORPHEUS-17' })
     })).json();
     assert.equal(solved.publicResult.correct, true);
-    assert.equal(solved.state.countdown.remainingMs, 0);
+    assert.equal(solved.countdown.remainingMs, 0);
   } finally { await server.close(); }
 });

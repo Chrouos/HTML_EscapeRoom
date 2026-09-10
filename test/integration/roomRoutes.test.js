@@ -40,6 +40,20 @@ async function readState(jar, roomCode, suffix = '') {
   return { response, body };
 }
 
+test('state polling validates actor cursors and disables caching', async () => {
+  const a = await createRoom();
+  const invalid = await readState(a.jar, a.roomCode, '?sinceCursor=-1');
+  assert.equal(invalid.response.status, 400);
+  assert.equal(invalid.body.code, 'INVALID_CURSOR');
+
+  const decimal = await readState(a.jar, a.roomCode, '?sinceCursor=1.5');
+  assert.equal(decimal.response.status, 400);
+  const current = await readState(a.jar, a.roomCode);
+  assert.equal(current.response.headers.get('cache-control'), 'no-store');
+  assert.equal(Number.isSafeInteger(current.body.cursor), true);
+  assert.doesNotMatch(JSON.stringify(current.body), /revision/);
+});
+
 test('creates, joins, refreshes, and keeps A/B roles bound to separate cookies', async () => {
   const a = await createRoom();
   const anonymous = await (new CookieJar()).fetch(`${runningServer.baseUrl}/rooms/${a.roomCode}`);
@@ -103,8 +117,8 @@ test('filters safe state and ignores role spoofing in query and body', async () 
     room.answers = { main: 'do-not-leak' };
     room.messages = [
       { id: 'public', audience: { kind: 'both' }, text: '公開' },
-      { id: 'a', audience: 'A', text: 'A 私訊' },
-      { id: 'b', audience: 'B', text: 'B 私訊' }
+      { id: 'a', audience: { kind: 'role', role: 'host' }, text: 'A 私訊' },
+      { id: 'b', audience: { kind: 'role', role: 'guest' }, text: 'B 私訊' }
     ];
   });
 
@@ -112,9 +126,9 @@ test('filters safe state and ignores role spoofing in query and body', async () 
   const bState = await readState(b, a.roomCode, '?role=A');
   assert.equal(aState.body.state.role, 'A');
   assert.equal(bState.body.state.role, 'B');
-  assert.deepEqual(aState.body.state.clues, { clue: 'A 看得到' });
-  assert.deepEqual(bState.body.state.clues, { clue: 'B 看得到' });
-  const fixtureMessages = state => state.messages.filter(message => ['public', 'a', 'b'].includes(message.id)).map(message => message.id);
+  assert.deepEqual(aState.body.state.workstation, { clue: 'A 看得到' });
+  assert.deepEqual(bState.body.state.workstation, { clue: 'B 看得到' });
+  const fixtureMessages = state => state.intercom.filter(message => ['public', 'a', 'b'].includes(message.id)).map(message => message.id);
   assert.deepEqual(fixtureMessages(aState.body.state), ['public', 'a']);
   assert.deepEqual(fixtureMessages(bState.body.state), ['public', 'b']);
 

@@ -6,8 +6,8 @@ const { initializeGame, submitAction } = require('../../game/gameEngine');
 
 function readyRoom(overrides = {}) {
   const room = createRoomState('123456', Date.now());
-  room.players.A = { token: 'a-token' };
-  room.players.B = { token: 'b-token' };
+  room.players.A = { token: 'a-token', playerId: 'player-a' };
+  room.players.B = { token: 'b-token', playerId: 'player-b' };
   Object.assign(room, overrides);
   return room;
 }
@@ -16,19 +16,21 @@ function action(stepId, value, actionId = `${stepId}-action`) {
   return { actionId, puzzleId: 'main1', stepId, value };
 }
 
-test('initializeGame waits for both players and is idempotent with deterministic messages', () => {
+test('initializeGame waits for both players and emits strict, idempotent story events', () => {
   const waitingRoom = createRoomState('111111', Date.now());
   initializeGame(waitingRoom);
   assert.equal(waitingRoom.privateClues, undefined);
   assert.deepEqual(waitingRoom.messages, []);
 
   const room = readyRoom();
-  initializeGame(room);
-  const firstMessages = structuredClone(room.messages);
+  const events = [];
+  initializeGame(room, events);
+  const firstEvents = structuredClone(events);
   const firstClues = structuredClone(room.privateClues);
-  initializeGame(room);
+  initializeGame(room, events);
 
-  assert.deepEqual(room.messages, firstMessages);
+  assert.deepEqual(events, firstEvents);
+  assert.deepEqual(room.messages, []);
   assert.deepEqual(room.privateClues, firstClues);
   assert.deepEqual(room.publicProgress, {
     chapter: 1,
@@ -42,27 +44,28 @@ test('initializeGame waits for both players and is idempotent with deterministic
   assert.notDeepEqual(room.privateClues.A, room.privateClues.B);
   assert.match(room.privateClues.A.text, /ORPHEUS/);
   assert.match(room.privateClues.B.text, /17/);
-  for (const message of room.messages) {
-    assert.deepEqual(Object.keys(message).sort(), ['audience', 'id', 'sequence', 'text', 'type']);
+  for (const event of events) {
+    assert.deepEqual(event.audience, { kind: 'both' });
   }
 });
 
-test('initializeGame preserves injected clues and messages', () => {
+test('initializeGame preserves injected clues and does not re-emit existing story content', () => {
   const room = readyRoom({
     privateClues: { A: { title: '測試 A', text: '既有線索 A' }, B: { title: '測試 B', text: '既有線索 B' } },
-    messages: [{ id: 'injected', sequence: 7, type: 'story', text: '測試訊息', audience: 'public' }]
+    messages: [{ id: 'injected', contentId: 'main1-boot', type: 'story', text: '測試訊息',
+      audience: { kind: 'both' } }]
   });
 
-  initializeGame(room);
+  const events = [];
+  initializeGame(room, events);
 
   assert.deepEqual(room.privateClues, {
     A: { title: '測試 A', text: '既有線索 A' },
     B: { title: '測試 B', text: '既有線索 B' }
   });
   assert.equal(room.messages[0].id, 'injected');
-  assert.equal(room.messages[0].sequence, 7);
-  assert.ok(room.messages.length > 1, 'opening story still appears after early chat');
-  assert.equal(new Set(room.messages.map(message => message.id)).size, room.messages.length);
+  assert.equal(events.some(event => event.id === 'main1-boot'), false);
+  assert.equal(events.some(event => event.id === 'main1-briefing'), true);
 });
 
 test('submitAction rejects a locked puzzle with a 423 domain error', () => {
@@ -101,9 +104,10 @@ test('submitAction rejects malformed action fields with a 400 domain error', () 
 
 test('identity accepts harmless whitespace and case differences, then unlocks startup', () => {
   const room = readyRoom();
-  initializeGame(room);
+  const events = [];
+  initializeGame(room, events);
 
-  const result = submitAction(room, { role: 'A' }, action('identity', '  orpheus-17  ', 'identity-1'));
+  const result = submitAction(room, { role: 'A' }, action('identity', '  orpheus-17  ', 'identity-1'), events);
 
   assert.equal(result.stateChanged, true);
   assert.equal(result.publicResult.correct, true);
@@ -112,7 +116,8 @@ test('identity accepts harmless whitespace and case differences, then unlocks st
   assert.deepEqual(room.mainProgress, []);
   assert.equal(room.attempts.main1.identity, 0);
   assert.ok(result.events.length > 0);
-  assert.ok(room.messages.some(message => message.id === 'main1-identity-complete'));
+  assert.ok(events.some(event => event.id === 'main1-identity-complete'));
+  assert.ok(events.every(event => event.audience && typeof event.audience === 'object'));
 });
 
 test('wrong answers increment only the current step and reveal graduated hints', () => {

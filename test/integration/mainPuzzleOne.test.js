@@ -53,7 +53,7 @@ test('locked chapter does not consume action ID or change room progress', async 
   assert.equal(app.locals.roomStore.getRoom(code).revision, before.revision);
 });
 
-test('another room token cannot submit, and reading clues does not change revision', async () => {
+test('another room token cannot submit, and reading clues does not advance its cursor', async () => {
   const one = await roomPair();
   const two = await roomPair();
   const foreign = new CookieJar().set(`room_token_${one.code}`,
@@ -62,13 +62,14 @@ test('another room token cannot submit, and reading clues does not change revisi
     actionId: 'foreign', puzzleId: 'main1', stepId: 'identity', value: 'x'
   });
   assert.equal(denied.status, 409);
-  const before = app.locals.roomStore.getRoom(one.code).revision;
+  const before = await (await one.a.fetch(`${server.baseUrl}/api/rooms/${one.code}/state`)).json();
   const a = await (await one.a.fetch(`${server.baseUrl}/api/rooms/${one.code}/state`)).json();
   const b = await (await one.b.fetch(`${server.baseUrl}/api/rooms/${one.code}/state?role=A`)).json();
   assert.equal(a.state.role, 'A');
   assert.equal(b.state.role, 'B');
-  assert.notDeepEqual(a.state.clues, b.state.clues);
-  assert.equal(app.locals.roomStore.getRoom(one.code).revision, before);
+  assert.notDeepEqual(a.state.workstation, b.state.workstation);
+  const after = await (await one.a.fetch(`${server.baseUrl}/api/rooms/${one.code}/state?sinceCursor=${before.cursor}`)).json();
+  assert.equal(after.unchanged, true);
   assert.doesNotMatch(JSON.stringify(a.state), /"token"|"answers?"|"privateClues"/);
 });
 
@@ -82,8 +83,8 @@ test('two roles solve Main 1; retries and completed steps cannot advance twice',
   const retry = await action(a, code, request);
   assert.equal(retry.status, 200);
   assert.equal(retry.body.stateChanged, false);
-  assert.equal(retry.body.state.revision, first.body.state.revision);
-  assert.deepEqual(retry.body.state.messages, first.body.state.messages);
+  assert.equal(retry.body.cursor, first.body.cursor);
+  assert.deepEqual(retry.body.state.intercom, first.body.state.intercom);
   const done = await action(b, code, {
     actionId: 'startup-1', puzzleId: 'main1', stepId: 'startup', value: ' aux   core emergency '
   });
@@ -95,6 +96,21 @@ test('two roles solve Main 1; retries and completed steps cannot advance twice',
   });
   assert.equal(again.status, 200);
   assert.equal(again.body.stateChanged, false);
-  assert.equal(again.body.state.revision, done.body.state.revision);
-  assert.deepEqual(again.body.state.messages, done.body.state.messages);
+  assert.equal(again.body.cursor, done.body.cursor);
+  assert.deepEqual(again.body.state.intercom, done.body.state.intercom);
+});
+
+test('a public action advances both actor cursors and returns no audience metadata', async () => {
+  const { a, b, code } = await roomPair();
+  const endpoint = `${server.baseUrl}/api/rooms/${code}/state`;
+  const aBefore = await (await a.fetch(endpoint)).json();
+  const bBefore = await (await b.fetch(endpoint)).json();
+  const solved = await action(a, code, {
+    actionId: 'shared-result', puzzleId: 'main1', stepId: 'identity', value: 'ORPHEUS-17'
+  });
+  assert.equal(solved.body.cursor, aBefore.cursor + 1);
+  assert.doesNotMatch(JSON.stringify(solved.body), /audience|revision/);
+  const bAfter = await (await b.fetch(`${endpoint}?sinceCursor=${bBefore.cursor}`)).json();
+  assert.equal(bAfter.cursor, bBefore.cursor + 1);
+  assert.equal(bAfter.unchanged, false);
 });

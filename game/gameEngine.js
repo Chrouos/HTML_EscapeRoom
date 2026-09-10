@@ -73,7 +73,7 @@ function sideViews(room) {
   }
 }
 
-function initializeGame(room) {
+function initializeGame(room, pendingEvents = []) {
   if (!room || typeof room !== 'object') fail('INVALID_ROOM', 400, '無法初始化房間');
   if (!room.players?.A || !room.players?.B) return room;
   room.mainProgress ??= [];
@@ -88,7 +88,7 @@ function initializeGame(room) {
       setClues(room, puzzle, stepId);
       room.publicProgress = progress(room, puzzle, stepId);
     }
-    appendStoryEvents(room, story[puzzle.puzzleId]?.initial || []);
+    appendStoryEvents(room, story[puzzle.puzzleId]?.initial || [], pendingEvents);
   } else {
     room.publicProgress = { chapter: room.chapter, mainProgress: [...room.mainProgress] };
     room.privateClues ??= { A: { text: '' }, B: { text: '' } };
@@ -99,7 +99,7 @@ function initializeGame(room) {
 
 function noOp() { return { stateChanged: false, events: [], publicResult: { completed: true } }; }
 
-function submitAction(room, player, action) {
+function submitAction(room, player, action, pendingEvents = []) {
   if (!action || Array.isArray(action) || !['actionId', 'puzzleId', 'stepId'].every(key =>
     typeof action[key] === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(action[key]))
     || typeof action.value !== 'string' || action.value.length > 1000) fail('INVALID_ACTION', 400, '操作格式不正確');
@@ -113,14 +113,15 @@ function submitAction(room, player, action) {
   if (room.mainProgress.includes(action.puzzleId)
     || (isSide && evidenceIds(room).has(puzzle.evidence.id))) return noOp();
   if (!isSide && room.chapter !== puzzle.chapter) fail('PUZZLE_LOCKED', 423, '這個謎題尚未解鎖');
-  initializeGame(room);
+  initializeGame(room, pendingEvents);
   prepare(room, puzzle);
   if (isSide && action.stepId === 'inspect') {
     room.openedSides ??= [];
     if (room.openedSides.includes(action.puzzleId)) return noOp();
     room.openedSides.push(action.puzzleId);
-    const events = appendStoryEvents(room, [{ id: action.puzzleId + '-opened', type: 'clue', text: puzzle.hook }]);
-    initializeGame(room);
+    const events = appendStoryEvents(room, [{ id: action.puzzleId + '-opened', type: 'clue', text: puzzle.hook,
+      audience: { kind: 'both' } }], pendingEvents);
+    initializeGame(room, pendingEvents);
     return { stateChanged: true, events, publicResult: { message: '紀錄已開啟，請比對兩人的資料' } };
   }
   if (isSide && !room.openedSides?.includes(action.puzzleId)) fail('PUZZLE_LOCKED', 423, '請先打開異常紀錄');
@@ -136,7 +137,8 @@ function submitAction(room, player, action) {
     if (room.pendingChoices[role] === choice) return noOp();
     room.pendingChoices[role] = choice;
     const endingId = evaluate(room);
-    const event = { id: 'choice-' + action.actionId, type: 'system', text: '角色 ' + role + ' 已確認出口協定。等待雙方達成一致。' };
+    const event = { id: 'choice-' + action.actionId, type: 'system', text: '角色 ' + role + ' 已確認出口協定。等待雙方達成一致。',
+      audience: { kind: 'both' } };
     if (endingId) {
       room.ending = structuredClone(endings[endingId]);
       room.mainProgress.push('main6');
@@ -146,8 +148,8 @@ function submitAction(room, player, action) {
     } else if (room.pendingChoices.A && room.pendingChoices.B && room.pendingChoices.A !== room.pendingChoices.B) {
       event.text = '雙方選擇不一致。請討論後重新確認，系統不會替你們決定。';
     }
-    const events = appendStoryEvents(room, [event]);
-    initializeGame(room);
+    const events = appendStoryEvents(room, [event], pendingEvents);
+    initializeGame(room, pendingEvents);
     return { stateChanged: true, events, publicResult: { message: event.text } };
   }
   const authorization = action.puzzleId === 'main4' && stepId === 'authorization';
@@ -157,25 +159,28 @@ function submitAction(room, player, action) {
     const hints = (step.hints || []).filter((_, index) => attempt >= step.hintThresholds[index]);
     room.hints[action.puzzleId][stepId] = hints;
     const events = appendStoryEvents(room, [{ id: action.puzzleId + '-' + stepId + '-error-' + attempt, type: 'error',
-      text: hints.length ? 'AI：資料不符。' + hints.at(-1) : 'AI：資料不符。請再次比對兩人的紀錄。' }]);
-    initializeGame(room);
+      text: hints.length ? 'AI：資料不符。' + hints.at(-1) : 'AI：資料不符。請再次比對兩人的紀錄。',
+      audience: { kind: 'both' } }], pendingEvents);
+    initializeGame(room, pendingEvents);
     return { stateChanged: true, events, publicResult: { correct: false, attempt, hints } };
   }
   room.completedSteps[action.puzzleId].push(stepId);
   if (authorization) room.authorizationChoice = action.value.trim().toUpperCase();
   const events = appendStoryEvents(room, [story[action.puzzleId]?.[stepId + 'Complete'] || {
-    id: action.puzzleId + '-' + stepId + '-complete', type: 'story', text: 'AI：' + step.title + '已完成。' }]);
+    id: action.puzzleId + '-' + stepId + '-complete', type: 'story', text: 'AI：' + step.title + '已完成。',
+    audience: { kind: 'both' } }], pendingEvents);
   const nextStep = currentStep(room, puzzle);
   if (!nextStep) {
     if (isSide) {
       room.sideEvidence.push(structuredClone(puzzle.evidence));
-      events.push(...appendStoryEvents(room, [{ id: action.puzzleId + '-evidence', type: 'clue', text: puzzle.evidence.summary }]));
+      events.push(...appendStoryEvents(room, [{ id: action.puzzleId + '-evidence', type: 'clue',
+        text: puzzle.evidence.summary, audience: { kind: 'both' } }], pendingEvents));
     } else {
       room.mainProgress.push(action.puzzleId);
       room.chapter += 1;
     }
   } else if (!isSide) setClues(room, puzzle, nextStep, true);
-  initializeGame(room);
+  initializeGame(room, pendingEvents);
   return { stateChanged: true, events, publicResult: { correct: true, nextStep,
     nextChapter: room.chapter, hints: [], message: nextStep ? '核對完成，下一步已解鎖' : '紀錄已完成' } };
 }

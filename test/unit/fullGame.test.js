@@ -28,7 +28,7 @@ function ready() {
     A: { token: 'A-token', playerId: 'player-a' },
     B: { token: 'B-token', playerId: 'player-b' }
   };
-  initializeGame(room);
+  initializeGame(room, []);
   return room;
 }
 function reachExit(room) {
@@ -79,8 +79,6 @@ for (const [count, choice, ending] of [[2, 'RESIST', 'resistance'], [4, 'TRUTH',
     assert.equal(room.mainProgress.length, 6);
     const state = JSON.stringify(forPlayer(room, { role: 'A', playerId: 'player-a' }));
     assert.doesNotMatch(state, /A-token|B-token|"answer"|"acceptedAnswers"/);
-    const messages = room.messages;
-    assert.equal(new Set(messages.map(message => message.id)).size, messages.length);
-    assert.ok(messages.every((message, index) => !index || message.sequence > messages[index - 1].sequence));
+    assert.ok(room.messages.every(message => message.audience && typeof message.audience === 'object'));
   });
 }

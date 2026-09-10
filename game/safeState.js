@@ -182,25 +182,8 @@ function stateResponse(room, player, sinceCursor) {
   return response;
 }
 
-function legacyAudience(audience) {
-  if (audience && typeof audience === 'object') return audience;
-  if (audience === 'public' || audience === 'all') return { kind: 'both' };
-  if (audience === 'A') return { kind: 'role', role: 'host' };
-  if (audience === 'B') return { kind: 'role', role: 'guest' };
-  return audience;
-}
-
-// Transitional adapter for routes that migrate to stateResponse in Task 5.
 function forPlayer(room, player) {
-  const role = player && player.role;
-  const normalizedRoom = {
-    ...room,
-    messages: Array.isArray(room.messages)
-      ? room.messages.map(message => ({ ...message, audience: legacyAudience(message.audience) }))
-      : room.messages
-  };
-  const playerId = player && player.playerId;
-  const projected = projectForPlayer(normalizedRoom, { role, playerId });
+  const projected = projectForPlayer(room, player);
   return {
     ...projected,
     messages: projected.intercom,
