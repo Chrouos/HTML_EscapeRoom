@@ -11,7 +11,8 @@
   const shown = new Set();
   const investigations = new Map();
   let state;
-  let delay = 1200;
+  let liveTransport;
+  let latestCountdown;
 
   function text(selector, value) {
     const node = root.querySelector(selector);
@@ -80,8 +81,14 @@
     ui.button.disabled = view.complete || Boolean(state.ending) || busy.has(ui.actionForm);
   }
 
-  function render(next) {
-    if (state && next.revision < state.revision) return;
+  function render(next, nextCountdown) {
+    next = {
+      ...next,
+      messages: next.messages || next.intercom || [],
+      clues: next.clues || next.workstation || {},
+      countdown: nextCountdown || next.countdown || latestCountdown
+    };
+    latestCountdown = next.countdown;
     if (state && (state.publicProgress.puzzleId !== next.publicProgress.puzzleId
       || state.publicProgress.stepId !== next.publicProgress.stepId)) {
       form.reset();
@@ -180,7 +187,8 @@
       pending.delete(target);
       if (target.elements.value.value === request.value) target.reset();
       feedback.textContent = result.publicResult?.message || (result.publicResult?.correct === false ? '資料不符，請查看通訊中的提示。' : '操作已記錄');
-      render(result.state);
+      if (liveTransport) liveTransport.adopt(result);
+      else render(result.state, result.countdown);
     } catch (error) {
       feedback.textContent = error.message + '；輸入已保留，可重新送出。';
     } finally {
@@ -219,7 +227,8 @@
       pending.delete(chatForm);
       if (chatForm.elements.text.value === request.text) chatForm.reset();
       text('[data-chat-feedback]', '');
-      render(result.state);
+      if (liveTransport) liveTransport.adopt(result);
+      else render(result.state, result.countdown);
     } catch (error) {
       text('[data-chat-feedback]', '訊息未確認送達，請重試：' + error.message);
     } finally {
@@ -228,22 +237,26 @@
     }
   });
 
-  async function poll() {
-    try {
-      const response = await fetch(endpoint + '/state' + (state ? '?sinceRevision=' + state.revision : ''));
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.message);
-      if (result.state) render(result.state);
-      else {
-        countdown(result.countdown);
-        connection.textContent = state.occupancy.ready ? '兩位受試者已連線' : '等待另一位受試者';
-      }
-      delay = 1200;
-    } catch (error) {
-      connection.textContent = '正在重新連線：' + error.message;
-      delay = Math.min(delay * 2, 10000);
+  function updateConnection(status) {
+    if (status === 'lost') {
+      connection.textContent = 'SIGNAL LOST';
+      return;
     }
-    window.setTimeout(poll, delay);
+    if (state) {
+      connection.textContent = state.occupancy.ready ? '兩位受試者已連線' : '等待另一位受試者';
+    }
   }
-  poll();
+
+  import('/public/js/live.js').then(({ createLiveTransport }) => {
+    liveTransport = createLiveTransport({
+      roomCode: root.dataset.gameRoom,
+      onSnapshot: render,
+      onCountdown: countdown,
+      onStatus: updateConnection
+    });
+    return liveTransport.start();
+  }).catch(error => {
+    connection.textContent = 'SIGNAL LOST';
+    text('[data-chat-feedback]', error.message);
+  });
 })();

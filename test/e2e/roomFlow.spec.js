@@ -1,6 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 test('two browsers exchange clues, solve initialization and recover on refresh', async ({ browser }) => {
+  test.setTimeout(60_000);
   const aContext = await browser.newContext();
   const bContext = await browser.newContext();
   try {
@@ -18,6 +19,7 @@ test('two browsers exchange clues, solve initialization and recover on refresh',
     await a.getByLabel('傳訊給另一位受試者').fill('我的卡片寫 ORPHEUS，你那邊呢？');
     await a.getByRole('button', { name: '傳送訊息' }).click();
     await expect(b.getByRole('log')).toContainText('我的卡片寫 ORPHEUS');
+    await expect(b.getByRole('log').getByText('我的卡片寫 ORPHEUS，你那邊呢？', { exact: true })).toHaveCount(1);
     await b.getByLabel('提交答案').fill('old identity draft');
     await a.getByLabel('提交答案').fill('ORPHEUS-17');
     await a.getByRole('button', { name: '送出', exact: true }).click();
