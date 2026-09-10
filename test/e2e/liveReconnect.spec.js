@@ -116,12 +116,14 @@ test('malformed and duplicate frames share one resync and never reach the render
   let liveSocket;
   let latestSnapshot;
   let snapshotReads = 0;
+  let snapshotResponses = 0;
 
   await aContext.route('**/api/rooms/*/state*', async route => {
     const response = await route.fetch();
     latestSnapshot = await response.json();
     if (!route.request().url().includes('sinceCursor=')) snapshotReads += 1;
     await route.fulfill({ response });
+    if (!route.request().url().includes('sinceCursor=')) snapshotResponses += 1;
   });
   await aContext.routeWebSocket(/\/live\?roomCode=/, socket => {
     liveSocket = socket;
@@ -136,8 +138,10 @@ test('malformed and duplicate frames share one resync and never reach the render
     await b.goto(a.url());
     await b.getByRole('button', { name: '加入房間（玩家 B）' }).click();
     await expect.poll(() => Boolean(liveSocket)).toBe(true);
+    const setupResponses = snapshotResponses;
     liveSocket.send(JSON.stringify({ type: 'snapshot_required', reason: 'test_setup' }));
-    await expect.poll(() => Boolean(latestSnapshot?.state?.workstation?.text)).toBe(true);
+    await expect.poll(() => snapshotResponses - setupResponses).toBe(1);
+    expect(latestSnapshot.state.workstation.text).toBeTruthy();
     const readsBeforeMalformed = snapshotReads;
 
     liveSocket.send('{');
@@ -233,6 +237,67 @@ test('invalid nested state entries resync once without an uncaught renderer erro
       event: { eventId: 'nested-recovery', kind: 'state',
         payload: { state: recoveredState, events: [] } } }));
     await expect(a.getByRole('log').getByText('巢狀資料錯誤後已恢復', { exact: true })).toHaveCount(1);
+    expect(pageErrors).toHaveLength(0);
+  } finally {
+    await aContext.close();
+    await bContext.close();
+  }
+});
+
+test('canonical messages may omit type while invalid present types resync', async ({ browser }) => {
+  const aContext = await browser.newContext();
+  const bContext = await browser.newContext();
+  let liveSocket;
+  let latestSnapshot;
+  let snapshotReads = 0;
+  let snapshotResponses = 0;
+  const pageErrors = [];
+
+  await aContext.route('**/api/rooms/*/state*', async route => {
+    const response = await route.fetch();
+    latestSnapshot = await response.json();
+    if (!route.request().url().includes('sinceCursor=')) snapshotReads += 1;
+    await route.fulfill({ response });
+    if (!route.request().url().includes('sinceCursor=')) snapshotResponses += 1;
+  });
+  await aContext.routeWebSocket(/\/live\?roomCode=/, socket => {
+    liveSocket = socket;
+    socket.onMessage(() => {});
+  });
+
+  try {
+    const a = await aContext.newPage();
+    const b = await bContext.newPage();
+    a.on('pageerror', error => pageErrors.push(error));
+    await a.goto('/');
+    await a.getByRole('button', { name: '建立房間（玩家 A）' }).click();
+    await b.goto(a.url());
+    await b.getByRole('button', { name: '加入房間（玩家 B）' }).click();
+    await expect.poll(() => Boolean(liveSocket)).toBe(true);
+    const setupResponses = snapshotResponses;
+    liveSocket.send(JSON.stringify({ type: 'snapshot_required', reason: 'test_setup' }));
+    await expect.poll(() => snapshotResponses - setupResponses).toBe(1);
+    const readsBeforeMessage = snapshotReads;
+
+    const canonicalState = structuredClone(latestSnapshot.state);
+    canonicalState.intercom.push({ id: 'canonical-no-type', text: '沒有類型也能顯示' });
+    liveSocket.send(JSON.stringify({ type: 'event', cursor: latestSnapshot.cursor + 1,
+      event: { eventId: 'canonical-no-type', kind: 'state',
+        payload: { state: canonicalState, events: [] } } }));
+    await expect(a.getByRole('log').getByText('沒有類型也能顯示', { exact: true })).toHaveCount(1);
+    expect(snapshotReads).toBe(readsBeforeMessage);
+
+    const invalidNull = structuredClone(latestSnapshot.state);
+    invalidNull.intercom.push({ id: 'bad-null-type', text: '不應顯示 null type', type: null });
+    const invalidNumber = structuredClone(latestSnapshot.state);
+    invalidNumber.intercom.push({ id: 'bad-number-type', text: '不應顯示 number type', type: 7 });
+    const invalidCursor = latestSnapshot.cursor + 2;
+    for (const [index, state] of [invalidNull, invalidNumber].entries()) {
+      liveSocket.send(JSON.stringify({ type: 'event', cursor: invalidCursor,
+        event: { eventId: `invalid-type-${index}`, kind: 'state', payload: { state, events: [] } } }));
+    }
+    await expect.poll(() => snapshotReads - readsBeforeMessage).toBe(1);
+    await expect(a.getByRole('log')).not.toContainText('不應顯示');
     expect(pageErrors).toHaveLength(0);
   } finally {
     await aContext.close();

@@ -13,7 +13,7 @@ function optionalString(value) {
 function isMessage(value) {
   return isRecord(value)
     && typeof value.id === 'string'
-    && typeof value.type === 'string'
+    && (value.type === undefined || typeof value.type === 'string')
     && typeof value.text === 'string'
     && optionalString(value.role);
 }

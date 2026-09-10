@@ -84,3 +84,18 @@ Implemented and verified.
 - Invalid nested entries now fail before `onSnapshot`, share the existing single-flight REST resync, and never advance the event cursor.
 - Wrapped snapshot/event renderer callbacks as a final safety boundary. An unexpected callback throw is contained, marks the projection for authoritative redraw, keeps the cursor unchanged, and enters recovery without escaping the WebSocket message handler.
 - The regression test records both snapshot requests and fulfilled responses, listens for browser `pageerror`, and waits for snapshot adoption before injecting the recovery event.
+
+## Fix round 3
+
+### TDD evidence
+
+- RED: a cursor-next event using the canonical safe-state message shape `{ id, text }` was rejected by the browser validator, did not render, and incorrectly started resync.
+- GREEN: the focused cross-boundary e2e renders the type-less message without a snapshot request; messages with present `type: null` or numeric `type` share one resync and never render.
+- Focused verification: `npx playwright test test/e2e/liveReconnect.spec.js` passed 7/7; `node --test test/unit/safeState.test.js` passed 7/7.
+- Full verification: `npm run check` passed 106/106 tests: 61 unit, 30 integration, and 15 e2e.
+
+### Changes
+
+- Aligned browser message validation with the canonical safe-state boundary: `id` and `text` remain required strings because the renderer consumes them directly; `type` may be omitted, but when present must be a string.
+- Kept `null` and numeric message types invalid so malformed nested projections still resync before reaching the renderer.
+- Tightened asynchronous test setup to wait for the setup snapshot response to be fulfilled before measuring malformed-frame resync requests, removing a full-suite timing race.
