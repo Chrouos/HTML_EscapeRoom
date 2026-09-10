@@ -174,6 +174,72 @@ test('malformed and duplicate frames share one resync and never reach the render
   }
 });
 
+test('invalid nested state entries resync once without an uncaught renderer error', async ({ browser }) => {
+  const aContext = await browser.newContext();
+  const bContext = await browser.newContext();
+  let liveSocket;
+  let latestSnapshot;
+  let snapshotReads = 0;
+  let snapshotResponses = 0;
+  const pageErrors = [];
+
+  await aContext.route('**/api/rooms/*/state*', async route => {
+    const response = await route.fetch();
+    latestSnapshot = await response.json();
+    if (!route.request().url().includes('sinceCursor=')) snapshotReads += 1;
+    await route.fulfill({ response });
+    if (!route.request().url().includes('sinceCursor=')) snapshotResponses += 1;
+  });
+  await aContext.routeWebSocket(/\/live\?roomCode=/, socket => {
+    liveSocket = socket;
+    socket.onMessage(() => {});
+  });
+
+  try {
+    const a = await aContext.newPage();
+    const b = await bContext.newPage();
+    a.on('pageerror', error => pageErrors.push(error));
+    await a.goto('/');
+    await a.getByRole('button', { name: '建立房間（玩家 A）' }).click();
+    await b.goto(a.url());
+    await b.getByRole('button', { name: '加入房間（玩家 B）' }).click();
+    await expect.poll(() => Boolean(liveSocket)).toBe(true);
+    const setupResponses = snapshotResponses;
+    liveSocket.send(JSON.stringify({ type: 'snapshot_required', reason: 'test_setup' }));
+    await expect.poll(() => snapshotResponses - setupResponses).toBe(1);
+    expect(latestSnapshot.state).toBeTruthy();
+    const readsBeforeMalformed = snapshotReads;
+    const responsesBeforeMalformed = snapshotResponses;
+
+    const invalidStates = [
+      { ...structuredClone(latestSnapshot.state), intercom: [null] },
+      { ...structuredClone(latestSnapshot.state), discoveredEvidence: [null] },
+      { ...structuredClone(latestSnapshot.state), publicProgress: {
+        ...structuredClone(latestSnapshot.state.publicProgress), sidePuzzles: [null]
+      } }
+    ];
+    for (const [index, state] of invalidStates.entries()) {
+      liveSocket.send(JSON.stringify({ type: 'event', cursor: latestSnapshot.cursor + 1,
+        event: { eventId: `bad-nested-${index}`, kind: 'state', payload: { state, events: [] } } }));
+    }
+
+    await expect.poll(() => snapshotReads - readsBeforeMalformed).toBe(1);
+    await expect.poll(() => snapshotResponses - responsesBeforeMalformed).toBe(1);
+    expect(pageErrors).toHaveLength(0);
+
+    const recoveredState = structuredClone(latestSnapshot.state);
+    recoveredState.intercom.push({ id: 'nested-recovery', type: 'story', text: '巢狀資料錯誤後已恢復' });
+    liveSocket.send(JSON.stringify({ type: 'event', cursor: latestSnapshot.cursor + 1,
+      event: { eventId: 'nested-recovery', kind: 'state',
+        payload: { state: recoveredState, events: [] } } }));
+    await expect(a.getByRole('log').getByText('巢狀資料錯誤後已恢復', { exact: true })).toHaveCount(1);
+    expect(pageErrors).toHaveLength(0);
+  } finally {
+    await aContext.close();
+    await bContext.close();
+  }
+});
+
 test('a failed snapshot discards the stale socket and reconnects with polling active', async ({ browser }) => {
   const aContext = await browser.newContext();
   const bContext = await browser.newContext();

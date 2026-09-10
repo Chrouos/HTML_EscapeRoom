@@ -68,3 +68,19 @@ Implemented and verified.
 - A socket that opens while a snapshot is pending remains in resyncing mode and does not resume or show connected status. Successful snapshot adoption resumes the current active socket from the adopted cursor, then returns to websocket mode.
 - The race test holds a snapshot through fresh-socket creation, verifies `SIGNAL LOST` remains visible and REST concurrency stays at one, then releases the snapshot and observes connection recovery.
 - Malformed-frame coverage separately verifies invalid JSON, `null`, malformed event and state shapes, a rapid malformed burst using one resync, an old/duplicate cursor, and a subsequent valid event. The gap setup and recovery use explicit snapshot response counts and a new visible event rather than relying on initial clue text.
+
+## Fix round 2
+
+### TDD evidence
+
+- RED: a cursor-next event burst containing `intercom: [null]`, `discoveredEvidence: [null]`, and `publicProgress.sidePuzzles: [null]` reached the renderer and produced three uncaught `pageerror` exceptions for `id`, `title`, and `puzzleId` access.
+- GREEN: the focused nested-state e2e passed with zero `pageerror`, exactly one completed snapshot resync, and a subsequent legal event rendered once.
+- Focused verification: `npx playwright test test/e2e/liveReconnect.spec.js test/e2e/roomFlow.spec.js` passed 7/7.
+- Full verification: `npm run check` passed 105/105 tests: 61 unit, 30 integration, and 14 e2e.
+
+### Changes
+
+- Extended state validation only across the renderer's current consumption boundary: occupancy readiness, progress strings and side-puzzle entries, message identity/type/text, workstation clue entries, discovered-evidence entries, and ending text.
+- Invalid nested entries now fail before `onSnapshot`, share the existing single-flight REST resync, and never advance the event cursor.
+- Wrapped snapshot/event renderer callbacks as a final safety boundary. An unexpected callback throw is contained, marks the projection for authoritative redraw, keeps the cursor unchanged, and enters recovery without escaping the WebSocket message handler.
+- The regression test records both snapshot requests and fulfilled responses, listens for browser `pageerror`, and waits for snapshot adoption before injecting the recovery event.

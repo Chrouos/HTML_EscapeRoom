@@ -6,14 +6,61 @@ function isRecord(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+function optionalString(value) {
+  return value === undefined || value === null || typeof value === 'string';
+}
+
+function isMessage(value) {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && typeof value.type === 'string'
+    && typeof value.text === 'string'
+    && optionalString(value.role);
+}
+
+function isEvidence(value) {
+  return isRecord(value)
+    && optionalString(value.title)
+    && optionalString(value.summary);
+}
+
+function isSidePuzzle(value) {
+  return isRecord(value)
+    && typeof value.puzzleId === 'string'
+    && optionalString(value.stepId)
+    && optionalString(value.title)
+    && optionalString(value.hook)
+    && optionalString(value.prompt);
+}
+
+function isWorkstation(value) {
+  return isRecord(value)
+    && optionalString(value.text)
+    && optionalString(value.audioUrl)
+    && (value.sideClues === undefined || (Array.isArray(value.sideClues)
+      && value.sideClues.every(clue => isRecord(clue)
+        && typeof clue.puzzleId === 'string'
+        && typeof clue.text === 'string')));
+}
+
 function isState(value) {
   return isRecord(value)
     && isRecord(value.occupancy)
+    && typeof value.occupancy.ready === 'boolean'
     && isRecord(value.publicProgress)
-    && Array.isArray(value.intercom)
-    && isRecord(value.workstation)
+    && optionalString(value.publicProgress.puzzleId)
+    && optionalString(value.publicProgress.stepId)
+    && optionalString(value.publicProgress.title)
+    && optionalString(value.publicProgress.prompt)
+    && (value.publicProgress.sidePuzzles === undefined
+      || (Array.isArray(value.publicProgress.sidePuzzles)
+        && value.publicProgress.sidePuzzles.every(isSidePuzzle)))
+    && Array.isArray(value.intercom) && value.intercom.every(isMessage)
+    && isWorkstation(value.workstation)
     && Array.isArray(value.privateMissions)
-    && Array.isArray(value.discoveredEvidence);
+    && Array.isArray(value.discoveredEvidence) && value.discoveredEvidence.every(isEvidence)
+    && (value.ending === null || value.ending === undefined || (isRecord(value.ending)
+      && optionalString(value.ending.title) && optionalString(value.ending.text)));
 }
 
 function validateStateResponse(result, snapshot) {
@@ -76,7 +123,12 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
     if (response.cursor < cursor) return false;
     const shouldRender = Boolean(response.state) && (!hasSnapshot || response.cursor > cursor);
     if (shouldRender) {
-      onSnapshot(response.state, response.countdown);
+      try {
+        onSnapshot(response.state, response.countdown);
+      } catch {
+        hasSnapshot = false;
+        throw new TypeError('Renderer rejected state');
+      }
       hasSnapshot = true;
     } else {
       onCountdown(response.countdown);
@@ -206,7 +258,13 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
       resync();
       return;
     }
-    onSnapshot(frame.event.payload.state);
+    try {
+      onSnapshot(frame.event.payload.state);
+    } catch {
+      hasSnapshot = false;
+      resync();
+      return;
+    }
     cursor = frame.cursor;
     hasSnapshot = true;
     send({ type: 'ack', cursor });
