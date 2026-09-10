@@ -38,3 +38,11 @@ Implemented and verified.
 
 - `npm install` reports 22 vulnerabilities in the pre-existing dependency tree (4 low, 6 moderate, 10 high, 2 critical). No broad dependency upgrades were attempted because they are outside Task 6.
 - Browser transport/reconnect behavior remains intentionally deferred to Task 7.
+
+## Review round 1
+
+- Added a dedicated `roomStore.acknowledge()` metadata commit. A valid ack now persists in the authenticated player's server-owned stream without incrementing the game cursor/revision or appending an envelope. A reconnect resumes after the greater of its supplied cursor and persisted acknowledged cursor. Future or not-yet-sent acknowledgements cannot update the stream.
+- Rejected upgrade sockets are now tracked, the HTTP rejection is flushed, and the socket is explicitly destroyed. Hub shutdown also destroys any pending upgrade sockets.
+- Closing an actor's final socket drops its retained buffer. Closing a room's final actor socket also unsubscribes and removes the room subscription, so a later same-code connection hydrates fresh state and installs a fresh subscription.
+- TDD RED: the three new regression tests each timed out against the prior implementation at the missing persistence, missing raw-socket destruction, and missing unsubscribe conditions.
+- GREEN: focused liveHub tests pass 8/8. Full `npm test` passes 91/91 (61 unit, 30 integration).

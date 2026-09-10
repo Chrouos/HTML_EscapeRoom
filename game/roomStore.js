@@ -283,6 +283,28 @@ function createRoomStore(options = {}) {
       || [...room.processedActionIds].some(key => key.endsWith(suffix));
   }
 
+  function acknowledge(roomCode, player, cursor) {
+    const code = String(roomCode);
+    const room = getActiveRoom(code, now());
+    const role = player && player.role;
+    const playerId = player && player.playerId;
+    const occupant = (role === 'A' || role === 'B') && room.players[role];
+    if (!occupant || occupant.playerId !== playerId) {
+      throw new RoomError(roomErrors.INVALID_TOKEN, 'Invalid player identity');
+    }
+    if (!Number.isSafeInteger(cursor) || cursor < 0 || cursor > room.streams[role].cursor) {
+      throw new RangeError('Acknowledged cursor is outside the actor stream');
+    }
+    if (cursor <= room.streams[role].acknowledgedCursor) {
+      return room.streams[role].acknowledgedCursor;
+    }
+
+    const draft = structuredClone(room);
+    draft.streams[role].acknowledgedCursor = cursor;
+    rooms.set(code, draft);
+    return cursor;
+  }
+
   function subscribe(roomCode, listener) {
     if (typeof listener !== 'function') {
       throw new TypeError('Room subscriber must be a function');
@@ -308,6 +330,7 @@ function createRoomStore(options = {}) {
     transact,
     updateRoom,
     hasProcessedAction,
+    acknowledge,
     subscribe
   };
 }

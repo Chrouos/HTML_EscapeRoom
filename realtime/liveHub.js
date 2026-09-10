@@ -6,12 +6,11 @@ const { parseCookieHeader, roomTokenCookieName } = require('../utils/cookies');
 const RETENTION_LIMIT = 256;
 
 function rejectUpgrade(socket, statusCode, statusText) {
-  socket.end(
-    `HTTP/1.1 ${statusCode} ${statusText}\r\n`
+  const response = `HTTP/1.1 ${statusCode} ${statusText}\r\n`
     + 'Connection: close\r\n'
     + 'Content-Length: 0\r\n'
-    + '\r\n'
-  );
+    + '\r\n';
+  socket.write(response, () => socket.destroy());
 }
 
 function actorKey(roomCode, playerId) {
@@ -43,8 +42,9 @@ function createLiveHub({ server, roomStore, allowedOrigins }) {
     throw new TypeError('HTTP server is required');
   }
   if (!roomStore || typeof roomStore.resolvePlayer !== 'function'
-      || typeof roomStore.subscribe !== 'function') {
-    throw new TypeError('Room store with player resolution and subscriptions is required');
+      || typeof roomStore.subscribe !== 'function'
+      || typeof roomStore.acknowledge !== 'function') {
+    throw new TypeError('Room store with player resolution, acknowledgement, and subscriptions is required');
   }
   if (!Array.isArray(allowedOrigins) && !(allowedOrigins instanceof Set)) {
     throw new TypeError('allowedOrigins must be an array or Set');
@@ -55,6 +55,7 @@ function createLiveHub({ server, roomStore, allowedOrigins }) {
   const actors = new Map();
   const roomSubscriptions = new Map();
   const sockets = new Set();
+  const pendingSockets = new Set();
   let closed = false;
 
   function appendEntry(actor, envelope, eventId) {
@@ -115,10 +116,11 @@ function createLiveHub({ server, roomStore, allowedOrigins }) {
       return;
     }
 
-    const pending = actor.entries.filter(entry => entry.cursor > cursor);
-    const hasGap = cursor < actor.latestCursor && (
+    const effectiveCursor = Math.max(cursor, actor.acknowledgedCursor);
+    const pending = actor.entries.filter(entry => entry.cursor > effectiveCursor);
+    const hasGap = effectiveCursor < actor.latestCursor && (
       pending.length === 0
-      || pending[0].cursor !== cursor + 1
+      || pending[0].cursor !== effectiveCursor + 1
       || pending.at(-1).cursor !== actor.latestCursor
       || pending.some((entry, index) => index > 0
         && entry.cursor !== pending[index - 1].cursor + 1)
@@ -130,7 +132,7 @@ function createLiveHub({ server, roomStore, allowedOrigins }) {
     }
 
     connection.resumed = false;
-    connection.lastSentCursor = cursor;
+    connection.lastSentCursor = effectiveCursor;
     for (const entry of pending) {
       send(connection.socket, { type: 'event', ...entry });
       connection.lastSentCursor = entry.cursor;
@@ -168,17 +170,36 @@ function createLiveHub({ server, roomStore, allowedOrigins }) {
           && frame.cursor >= actor.acknowledgedCursor
           && frame.cursor <= actor.latestCursor
           && frame.cursor <= connection.lastSentCursor) {
-        actor.acknowledgedCursor = frame.cursor;
+        try {
+          actor.acknowledgedCursor = roomStore.acknowledge(actor.roomCode, {
+            role: actor.role,
+            playerId: actor.playerId
+          }, frame.cursor);
+        } catch {
+          socket.close(1008);
+        }
       }
     });
 
     socket.once('close', () => {
       sockets.delete(socket);
       actor.connections.delete(connection);
+      if (actor.connections.size === 0) {
+        actors.delete(actorKey(actor.roomCode, actor.playerId));
+        const roomStillConnected = [...actors.values()]
+          .some(candidate => candidate.roomCode === actor.roomCode);
+        if (!roomStillConnected) {
+          const unsubscribe = roomSubscriptions.get(actor.roomCode);
+          if (unsubscribe) unsubscribe();
+          roomSubscriptions.delete(actor.roomCode);
+        }
+      }
     });
   });
 
   function handleUpgrade(request, socket, head) {
+    pendingSockets.add(socket);
+    socket.once('close', () => pendingSockets.delete(socket));
     if (closed) {
       rejectUpgrade(socket, 503, 'Service Unavailable');
       return;
@@ -207,6 +228,7 @@ function createLiveHub({ server, roomStore, allowedOrigins }) {
 
     const actor = ensureActor(roomCode, player);
     webSocketServer.handleUpgrade(request, socket, head, upgradedSocket => {
+      pendingSockets.delete(socket);
       webSocketServer.emit('connection', upgradedSocket, request, actor);
     });
   }
@@ -221,7 +243,9 @@ function createLiveHub({ server, roomStore, allowedOrigins }) {
       for (const unsubscribe of roomSubscriptions.values()) unsubscribe();
       roomSubscriptions.clear();
       for (const socket of sockets) socket.terminate();
+      for (const socket of pendingSockets) socket.destroy();
       sockets.clear();
+      pendingSockets.clear();
       actors.clear();
       return new Promise(resolve => webSocketServer.close(() => resolve()));
     }
