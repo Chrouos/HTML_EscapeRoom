@@ -122,7 +122,12 @@ function createApiRoutes(store) {
       const room = store.transact(roomCode, draft => {
         initializeGame(draft, events);
         result = submitAction(draft, player, action, events);
-      }, { playerId: player.playerId, actionId, events });
+      }, {
+        playerId: player.playerId,
+        actionId,
+        events,
+        shouldRecordAction: () => result.stateChanged
+      });
       return response.json({ success: true, stateChanged: result.stateChanged,
         publicResult: result.publicResult, ...stateResponse(room, player) });
     } catch (error) {

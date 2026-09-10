@@ -31,3 +31,28 @@ Final verification:
 ## Concerns
 
 - This task intentionally does not migrate the browser UI polling/rendering contract; REST now returns canonical `intercom`/`workstation` fields from `stateResponse()` as required by the brief.
+
+## Fix round 1
+
+Addressed both Important review findings with regression-first changes:
+
+- Ending choice event identity now includes the server-authenticated role (`choice-A-...` / `choice-B-...`), so actors may legally reuse the same client action ID without story event deduplication dropping the second ending event.
+- Action transactions now accept a post-updater `shouldRecordAction` decision. REST actions record the player-scoped action key only when `submitAction().stateChanged` is true, so a completed-step semantic no-op does not consume an ID that is later used for a valid step.
+
+RED command:
+
+`node --test test/unit/gameEngine.test.js test/unit/fullGame.test.js test/integration/mainPuzzleOne.test.js`
+
+Result: 16 passed, 2 failed. The failures were exactly the missing second same-ID ending event (`1 !== 2`) and the no-op ID being marked processed (`true !== false`).
+
+Focused GREEN command:
+
+`node --test test/unit/gameEngine.test.js test/unit/fullGame.test.js test/unit/roomStore.test.js test/integration/mainPuzzleOne.test.js test/integration/chatAndPolling.test.js`
+
+Result: 41 passed, 0 failed.
+
+Full verification command:
+
+`npm test`
+
+Result: 83 passed, 0 failed (61 unit, 22 integration).

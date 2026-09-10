@@ -114,3 +114,23 @@ test('a public action advances both actor cursors and returns no audience metada
   assert.equal(bAfter.cursor, bBefore.cursor + 1);
   assert.equal(bAfter.unchanged, false);
 });
+
+test('a completed-step no-op does not consume its action ID before a later valid action', async () => {
+  const { a, code } = await roomPair();
+  await action(a, code, {
+    actionId: 'finish-identity', puzzleId: 'main1', stepId: 'identity', value: 'ORPHEUS-17'
+  });
+
+  const noOp = await action(a, code, {
+    actionId: 'reusable-action', puzzleId: 'main1', stepId: 'identity', value: 'ORPHEUS-17'
+  });
+  assert.equal(noOp.body.stateChanged, false);
+  assert.equal(app.locals.roomStore.hasProcessedAction(code, 'reusable-action'), false);
+
+  const valid = await action(a, code, {
+    actionId: 'reusable-action', puzzleId: 'main1', stepId: 'startup', value: 'AUX CORE EMERGENCY'
+  });
+  assert.equal(valid.body.stateChanged, true);
+  assert.equal(valid.body.state.publicProgress.chapter, 2);
+  assert.equal(app.locals.roomStore.hasProcessedAction(code, 'reusable-action'), true);
+});

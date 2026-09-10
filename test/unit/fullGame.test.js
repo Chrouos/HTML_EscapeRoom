@@ -56,6 +56,25 @@ test('complete main path remains independent of side answers and final choices c
   assert.equal(room.mainProgress.length, 6);
 });
 
+test('both actors can use the same action ID and retain both ending events', () => {
+  const room = ready();
+  reachExit(room);
+  const events = [];
+
+  submitAction(room, { role: 'A', playerId: 'player-a' }, {
+    actionId: 'same-ending', puzzleId: 'main6', stepId: 'ending', value: 'COMPLY'
+  }, events);
+  submitAction(room, { role: 'B', playerId: 'player-b' }, {
+    actionId: 'same-ending', puzzleId: 'main6', stepId: 'ending', value: 'COMPLY'
+  }, events);
+
+  const endingEvents = events.filter(event => event.id.includes('same-ending'));
+  assert.equal(endingEvents.length, 2);
+  assert.equal(new Set(endingEvents.map(event => event.id)).size, 2);
+  assert.deepEqual(endingEvents.map(event => event.type), ['system', 'story']);
+  assert.equal(endingEvents[1].text, room.ending.text);
+});
+
 for (const [count, choice, ending] of [[2, 'RESIST', 'resistance'], [4, 'TRUTH', 'truth']]) {
   test(`${count} optional investigations unlock ${ending} and conflict remains recoverable`, () => {
     const room = ready();

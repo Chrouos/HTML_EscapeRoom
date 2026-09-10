@@ -137,7 +137,7 @@ function submitAction(room, player, action, pendingEvents = []) {
     if (room.pendingChoices[role] === choice) return noOp();
     room.pendingChoices[role] = choice;
     const endingId = evaluate(room);
-    const event = { id: 'choice-' + action.actionId, type: 'system', text: '角色 ' + role + ' 已確認出口協定。等待雙方達成一致。',
+    const event = { id: 'choice-' + role + '-' + action.actionId, type: 'system', text: '角色 ' + role + ' 已確認出口協定。等待雙方達成一致。',
       audience: { kind: 'both' } };
     if (endingId) {
       room.ending = structuredClone(endings[endingId]);

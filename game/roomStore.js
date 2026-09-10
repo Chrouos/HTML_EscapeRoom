@@ -223,6 +223,10 @@ function createRoomStore(options = {}) {
     }
     const actionId = options.actionId;
     const playerId = options.playerId;
+    const shouldRecordAction = options.shouldRecordAction;
+    if (shouldRecordAction !== undefined && typeof shouldRecordAction !== 'function') {
+      throw new TypeError('shouldRecordAction must be a function');
+    }
     if (actionId !== undefined && actionId !== null
       && (playerId === undefined || playerId === null || String(playerId).trim() === '')) {
       throw new TypeError('playerId is required when actionId is provided');
@@ -249,7 +253,7 @@ function createRoomStore(options = {}) {
     const envelopes = dispatchChanges
       ? dispatchProjectionChanges({ before: room, draft, events: options.events || [] })
       : {};
-    if (key) draft.processedActionIds.add(key);
+    if (key && (!shouldRecordAction || shouldRecordAction())) draft.processedActionIds.add(key);
     draft.revision = room.revision + 1;
     const committedView = roomView(draft, currentTime);
     rooms.set(code, draft);
