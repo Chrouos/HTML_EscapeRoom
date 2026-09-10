@@ -2,6 +2,45 @@ const MODES = new Set(['websocket', 'polling', 'resyncing']);
 const BASE_DELAY = 1200;
 const MAX_DELAY = 10000;
 
+function isRecord(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isState(value) {
+  return isRecord(value)
+    && isRecord(value.occupancy)
+    && isRecord(value.publicProgress)
+    && Array.isArray(value.intercom)
+    && isRecord(value.workstation)
+    && Array.isArray(value.privateMissions)
+    && Array.isArray(value.discoveredEvidence);
+}
+
+function validateStateResponse(result, snapshot) {
+  if (!isRecord(result) || result.success !== true
+      || typeof result.unchanged !== 'boolean'
+      || !Number.isSafeInteger(result.cursor) || result.cursor < 0
+      || !isRecord(result.countdown)
+      || ((snapshot || !result.unchanged) && !isState(result.state))) {
+    throw new TypeError('Invalid state response');
+  }
+  return result;
+}
+
+function isEventFrame(frame) {
+  return isRecord(frame)
+    && frame.type === 'event'
+    && Number.isSafeInteger(frame.cursor)
+    && frame.cursor >= 0
+    && isRecord(frame.event)
+    && typeof frame.event.eventId === 'string'
+    && frame.event.eventId.length > 0
+    && frame.event.kind === 'state'
+    && isRecord(frame.event.payload)
+    && isState(frame.event.payload.state)
+    && Array.isArray(frame.event.payload.events);
+}
+
 export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatus }) {
   const endpoint = `/api/rooms/${roomCode}/state`;
   const liveUrl = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/live?roomCode=${roomCode}`;
@@ -13,6 +52,8 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
   let pollDelay = BASE_DELAY;
   let reconnectDelay = BASE_DELAY;
   let resyncPromise;
+  let stateFlight;
+  let generation = 0;
   let hasSnapshot = false;
   let stopped = false;
 
@@ -21,8 +62,14 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
     mode = next;
   }
 
-  function clearTimer(timer) {
-    if (timer) window.clearTimeout(timer);
+  function clearPollTimer() {
+    if (pollTimer) window.clearTimeout(pollTimer);
+    pollTimer = undefined;
+  }
+
+  function clearReconnectTimer() {
+    if (reconnectTimer) window.clearTimeout(reconnectTimer);
+    reconnectTimer = undefined;
   }
 
   function emitSnapshot(response) {
@@ -31,7 +78,7 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
     if (shouldRender) {
       onSnapshot(response.state, response.countdown);
       hasSnapshot = true;
-    } else if (response.countdown) {
+    } else {
       onCountdown(response.countdown);
     }
     const advanced = response.cursor > cursor;
@@ -39,17 +86,43 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
     return advanced;
   }
 
-  async function readState(sinceCursor) {
-    const suffix = sinceCursor === undefined ? '' : `?sinceCursor=${sinceCursor}`;
-    const response = await fetch(endpoint + suffix, { cache: 'no-store' });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.message);
-    emitSnapshot(result);
-    return result;
+  function requestState(kind) {
+    if (stateFlight) {
+      if (stateFlight.kind === kind) return stateFlight.promise;
+      if (kind === 'poll' && stateFlight.kind === 'snapshot') return stateFlight.promise;
+      if (kind === 'snapshot' && stateFlight.kind === 'poll') {
+        stateFlight.controller.abort();
+      }
+      return stateFlight.promise.catch(() => undefined).then(() => requestState(kind));
+    }
+
+    const controller = new AbortController();
+    const requestCursor = cursor;
+    const flight = { kind, controller };
+    flight.promise = (async () => {
+      try {
+        const suffix = kind === 'poll' ? `?sinceCursor=${requestCursor}` : '';
+        const response = await fetch(endpoint + suffix, { cache: 'no-store', signal: controller.signal });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message);
+        return validateStateResponse(result, kind === 'snapshot');
+      } finally {
+        if (stateFlight === flight) stateFlight = undefined;
+      }
+    })();
+    stateFlight = flight;
+    return flight.promise;
   }
 
   function send(frame) {
     if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(frame));
+  }
+
+  function discardSocket() {
+    const staleSocket = socket;
+    socket = undefined;
+    generation += 1;
+    if (staleSocket && staleSocket.readyState < WebSocket.CLOSING) staleSocket.close();
   }
 
   function scheduleReconnect() {
@@ -61,65 +134,105 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
     reconnectDelay = Math.min(reconnectDelay * 2, MAX_DELAY);
   }
 
-  function schedulePoll(delay = pollDelay) {
+  function schedulePoll(token, delay = pollDelay) {
     if (stopped || mode !== 'polling' || pollTimer) return;
-    pollTimer = window.setTimeout(async () => {
+    pollTimer = window.setTimeout(() => {
       pollTimer = undefined;
-      if (stopped || mode !== 'polling') return;
-      try {
-        await readState(cursor);
-        pollDelay = BASE_DELAY;
-      } catch {
-        pollDelay = Math.min(pollDelay * 2, MAX_DELAY);
-      }
-      schedulePoll();
-      scheduleReconnect();
+      poll(token);
     }, delay);
+  }
+
+  async function poll(token) {
+    if (stopped || mode !== 'polling' || token !== generation) return;
+    try {
+      const response = await requestState('poll');
+      if (stopped || mode !== 'polling' || token !== generation) return;
+      emitSnapshot(response);
+      pollDelay = BASE_DELAY;
+    } catch (error) {
+      if (stopped || mode !== 'polling' || token !== generation) return;
+      if (error.name !== 'AbortError') pollDelay = Math.min(pollDelay * 2, MAX_DELAY);
+    }
+    schedulePoll(token);
+    scheduleReconnect();
   }
 
   function enterPolling() {
     if (stopped) return;
+    clearPollTimer();
     setMode('polling');
     onStatus('lost');
-    schedulePoll(0);
+    const token = ++generation;
+    schedulePoll(token, 0);
     scheduleReconnect();
   }
 
-  function resync() {
+  function resync(initial = false) {
     if (resyncPromise) return resyncPromise;
     setMode('resyncing');
-    clearTimer(pollTimer);
-    pollTimer = undefined;
-    resyncPromise = readState().then(() => {
-      if (stopped) return;
-      if (socket?.readyState === WebSocket.OPEN) {
-        send({ type: 'resume', cursor });
-        setMode('websocket');
-        onStatus('connected');
-      } else {
+    clearPollTimer();
+    generation += 1;
+    resyncPromise = (async () => {
+      try {
+        const response = await requestState('snapshot');
+        if (stopped) return false;
+        emitSnapshot(response);
+        if (socket?.readyState === WebSocket.OPEN) {
+          clearPollTimer();
+          clearReconnectTimer();
+          pollDelay = reconnectDelay = BASE_DELAY;
+          generation += 1;
+          setMode('websocket');
+          send({ type: 'resume', cursor });
+          onStatus('connected');
+        } else if (!initial) {
+          enterPolling();
+        }
+        return true;
+      } catch {
+        if (stopped) return false;
+        discardSocket();
         enterPolling();
+        return false;
+      } finally {
+        resyncPromise = undefined;
       }
-    }).catch(() => {
-      if (!stopped) enterPolling();
-    }).finally(() => {
-      resyncPromise = undefined;
-    });
+    })();
     return resyncPromise;
   }
 
   function applyEvent(frame) {
-    if (!Number.isSafeInteger(frame.cursor) || frame.cursor !== cursor + 1
-        || !frame.event?.payload?.state) {
-      if (Number.isSafeInteger(frame.cursor) && frame.cursor <= cursor) {
-        send({ type: 'ack', cursor });
-      } else {
-        resync();
-      }
+    if (!isEventFrame(frame) || frame.cursor !== cursor + 1) {
+      resync();
       return;
     }
     onSnapshot(frame.event.payload.state);
     cursor = frame.cursor;
+    hasSnapshot = true;
     send({ type: 'ack', cursor });
+  }
+
+  function handleFrame(data) {
+    let frame;
+    try {
+      frame = JSON.parse(data);
+    } catch {
+      resync();
+      return;
+    }
+    if (!isRecord(frame)) {
+      resync();
+      return;
+    }
+    if (frame.type === 'event') {
+      applyEvent(frame);
+      return;
+    }
+    if (frame.type === 'snapshot_required' && typeof frame.reason === 'string') {
+      resync();
+      return;
+    }
+    resync();
   }
 
   function connect() {
@@ -128,24 +241,23 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
     socket = candidate;
     candidate.addEventListener('open', () => {
       if (candidate !== socket || stopped) return;
-      clearTimer(pollTimer);
-      clearTimer(reconnectTimer);
-      pollTimer = reconnectTimer = undefined;
+      if (resyncPromise || stateFlight?.kind === 'snapshot') {
+        clearPollTimer();
+        clearReconnectTimer();
+        setMode('resyncing');
+        return;
+      }
+      generation += 1;
+      clearPollTimer();
+      clearReconnectTimer();
+      if (stateFlight?.kind === 'poll') stateFlight.controller.abort();
       pollDelay = reconnectDelay = BASE_DELAY;
       setMode('websocket');
       send({ type: 'resume', cursor });
       onStatus('connected');
     });
     candidate.addEventListener('message', event => {
-      if (candidate !== socket || stopped) return;
-      let frame;
-      try {
-        frame = JSON.parse(event.data);
-      } catch {
-        return;
-      }
-      if (frame.type === 'event') applyEvent(frame);
-      else if (frame.type === 'snapshot_required') resync();
+      if (candidate === socket && !stopped) handleFrame(event.data);
     });
     candidate.addEventListener('close', () => {
       if (candidate !== socket) return;
@@ -156,19 +268,24 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
 
   return {
     async start() {
-      await resync();
-      if (!stopped && !socket) connect();
+      const ready = await resync(true);
+      if (ready && !stopped && !socket) connect();
     },
     adopt(response) {
-      if (!response || !Number.isSafeInteger(response.cursor)) return;
+      try {
+        validateStateResponse(response, false);
+      } catch {
+        resync();
+        return;
+      }
       if (emitSnapshot(response) && mode === 'websocket') send({ type: 'resume', cursor });
     },
     stop() {
       stopped = true;
-      clearTimer(pollTimer);
-      clearTimer(reconnectTimer);
-      socket?.close();
-      socket = undefined;
+      clearPollTimer();
+      clearReconnectTimer();
+      stateFlight?.controller.abort();
+      discardSocket();
     }
   };
 }

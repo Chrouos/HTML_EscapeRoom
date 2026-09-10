@@ -40,3 +40,31 @@ Implemented and verified.
 
 - Playwright's pass-through WebSocket route did not reliably surface browser-sent frames in this environment. The final test avoids relying on that instrumentation and follows the review ruling above.
 - No browser-accessible action currently emits a player-private event on demand. Browser tests therefore cover independent contexts and public visibility, while the existing integration suite remains the authoritative coverage for A-only body/cursor isolation and shared event identity.
+
+## Fix round 1
+
+### Review findings verified
+
+- A failed resync left the original OPEN socket assigned. Since reconnect creation rejected any existing socket, the browser could poll forever without a fresh WebSocket.
+- Invalid JSON and non-object frames were ignored, malformed event projections could reach incomplete validation, and old/duplicate cursors were acknowledged instead of resynchronized.
+- REST polling and snapshot resync used independent fetch calls, so closing a socket during a delayed snapshot could start an overlapping poll.
+- A fresh socket could open before an in-flight snapshot finished, resume from the stale cursor, and cause the generation guard to discard the authoritative snapshot.
+
+### TDD evidence
+
+- RED: three new focused e2e tests failed against the prior implementation:
+  - duplicate cursor produced 1 snapshot read instead of 2 after the preceding malformed-frame resync;
+  - snapshot failure produced no fresh socket within 15 seconds;
+  - close during a delayed resync reached 2 simultaneous REST requests.
+- An expanded race test then failed because a fresh socket displayed the connected state before the delayed snapshot was released.
+- GREEN: `npx playwright test test/e2e/liveReconnect.spec.js test/e2e/roomFlow.spec.js` passed 6/6.
+- Full verification: `npm run check` passed 104/104 tests: 61 unit, 30 integration, and 13 e2e.
+
+### Changes
+
+- Added strict REST response and live event projection validation. Invalid JSON, `null`, non-object/unknown frames, malformed event/state shapes, and every non-next cursor now enter the same single-flight snapshot resync without calling the renderer.
+- Routed every `/state` read through one abortable flight. A snapshot supersedes and aborts an in-flight poll; a poll reuses an in-flight snapshot; stale timer continuations are rejected by generation checks.
+- Resync failure now clears and closes the stale socket before entering one polling loop and scheduling a fresh reconnect.
+- A socket that opens while a snapshot is pending remains in resyncing mode and does not resume or show connected status. Successful snapshot adoption resumes the current active socket from the adopted cursor, then returns to websocket mode.
+- The race test holds a snapshot through fresh-socket creation, verifies `SIGNAL LOST` remains visible and REST concurrency stays at one, then releases the snapshot and observes connection recovery.
+- Malformed-frame coverage separately verifies invalid JSON, `null`, malformed event and state shapes, a rapid malformed burst using one resync, an old/duplicate cursor, and a subsequent valid event. The gap setup and recovery use explicit snapshot response counts and a new visible event rather than relying on initial clue text.
