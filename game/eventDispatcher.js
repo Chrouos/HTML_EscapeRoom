@@ -4,6 +4,8 @@ const { isDeepStrictEqual } = require('node:util');
 const { resolveRecipients } = require('./audience');
 const { projectForPlayer } = require('./safeState');
 
+const STREAM_RETENTION_LIMIT = 256;
+
 function actorIdentity(room, role) {
   const player = room.players && room.players[role];
   return player ? { role, playerId: player.playerId } : null;
@@ -96,6 +98,9 @@ function dispatchProjectionChanges({ before, draft, events = [] }) {
     };
     stream.cursor = envelope.cursor;
     stream.events.push(envelope);
+    if (stream.events.length > STREAM_RETENTION_LIMIT) {
+      stream.events.splice(0, stream.events.length - STREAM_RETENTION_LIMIT);
+    }
     envelopes[role] = envelope;
   }
 

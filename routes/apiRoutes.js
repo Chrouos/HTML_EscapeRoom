@@ -157,7 +157,7 @@ function createApiRoutes(store) {
       const events = [];
       const room = store.transact(roomCode, draft => {
         initializeGame(draft, events);
-        appendStoryEvents(draft, [{ id: `chat-${player.playerId}-${actionId}`, type: 'player',
+        appendStoryEvents(draft, [{ id: `chat-${player.role}-${actionId}`, type: 'player',
           text: text.trim(), payload: { role: player.role }, audience: { kind: 'both' } }], events);
       }, { playerId: player.playerId, actionId, events });
       return response.json(stateResponse(room, player));

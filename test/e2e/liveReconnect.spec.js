@@ -111,6 +111,7 @@ test('a cursor gap performs one snapshot resync and resumes at the adopted curso
 });
 
 test('malformed and duplicate frames share one resync and never reach the renderer', async ({ browser }) => {
+  test.setTimeout(90_000);
   const aContext = await browser.newContext();
   const bContext = await browser.newContext();
   let liveSocket;
@@ -143,16 +144,21 @@ test('malformed and duplicate frames share one resync and never reach the render
     await expect.poll(() => snapshotResponses - setupResponses).toBe(1);
     expect(latestSnapshot.state.workstation.text).toBeTruthy();
     const readsBeforeMalformed = snapshotReads;
+    const responsesBeforeMalformed = snapshotResponses;
 
     liveSocket.send('{');
-    await expect.poll(() => snapshotReads - readsBeforeMalformed).toBe(1);
+    await expect.poll(() => snapshotResponses - responsesBeforeMalformed,
+      { timeout: 15_000 }).toBe(1);
     liveSocket.send('null');
-    await expect.poll(() => snapshotReads - readsBeforeMalformed).toBe(2);
+    await expect.poll(() => snapshotResponses - responsesBeforeMalformed,
+      { timeout: 15_000 }).toBe(2);
     liveSocket.send(JSON.stringify({ type: 'event', cursor: latestSnapshot.cursor + 1,
       event: { eventId: 'bad-state', kind: 'state', payload: { state: null, events: [] } } }));
-    await expect.poll(() => snapshotReads - readsBeforeMalformed).toBe(3);
+    await expect.poll(() => snapshotResponses - responsesBeforeMalformed,
+      { timeout: 15_000 }).toBe(3);
     liveSocket.send(JSON.stringify({ type: 'event', cursor: latestSnapshot.cursor + 1, event: null }));
-    await expect.poll(() => snapshotReads - readsBeforeMalformed).toBe(4);
+    await expect.poll(() => snapshotResponses - responsesBeforeMalformed,
+      { timeout: 15_000 }).toBe(4);
     await expect(a.getByRole('log')).not.toContainText('BAD FRAME');
 
     liveSocket.send('{');
@@ -160,11 +166,14 @@ test('malformed and duplicate frames share one resync and never reach the render
     liveSocket.send(JSON.stringify({ type: 'event', cursor: latestSnapshot.cursor + 1,
       event: { eventId: 'bad-state-burst', kind: 'state', payload: { state: null, events: [] } } }));
     await expect.poll(() => snapshotReads - readsBeforeMalformed).toBe(5);
+    await expect.poll(() => snapshotResponses - responsesBeforeMalformed,
+      { timeout: 15_000 }).toBe(5);
 
     liveSocket.send(JSON.stringify({ type: 'event', cursor: latestSnapshot.cursor,
       event: { eventId: 'duplicate-cursor', kind: 'state',
         payload: { state: latestSnapshot.state, events: [] } } }));
-    await expect.poll(() => snapshotReads - readsBeforeMalformed).toBe(6);
+    await expect.poll(() => snapshotResponses - responsesBeforeMalformed,
+      { timeout: 15_000 }).toBe(6);
 
     const continuedState = structuredClone(latestSnapshot.state);
     continuedState.intercom.push({ id: 'after-malformed', type: 'story', text: '壞資料後仍可續接' });

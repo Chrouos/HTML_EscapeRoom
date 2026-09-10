@@ -301,6 +301,13 @@ test('resume reports a retention gap after more than 256 actor events', async ()
     type: 'snapshot_required',
     reason: 'retention_gap'
   });
+  socket.send(JSON.stringify({ type: 'resume', cursor: 1 }));
+  const retained = [];
+  for (let cursor = 2; cursor <= 257; cursor += 1) {
+    retained.push(await inbox.next());
+  }
+  assert.deepEqual(retained.map(frame => frame.cursor),
+    Array.from({ length: 256 }, (_, index) => index + 2));
   socket.close();
 });
 

@@ -280,6 +280,32 @@ test('failed transactions and no-op projections never notify subscribers', () =>
   assert.deepEqual(received, []);
 });
 
+test('actor streams retain only the newest 256 contiguous envelopes without resetting cursors', () => {
+  const { store, roomCode } = occupiedStore();
+
+  for (let index = 1; index <= 257; index += 1) {
+    store.transact(roomCode, draft => {
+      draft.chapter = index + 1;
+    }, { playerId: 'player-a', actionId: `retained-${index}`, events: [] });
+    if (index === 1) {
+      store.acknowledge(roomCode, { role: 'A', playerId: 'player-a' }, 1);
+      store.acknowledge(roomCode, { role: 'B', playerId: 'player-b' }, 1);
+    }
+  }
+
+  const room = store.getRoom(roomCode);
+  for (const role of ['A', 'B']) {
+    const stream = room.streams[role];
+    assert.equal(stream.cursor, 257);
+    assert.equal(stream.acknowledgedCursor, 1);
+    assert.equal(stream.events.length, 256);
+    assert.equal(stream.events[0].cursor, 2);
+    assert.equal(stream.events.at(-1).cursor, 257);
+    assert.deepEqual(stream.events.map(envelope => envelope.cursor),
+      Array.from({ length: 256 }, (_, index) => index + 2));
+  }
+});
+
 test('a post-dispatch return snapshot failure rolls back the room and action ID', () => {
   const { store, roomCode } = occupiedStore();
   const before = store.getRoom(roomCode);
