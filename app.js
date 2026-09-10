@@ -7,11 +7,17 @@ const { createRoomStore } = require('./game/roomStore');
 const { createRoomRoutes } = require('./routes/roomRoutes');
 const pageRoutes = require('./routes/pageRoutes');
 const errorHandler = require('./middleware/errorHandler');
+const { createLiveHub } = require('./realtime/liveHub');
 
 const app = express();
 const roomStore = createRoomStore();
 
 app.locals.roomStore = roomStore;
+app.attachLiveHub = (server, allowedOrigins) => createLiveHub({
+  server,
+  roomStore,
+  allowedOrigins
+});
 
 app.set('views', path.resolve(__dirname, 'views'));
 app.set('view engine', 'ejs');

@@ -12,19 +12,26 @@ function testServer(app) {
     server.once('error', reject);
     server.listen(0, '127.0.0.1', () => {
       const address = server.address();
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+      const liveHub = typeof app.attachLiveHub === 'function'
+        ? app.attachLiveHub(server, [baseUrl])
+        : null;
 
       resolve({
-        baseUrl: `http://127.0.0.1:${address.port}`,
-        close: () => new Promise((closeResolve, closeReject) => {
-          server.close((error) => {
-            if (error) {
-              closeReject(error);
-              return;
-            }
+        baseUrl,
+        close: async () => {
+          if (liveHub) await liveHub.close();
+          await new Promise((closeResolve, closeReject) => {
+            server.close((error) => {
+              if (error) {
+                closeReject(error);
+                return;
+              }
 
-            closeResolve();
+              closeResolve();
+            });
           });
-        })
+        }
       });
     });
   });
