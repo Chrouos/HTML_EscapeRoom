@@ -1,0 +1,248 @@
+@charset "UTF-8";
+
+:root {
+  --phosphor: #9debd3;
+  --phosphor-dim: #4e887b;
+  --casing: #20292d;
+  --casing-edge: #435157;
+  --bezel: #070d10;
+  --screen: #081519;
+  --screen-grid: #9debd30a;
+  --screen-glow: #78e4c426;
+  --status-ready: #7ee3bd;
+  --status-attention: #e0b66d;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.full-shell-layer {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+}
+
+.monitor-tabs {
+  display: none;
+}
+
+.workstation-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: clamp(16px, 2vw, 28px);
+  align-items: start;
+}
+
+.monitor-frame {
+  min-width: 0;
+  color: var(--phosphor);
+  filter: drop-shadow(0 16px 28px #0008);
+}
+
+.monitor-casing {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--casing-edge);
+  border-radius: 9px;
+  background: linear-gradient(145deg, #2a3438, var(--casing) 55%, #151c20);
+  box-shadow: inset 0 1px #ffffff12, inset 0 -2px #0008;
+}
+
+.monitor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 38px;
+  padding: 0 4px 10px;
+  font-family: var(--mono);
+  text-transform: uppercase;
+}
+
+.monitor-header h2 {
+  color: var(--phosphor);
+  font-size: 11px;
+  letter-spacing: .13em;
+}
+
+.monitor-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #9eafb3;
+  font-size: 8px;
+  letter-spacing: .09em;
+  white-space: nowrap;
+}
+
+.status-light {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--status-ready);
+  box-shadow: 0 0 10px var(--status-ready);
+}
+
+.status-light-amber {
+  background: var(--status-attention);
+  box-shadow: 0 0 10px var(--status-attention);
+}
+
+.monitor-bezel {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #354247;
+  border-radius: 6px;
+  background: var(--bezel);
+  box-shadow: inset 0 0 0 2px #000;
+}
+
+.monitor-screen {
+  position: relative;
+  min-width: 0;
+  min-height: 600px;
+  overflow: hidden;
+  border: 1px solid var(--phosphor-dim);
+  border-radius: 10px / 5px;
+  background-color: var(--screen);
+  background-image:
+    linear-gradient(var(--screen-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--screen-grid) 1px, transparent 1px),
+    radial-gradient(circle at 50% 35%, var(--screen-glow), transparent 68%);
+  background-size: 20px 20px, 20px 20px, auto;
+  box-shadow: inset 0 0 38px #000c, 0 0 18px var(--screen-glow);
+}
+
+.monitor-screen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, transparent 0 3px, #0000001f 3px 4px);
+}
+
+.monitor-screen .terminal-panel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.monitor-screen .chat-panel {
+  position: static;
+  padding: 22px;
+}
+
+.monitor-screen .chat-log {
+  height: clamp(350px, 48vh, 560px);
+}
+
+.operations-workspace {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  background: #45615866;
+}
+
+.operations-workspace > .terminal-panel {
+  padding: 22px;
+  background: #09191de8;
+}
+
+@media (max-width: 759px) {
+  .monitor-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .monitor-tab-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+  }
+
+  .monitor-tab {
+    margin: 0;
+    padding: 11px 8px;
+    border: 1px solid var(--casing-edge);
+    background: #111e24;
+    color: #91a3a9;
+    font: 10px/1.4 var(--mono);
+    letter-spacing: .1em;
+    text-align: center;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .monitor-tab-input:checked + .monitor-tab {
+    border-color: var(--phosphor-dim);
+    background: #18302f;
+    color: var(--phosphor);
+  }
+
+  .monitor-tab-input:focus-visible + .monitor-tab {
+    outline: 3px solid var(--amber);
+    outline-offset: 3px;
+  }
+
+  .workstation-shell {
+    display: block;
+  }
+
+  .monitor-selector:has(#monitor-intercom:checked) .operations-monitor,
+  .monitor-selector:has(#monitor-operations:checked) .intercom-monitor {
+    display: none;
+  }
+
+  .monitor-casing {
+    padding: 8px;
+  }
+
+  .monitor-header {
+    gap: 8px;
+  }
+
+  .monitor-header h2 {
+    font-size: 9px;
+    letter-spacing: .08em;
+  }
+
+  .monitor-status {
+    font-size: 7px;
+  }
+
+  .monitor-bezel {
+    padding: 6px;
+  }
+
+  .monitor-screen {
+    min-height: 0;
+  }
+
+  .monitor-screen .chat-panel,
+  .operations-workspace > .terminal-panel {
+    padding: 16px;
+  }
+
+  .monitor-screen .chat-log {
+    height: 320px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-light {
+    animation: none;
+  }
+}
