@@ -2,15 +2,14 @@
   const root = document.querySelector('[data-game-room]');
   if (!root) return;
   const endpoint = '/api/rooms/' + root.dataset.gameRoom;
-  const log = root.querySelector('[data-chat]');
   const form = root.querySelector('[data-action-form]');
   const connection = root.querySelector('[data-connection]');
   const chatForm = root.querySelector('[data-chat-form]');
   const pending = new WeakMap();
   const busy = new WeakSet();
-  const shown = new Set();
   const investigations = new Map();
   let state;
+  let intercom;
   let liveTransport;
   let latestCountdown;
 
@@ -84,7 +83,6 @@
   function render(next, nextCountdown) {
     next = {
       ...next,
-      messages: next.messages || next.intercom || [],
       clues: next.clues || next.workstation || {},
       countdown: nextCountdown || next.countdown || latestCountdown
     };
@@ -118,21 +116,7 @@
     }
     text('[data-stage]', progress.title || '出口協定');
     countdown(next.countdown);
-    const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 48;
-    for (const message of next.messages) {
-      if (shown.has(message.id)) continue;
-      shown.add(message.id);
-      const entry = document.createElement('article');
-      entry.className = 'message message-' + message.type;
-      const sender = document.createElement('span');
-      sender.className = 'message-sender';
-      sender.textContent = message.type === 'player' ? '受試者 ' + message.role : message.type === 'story' ? '設施 AI' : '系統紀錄';
-      const body = document.createElement('p');
-      body.textContent = message.text;
-      entry.append(sender, body);
-      log.append(entry);
-    }
-    if (atBottom) log.scrollTop = log.scrollHeight;
+    intercom.render(next.intercom || []);
     form.querySelector('button').disabled = busy.has(form) || !next.occupancy.ready || !progress.stepId || Boolean(next.ending);
     for (const side of progress.sidePuzzles || []) renderSide(side);
     const evidence = root.querySelector('[data-evidence]');
@@ -247,7 +231,11 @@
     }
   }
 
-  import('/public/js/live.js').then(({ createLiveTransport }) => {
+  Promise.all([
+    import('/public/js/intercom.js'),
+    import('/public/js/live.js')
+  ]).then(([{ createIntercom }, { createLiveTransport }]) => {
+    intercom = createIntercom(root);
     liveTransport = createLiveTransport({
       roomCode: root.dataset.gameRoom,
       onSnapshot: render,
