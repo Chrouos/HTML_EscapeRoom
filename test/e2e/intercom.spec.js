@@ -19,7 +19,7 @@ async function mountIntercom(page, name, messages) {
     const root = document.createElement('section');
     root.id = `fixture-${name}`;
     root.innerHTML = `
-      <div data-intercom-log role="log" aria-label="Transmission log"></div>
+      <div data-intercom-log role="log" aria-label="Transmission log" aria-live="off"></div>
       <p data-intercom-announcer class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>
     `;
     document.body.replaceChildren(root);
@@ -63,6 +63,47 @@ test('an A-only projected entry leaves no trace in the B intercom', async ({ pag
   await expect(fixture).not.toContainText('Do not disclose cabinet seven.');
   await expect(fixture).not.toContainText(/placeholder|missing|gap|unread|delayed|timing/i);
   await expect(fixture.locator('[hidden], [data-sequence], [data-unread], time')).toHaveCount(0);
+});
+
+test('rejects player entries without a canonical A or B payload role', async ({ page }) => {
+  await mountIntercom(page, 'invalid-player', []);
+
+  for (const message of [
+    { id: 'missing-payload', type: 'player', text: 'Missing payload' },
+    { id: 'null-payload', type: 'player', text: 'Null payload', payload: null },
+    { id: 'wrong-role', type: 'player', text: 'Wrong role', payload: { role: 'C' } }
+  ]) {
+    const result = await page.evaluate(candidate => {
+      try {
+        window.fixtureIntercom.append(candidate);
+        return 'accepted';
+      } catch (error) {
+        return `${error.name}: ${error.message}`;
+      }
+    }, message);
+    expect(result).toBe('TypeError: Invalid player message');
+  }
+
+  await expect(page.getByRole('log', { name: 'Transmission log' }).locator('.message')).toHaveCount(0);
+});
+
+test('hydrates history silently and announces later render additions only through one throttled status', async ({ page }) => {
+  await mountIntercom(page, 'announcements', actorBProjection);
+
+  const log = page.getByRole('log', { name: 'Transmission log' });
+  const announcer = page.getByRole('status');
+  await expect(log).toHaveAttribute('aria-live', 'off');
+  await expect(page.locator('[aria-live="polite"]')).toHaveCount(1);
+  await page.waitForTimeout(350);
+  await expect(announcer).toBeEmpty();
+
+  await page.evaluate(messages => window.fixtureIntercom.render(messages), [
+    ...actorBProjection,
+    { id: 'new-one', type: 'story', text: 'First new signal.' },
+    { id: 'new-two', type: 'story', text: 'Second new signal.' }
+  ]);
+
+  await expect(announcer).toHaveText('ORPHEUS: First new signal. ORPHEUS: Second new signal.');
 });
 
 test('keeps a reader position but follows new messages when already near the bottom', async ({ page }) => {

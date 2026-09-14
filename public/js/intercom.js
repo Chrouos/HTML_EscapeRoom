@@ -3,7 +3,11 @@ const ANNOUNCEMENT_DELAY = 250;
 
 function messageSender(message) {
   if (message.type !== 'player') return 'ORPHEUS';
-  return message.payload?.role === 'B' ? 'B' : 'A';
+  if (!message.payload || typeof message.payload !== 'object' || Array.isArray(message.payload)
+    || (message.payload.role !== 'A' && message.payload.role !== 'B')) {
+    throw new TypeError('Invalid player message');
+  }
+  return message.payload.role;
 }
 
 export function createIntercom(root) {
@@ -14,6 +18,7 @@ export function createIntercom(root) {
   const renderedIds = new Set();
   const announcementQueue = [];
   let announcementTimer;
+  let hydrated = false;
 
   function announce(sender, message) {
     announcementQueue.push(`${sender}: ${message.text}`);
@@ -24,7 +29,7 @@ export function createIntercom(root) {
     }, ANNOUNCEMENT_DELAY);
   }
 
-  function append(message) {
+  function insert(message, shouldAnnounce) {
     if (!message || typeof message.id !== 'string' || typeof message.text !== 'string'
       || renderedIds.has(message.id)) return false;
 
@@ -41,12 +46,18 @@ export function createIntercom(root) {
     log.append(entry);
     renderedIds.add(message.id);
     if (followLatest) log.scrollTop = log.scrollHeight;
-    announce(senderText, message);
+    if (shouldAnnounce) announce(senderText, message);
     return true;
   }
 
+  function append(message) {
+    return insert(message, true);
+  }
+
   function render(messages) {
-    for (const message of messages || []) append(message);
+    const shouldAnnounce = hydrated;
+    for (const message of messages || []) insert(message, shouldAnnounce);
+    hydrated = true;
   }
 
   return { render, append };

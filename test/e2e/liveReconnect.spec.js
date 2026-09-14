@@ -300,13 +300,32 @@ test('canonical messages may omit type while invalid present types resync', asyn
     invalidNull.intercom.push({ id: 'bad-null-type', text: '不應顯示 null type', type: null });
     const invalidNumber = structuredClone(latestSnapshot.state);
     invalidNumber.intercom.push({ id: 'bad-number-type', text: '不應顯示 number type', type: 7 });
-    const invalidCursor = latestSnapshot.cursor + 2;
+    const invalidPlayerMissingPayload = structuredClone(latestSnapshot.state);
+    invalidPlayerMissingPayload.intercom.push({
+      id: 'bad-player-missing-payload', text: 'invalid missing player payload', type: 'player'
+    });
+    const invalidPlayerRole = structuredClone(latestSnapshot.state);
+    invalidPlayerRole.intercom.push({
+      id: 'bad-player-role', text: 'invalid player role', type: 'player', payload: { role: 'C' }
+    });
+    liveSocket.send(JSON.stringify({ type: 'event', cursor: latestSnapshot.cursor + 2,
+      event: { eventId: 'invalid-player-missing-payload', kind: 'state',
+        payload: { state: invalidPlayerMissingPayload, events: [] } } }));
+    await expect.poll(() => snapshotReads - readsBeforeMessage).toBe(1);
+    await expect(a.getByRole('log')).not.toContainText('invalid missing player payload');
+
+    liveSocket.send(JSON.stringify({ type: 'event', cursor: latestSnapshot.cursor + 1,
+      event: { eventId: 'invalid-player-role', kind: 'state',
+        payload: { state: invalidPlayerRole, events: [] } } }));
+    await expect.poll(() => snapshotReads - readsBeforeMessage).toBe(2);
+
     for (const [index, state] of [invalidNull, invalidNumber].entries()) {
-      liveSocket.send(JSON.stringify({ type: 'event', cursor: invalidCursor,
+      liveSocket.send(JSON.stringify({ type: 'event', cursor: latestSnapshot.cursor + 1,
         event: { eventId: `invalid-type-${index}`, kind: 'state', payload: { state, events: [] } } }));
     }
-    await expect.poll(() => snapshotReads - readsBeforeMessage).toBe(1);
+    await expect.poll(() => snapshotReads - readsBeforeMessage).toBe(3);
     await expect(a.getByRole('log')).not.toContainText('不應顯示');
+    await expect(a.getByRole('log')).not.toContainText('invalid player');
     expect(pageErrors).toHaveLength(0);
   } finally {
     await aContext.close();

@@ -11,11 +11,14 @@ function optionalString(value) {
 }
 
 function isMessage(value) {
-  return isRecord(value)
+  const validBase = isRecord(value)
     && typeof value.id === 'string'
     && (value.type === undefined || typeof value.type === 'string')
     && typeof value.text === 'string'
     && optionalString(value.role);
+  if (!validBase) return false;
+  return value.type !== 'player'
+    || (isRecord(value.payload) && (value.payload.role === 'A' || value.payload.role === 'B'));
 }
 
 function isEvidence(value) {
