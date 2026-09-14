@@ -99,10 +99,12 @@ function validateContent(bundle = defaultContent) {
   }
   const entryIds = new Set(terminalEntries.map(item => item.id));
   const contentIds = new Set([...entryIds, ...dialogue.map(item => item.id), 'neutral_finale']);
+  const reach = operationReachability(operations);
   for (const entry of terminalEntries) {
     for (const key of REQUIRED_ENTRY_KEYS) if (!(key in entry)) errors.push(`entry ${entry.id || '?'} missing ${key}`);
     try { validateAudience(entry.audience); } catch { errors.push(`entry ${entry.id} has invalid audience`); }
     predicateErrors(entry.unlockWhen, `entry ${entry.id}.unlockWhen`, errors);
+    if (!entryIds.has(entry.sourceEntryId)) errors.push(`entry ${entry.id} references missing source entry ${entry.sourceEntryId}`);
     for (const verification of entry.verificationEntries || []) {
       const target = terminalEntries.find(item => item.id === verification.entryId);
       if (!target) errors.push(`entry ${entry.id} references missing verification ${verification.entryId}`);
@@ -123,6 +125,7 @@ function validateContent(bundle = defaultContent) {
     if (item.channel === 'broadcast' && (!(item.intent === 'system' || item.intent === 'common_task') || !bothAudience)) errors.push(`dialogue ${item.id} invalid broadcast audience or intent`);
     if (item.channel === 'direct' && (!(item.intent === 'rapport' || item.intent === 'observation' || item.intent === 'manipulation' || item.intent === 'private_task') || !directAudience)) errors.push(`dialogue ${item.id} invalid direct audience or intent`);
     predicateErrors(item.unlockWhen, `dialogue ${item.id}.unlockWhen`, errors);
+    if (!entryIds.has(item.sourceEntryId) && !dialogue.some(candidate => candidate.id === item.sourceEntryId)) errors.push(`dialogue ${item.id} references missing source entry ${item.sourceEntryId}`);
     if (!Array.isArray(item.variants) || !item.variants.length) errors.push(`dialogue ${item.id} requires visible variants`);
     for (const { value } of allStrings(item.variants || [])) if (DELIVERY_LABEL_RE.test(value)) errors.push(`dialogue ${item.id} visible copy contains delivery label`);
     for (const factId of item.debriefFactIds || []) if (!debrief.some(entry => entry.factId === factId)) errors.push(`dialogue ${item.id} references missing debrief fact ${factId}`);
@@ -148,7 +151,6 @@ function validateContent(bundle = defaultContent) {
     for (const field of ['surfaceClaim', 'actualEffect', 'verificationEntryIds']) if (!(field in item)) errors.push(`debrief fact ${item.factId} missing ${field}`);
     for (const { value } of allStrings([item.surfaceClaim, item.actualEffect], `debrief ${item.factId}`)) if (DELIVERY_LABEL_RE.test(value)) errors.push(`debrief fact ${item.factId} visible copy contains delivery label`);
   }
-  const reach = operationReachability(operations);
   const knownNodes = new Set([
     'roomCreated', 'hostJoined', 'guestJoined', 'main1Completed', 'file_index_ready', 'roster_review_ready',
     'incident_verification_ready', 'main2Completed', 'mirror_restored', 'mirror_fetched', 'main3Completed',
@@ -168,7 +170,7 @@ function validateContent(bundle = defaultContent) {
     if (!entry.verificationEntries?.length && entry.isDeception) errors.push(`deception ${entry.id} missing verification`);
     if (entry.isDeception && !entry.verificationEntries.some(v => {
       const target = terminalEntries.find(item => item.id === v.entryId);
-      return target && v.sourceGroup === target.sourceGroup && target.sourceGroup !== entry.sourceGroup && publicReachable(target.unlockWhen, new Set(['roomCreated', 'hostJoined', 'guestJoined', 'main1Completed', 'main2Completed', 'main3Completed', 'main4Completed', 'main5Completed', 'mainCompleted']));
+      return target && v.sourceGroup === target.sourceGroup && target.sourceGroup !== entry.sourceGroup && publicReachable(target.unlockWhen, reach.facts);
     })) errors.push(`deception ${entry.id} lacks independently sourced reachable verification`);
   }
   const deceptionGroups = new Set(terminalEntries.filter(item => item.isDeception).map(item => item.deceptionId));
