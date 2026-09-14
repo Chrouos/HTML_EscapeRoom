@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 const { createRoomState } = require('../../game/createRoomState');
 const { terminalEntries } = require('../../game/content/terminalEntries');
-const { openEntry, executeOperation, projectWorkstation, refreshWorkstation } = require('../../game/terminalEngine');
+const { openEntry, executeOperation, projectWorkstation, refreshWorkstation, audienceAllows } = require('../../game/terminalEngine');
 
 function readyRoom() {
   const room = createRoomState('ROOM42', 0);
@@ -95,4 +95,41 @@ test('executeOperation applies role facts without mutating the other actor proje
   assert.equal(result.stateChanged, true);
   assert.ok(room.workstation.A.roleFacts.includes('aArchivedIndex'));
   assert.equal(JSON.stringify(projectWorkstation(room, 'B')), before);
+});
+
+test('private operations are bound to their owner role and never appear cross-role', () => {
+  const room = readyRoom();
+  room.publicFacts = ['roomCreated', 'hostJoined', 'guestJoined', 'main1Completed'];
+  room.workstation.A.roleFacts.push('rapportCount2');
+  openEntry(room, { role: 'A', playerId: 'player-a' }, 'files.mainline');
+  refreshWorkstation(room);
+  assert.ok(room.workstation.A.activeOperations.includes('archive_index'));
+  assert.ok(!room.workstation.B.activeOperations.includes('archive_index'));
+  assert.ok(!room.workstation.A.activeOperations.includes('flag_identity'));
+  assert.throws(() => executeOperation(room, { role: 'B', playerId: 'player-b' }, 'archive_index'), /locked|role/i);
+  assert.throws(() => executeOperation(room, { role: 'A', playerId: 'player-a' }, 'flag_identity'), /locked|role/i);
+  assert.deepEqual(room.workstation.A.roleFacts, ['rapportCount2']);
+  assert.deepEqual(room.workstation.B.roleFacts, []);
+});
+
+test('a mainline operation has one shared completion and cannot be rerun by the other actor', () => {
+  const room = readyRoom();
+  room.publicFacts = ['roomCreated', 'hostJoined', 'guestJoined', 'main1Completed'];
+  refreshWorkstation(room);
+  executeOperation(room, { role: 'A', playerId: 'player-a' }, 'continue_file_index');
+  assert.ok(room.completedNodes.includes('file_index_ready'));
+  assert.throws(() => executeOperation(room, { role: 'B', playerId: 'player-b' }, 'continue_file_index'), /locked|completed/i);
+  assert.equal(room.publicFacts.filter(fact => fact === 'fileIndexContinued').length, 1);
+});
+
+test('direct engine callers must provide a verified player identity', () => {
+  const room = readyRoom();
+  assert.throws(() => projectWorkstation(room, { role: 'A' }), /identity|playerId/i);
+  assert.throws(() => openEntry(room, { role: 'A' }, 'files.mainline'), /identity|playerId/i);
+  assert.throws(() => executeOperation(room, { role: 'A' }, 'continue_file_index'), /identity|playerId/i);
+});
+
+test('malformed role audiences fail closed instead of defaulting to B', () => {
+  assert.equal(audienceAllows({ audience: { kind: 'role', role: 'bogus' } }, 'A'), false);
+  assert.equal(audienceAllows({ audience: { kind: 'role', role: 'bogus' } }, 'B'), false);
 });

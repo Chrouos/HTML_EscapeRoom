@@ -4,6 +4,14 @@ const { operations } = require('./content/operations');
 const { createWorkstationState } = require('./createRoomState');
 
 const ROLES = ['A', 'B'];
+const PRIVATE_OPERATION_ROLES = Object.freeze({
+  archive_index: 'A', decline_index_repair: 'A', skip_a1: 'A',
+  delete_local_mirror: 'A', share_mirror_first: 'A', decline_mirror_cleanup: 'A', skip_a2: 'A',
+  request_solo_validation: 'A', publish_fragment: 'A', request_pair_validation: 'A', skip_a3: 'A',
+  flag_identity: 'B', share_roster: 'B', decline_identity_check: 'B', skip_b1: 'B',
+  pause_local_mirror: 'B', keep_local_mirror: 'B', warn_partner_first: 'B', skip_b2: 'B',
+  file_full_report: 'B', file_anonymous_summary: 'B', disclose_report: 'B', skip_b3: 'B'
+});
 
 function roleOf(player) {
   const role = typeof player === 'string' ? player : player?.role;
@@ -13,8 +21,12 @@ function roleOf(player) {
 
 function assertPlayer(room, player) {
   const role = roleOf(player);
-  if (player && typeof player === 'object' && player.playerId !== undefined
-    && room.players?.[role]?.playerId !== player.playerId) {
+  const occupant = room.players?.[role];
+  if (!occupant || typeof occupant.playerId !== 'string' || !occupant.playerId) {
+    throw Object.assign(new Error('Player identity does not match room'), { code: 'INVALID_PLAYER', status: 409 });
+  }
+  if (player && typeof player === 'object'
+    && (typeof player.playerId !== 'string' || player.playerId !== occupant.playerId)) {
     throw Object.assign(new Error('Player identity does not match room'), { code: 'INVALID_PLAYER', status: 409 });
   }
   return role;
@@ -25,6 +37,7 @@ function ensureRoom(room) {
   room.publicFacts ??= [];
   room.completedNodes ??= [];
   room.actionAttempts ??= [];
+  room.completedOperations ??= [];
   room.workstation ??= {};
   for (const role of ROLES) {
     const current = room.workstation[role];
@@ -40,8 +53,12 @@ function ensureRoom(room) {
 
 function audienceAllows(entry, role) {
   const audience = entry.audience;
-  if (!audience || audience.kind === 'both') return true;
-  if (audience.kind === 'role') return (audience.role === 'host' ? 'A' : 'B') === role;
+  if (!audience || typeof audience !== 'object') return false;
+  if (audience.kind === 'both') return true;
+  if (audience.kind === 'role') {
+    if (audience.role !== 'host' && audience.role !== 'guest') return false;
+    return (audience.role === 'host' ? 'A' : 'B') === role;
+  }
   if (audience.kind === 'player') return false;
   return false;
 }
@@ -71,6 +88,10 @@ function entryVisible(room, role, entry) {
 }
 
 function operationVisible(room, role, operation) {
+  const owner = PRIVATE_OPERATION_ROLES[operation.operationId];
+  if (operation.kind === 'private' && owner !== role) return false;
+  if (operation.kind === 'mainline' && operation.operationId !== 'verify_incident_timestamp'
+    && room.completedOperations.includes(operation.operationId)) return false;
   if (operation.operationId === 'verify_incident_timestamp') {
     const openedA = room.workstation.A.openedEntryIds.includes('doc.a_incident_report');
     const openedB = room.workstation.B.openedEntryIds.includes('doc.b_incident_report');
@@ -170,6 +191,10 @@ function executeOperation(room, player, operationId, value) {
     throw Object.assign(new Error('Operation is locked'), { code: 'OPERATION_LOCKED', status: 423 });
   }
   const ws = room.workstation[role];
+  if (operation.kind === 'mainline' && operationId !== 'verify_incident_timestamp'
+    && room.completedOperations.includes(operationId)) {
+    return { stateChanged: false, operationId, value };
+  }
   if (operationId !== 'verify_incident_timestamp' && ws.completedOperations.includes(operationId)) {
     return { stateChanged: false, operationId, value };
   }
@@ -180,9 +205,11 @@ function executeOperation(room, player, operationId, value) {
     if (!ws.roleFacts.includes('incidentVerificationAttempted')) ws.roleFacts.push('incidentVerificationAttempted');
   }
   applyEffects(room, role, operation);
+  if (operation.kind === 'mainline' && operationId !== 'verify_incident_timestamp'
+    && !room.completedOperations.includes(operationId)) room.completedOperations.push(operationId);
   if (!ws.completedOperations.includes(operationId) && operationId !== 'verify_incident_timestamp') ws.completedOperations.push(operationId);
   refreshWorkstation(room);
   return { stateChanged: true, operationId, value };
 }
 
-module.exports = { ensureRoom, refreshWorkstation, projectWorkstation, openEntry, executeOperation };
+module.exports = { ensureRoom, refreshWorkstation, projectWorkstation, openEntry, executeOperation, audienceAllows };
