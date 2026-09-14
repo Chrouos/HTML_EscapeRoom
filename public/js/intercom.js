@@ -1,6 +1,11 @@
 const BOTTOM_THRESHOLD = 48;
 const ANNOUNCEMENT_DELAY = 250;
 
+function prefersReducedMotion() {
+  return typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
 function messageSender(message) {
   if (message.type !== 'player') return 'ORPHEUS';
   if (!message.payload || typeof message.payload !== 'object' || Array.isArray(message.payload)
@@ -37,6 +42,7 @@ export function createIntercom(root) {
     const senderText = messageSender(message);
     const entry = document.createElement('article');
     entry.className = message.type === 'player' ? 'message message-player' : 'message message-orpheus';
+    if (!prefersReducedMotion()) entry.classList.add('message-reveal');
     const sender = document.createElement('span');
     sender.className = 'message-sender';
     sender.textContent = senderText;

@@ -124,3 +124,82 @@ test('lost chat acknowledgement preserves text and retry does not duplicate', as
     await room.partnerContext.close();
   }
 });
+
+test('CRT atmosphere uses restrained motion when motion is available', async ({ browser }) => {
+  const room = await openPairedRoom(browser, { width: 1440, height: 900 }, 'no-preference');
+  try {
+    const { player } = room;
+    const effects = await player.locator('.intercom-monitor .monitor-screen').evaluate(screen => {
+      const frame = screen.closest('.monitor-frame');
+      const message = screen.querySelector('.message');
+      const style = node => node ? getComputedStyle(node) : null;
+      const screenStyle = style(screen);
+      const frameStyle = style(frame);
+      const beforeStyle = getComputedStyle(screen, '::before');
+      const afterStyle = getComputedStyle(screen, '::after');
+      const messageStyle = style(message);
+      return {
+        screenAnimation: screenStyle.animationName,
+        frameAnimation: frameStyle.animationName,
+        scanAnimation: beforeStyle.animationName,
+        noiseAnimation: afterStyle.animationName,
+        messageAnimation: messageStyle?.animationName,
+        messageDuration: messageStyle?.animationDuration
+      };
+    });
+
+    expect(effects.screenAnimation).toBe('crt-phosphor-bloom');
+    expect(effects.frameAnimation).toBe('crt-boot-pulse');
+    expect(effects.scanAnimation).toBe('crt-scan-sweep');
+    expect(effects.noiseAnimation).toBe('crt-signal-noise');
+    expect(effects.messageAnimation).toBe('crt-message-reveal');
+    expect(parseFloat(effects.messageDuration)).toBeGreaterThan(0);
+  } finally {
+    await room.playerContext.close();
+    await room.partnerContext.close();
+  }
+});
+
+test('reduced motion removes CRT effects and keeps intercom content and controls available', async ({ browser }) => {
+  const room = await openPairedRoom(browser, { width: 1440, height: 900 }, 'reduce');
+  try {
+    const { player } = room;
+    const effects = await player.locator('.intercom-monitor .monitor-screen').evaluate(screen => {
+      const frame = screen.closest('.monitor-frame');
+      const message = screen.querySelector('.message');
+      const style = node => node ? getComputedStyle(node) : null;
+      const screenStyle = style(screen);
+      const frameStyle = style(frame);
+      const beforeStyle = getComputedStyle(screen, '::before');
+      const afterStyle = getComputedStyle(screen, '::after');
+      const messageStyle = style(message);
+      return {
+        screenAnimation: screenStyle.animationName,
+        frameAnimation: frameStyle.animationName,
+        scanAnimation: beforeStyle.animationName,
+        noiseAnimation: afterStyle.animationName,
+        messageAnimation: messageStyle?.animationName,
+        animationDuration: messageStyle?.animationDuration,
+        transitionDuration: messageStyle?.transitionDuration,
+        animationDelay: messageStyle?.animationDelay,
+        transform: messageStyle?.transform
+      };
+    });
+
+    expect(effects.screenAnimation).toBe('none');
+    expect(effects.frameAnimation).toBe('none');
+    expect(effects.scanAnimation).toBe('none');
+    expect(effects.noiseAnimation).toBe('none');
+    expect(effects.messageAnimation).toBe('none');
+    expect(effects.animationDuration).toBe('0s');
+    expect(effects.transitionDuration).toBe('0s');
+    expect(effects.animationDelay).toBe('0s');
+    expect(effects.transform).toBe('none');
+    await expect(player.getByRole('log')).toContainText('ORPHEUS');
+    await expect(player.locator('[data-chat-form] input')).toBeVisible();
+    await expect(player.locator('[data-chat-form] button[type="submit"]')).toBeVisible();
+  } finally {
+    await room.playerContext.close();
+    await room.partnerContext.close();
+  }
+});

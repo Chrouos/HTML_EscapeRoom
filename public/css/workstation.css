@@ -46,6 +46,7 @@
   min-width: 0;
   color: var(--phosphor);
   filter: drop-shadow(0 16px 28px #0008);
+  animation: crt-boot-pulse 1.2s ease-out both;
 }
 
 .monitor-casing {
@@ -120,6 +121,19 @@
     radial-gradient(circle at 50% 35%, var(--screen-glow), transparent 68%);
   background-size: 20px 20px, 20px 20px, auto;
   box-shadow: inset 0 0 38px #000c, 0 0 18px var(--screen-glow);
+  animation: crt-phosphor-bloom 5.4s ease-in-out infinite;
+}
+
+.monitor-screen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: .12;
+  background: repeating-linear-gradient(0deg, transparent 0 3px, #9debd31f 3px 4px);
+  mix-blend-mode: screen;
+  animation: crt-scan-sweep 8s linear infinite;
 }
 
 .monitor-screen::after {
@@ -128,7 +142,14 @@
   inset: 0;
   z-index: 3;
   pointer-events: none;
-  background: repeating-linear-gradient(0deg, transparent 0 3px, #0000001f 3px 4px);
+  opacity: .08;
+  background-image:
+    radial-gradient(circle at 15% 25%, #9debd34d 0 1px, transparent 1px),
+    radial-gradient(circle at 75% 65%, #9debd326 0 1px, transparent 1px),
+    linear-gradient(90deg, transparent 0 48%, #9debd314 50%, transparent 52%);
+  background-size: 7px 7px, 11px 11px, 100% 100%;
+  mix-blend-mode: screen;
+  animation: crt-signal-noise 2.4s steps(2, end) infinite;
 }
 
 .monitor-screen .terminal-panel {
@@ -156,6 +177,45 @@
 .operations-workspace > .terminal-panel {
   padding: 22px;
   background: #09191de8;
+}
+
+.message {
+  animation: crt-message-reveal .42s ease-out both;
+}
+
+.monitor-status .status-light {
+  animation: crt-status-breathe 3.6s ease-in-out infinite;
+}
+
+@keyframes crt-boot-pulse {
+  0% { filter: drop-shadow(0 16px 28px #0008) drop-shadow(0 0 0 #9debd300); }
+  55% { filter: drop-shadow(0 16px 28px #0008) drop-shadow(0 0 14px #9debd34d); }
+  100% { filter: drop-shadow(0 16px 28px #0008) drop-shadow(0 0 0 #9debd300); }
+}
+
+@keyframes crt-phosphor-bloom {
+  0%, 100% { box-shadow: inset 0 0 38px #000c, 0 0 18px var(--screen-glow); }
+  50% { box-shadow: inset 0 0 38px #000c, 0 0 25px #78e4c436; }
+}
+
+@keyframes crt-scan-sweep {
+  0% { background-position: 0 -16px; }
+  100% { background-position: 0 16px; }
+}
+
+@keyframes crt-signal-noise {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(1px, -1px, 0); }
+}
+
+@keyframes crt-message-reveal {
+  from { opacity: .86; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes crt-status-breathe {
+  0%, 100% { opacity: .82; }
+  50% { opacity: 1; }
 }
 
 @media (max-width: 759px) {
@@ -243,8 +303,22 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .status-light {
-    animation: none;
+  .monitor-frame,
+  .monitor-screen,
+  .monitor-screen::before,
+  .monitor-screen::after,
+  .message,
+  .monitor-status .status-light {
+    animation: none !important;
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+    transition: none !important;
+    transition-duration: 0s !important;
+    transform: none !important;
+  }
+
+  .message {
+    opacity: 1 !important;
   }
 }
 
