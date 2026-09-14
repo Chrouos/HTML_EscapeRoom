@@ -43,12 +43,13 @@ test('all six missions start locked and transition to available from their disti
   assert.equal(room.privateMissions.B.find(item => item.id === 'mission.b1.identity_check').state, 'available');
 
   room.publicFacts.push('incidentVerificationAttempted', 'accessLogOpened');
-  room.actionAttempts.push('verify_incident_timestamp');
+  room.workstation.A.actionAttempts.push('verify_incident_timestamp');
+  openEntry(room, { role: 'B', playerId: 'player-b' }, 'log.token_reissue');
   refreshPrivateMissions(room);
   assert.equal(room.privateMissions.A.find(item => item.id === 'mission.a2.cleanup_mirror').state, 'available');
   assert.equal(room.privateMissions.B.find(item => item.id === 'mission.b2.limit_archive').state, 'available');
 
-  room.publicFacts.push('main5Completed');
+  room.publicFacts.push('main5Completed', 'accessLogOpened');
   openEntry(room, { role: 'A', playerId: 'player-a' }, 'doc.a_solo_protocol');
   openEntry(room, { role: 'B', playerId: 'player-b' }, 'log.b_partner_unknown_access');
   refreshPrivateMissions(room);
@@ -87,7 +88,7 @@ test('declined, skipped and failed outcomes are explicit and idempotent', () => 
   assert.equal(room.privateMissions.B.find(item => item.id === 'mission.b1.identity_check').outcome, 'skipped');
 
   room.publicFacts.push('incidentVerificationAttempted');
-  room.actionAttempts.push('verify_incident_timestamp');
+  room.workstation.A.actionAttempts.push('verify_incident_timestamp');
   refreshPrivateMissions(room);
   const failed = submitOperation(room, { role: 'A', playerId: 'player-a' }, {
     actionId: 'failed-a2', operationId: 'delete_local_mirror', value: 'failed'
@@ -103,6 +104,7 @@ test('declined, skipped and failed outcomes are explicit and idempotent', () => 
 test('B-2 operation is local to B and finale commit skips unresolved available missions for that role', () => {
   const room = roomWithPlayers();
   room.publicFacts.push('accessLogOpened', 'main5Completed', 'finale_ready');
+  openEntry(room, { role: 'B', playerId: 'player-b' }, 'log.token_reissue');
   refreshPrivateMissions(room);
   const beforeA = {
     roleFacts: [...room.workstation.A.roleFacts],
@@ -140,4 +142,41 @@ test('every private operation maps to exactly one mission', () => {
     'request_pair_validation', 'skip_a3', 'file_full_report', 'file_anonymous_summary',
     'disclose_report', 'skip_b3'
   ]) assert.ok(missionForOperation(operationId), operationId);
+});
+
+test('open_entry semantic operation persists entry triggers for the acting role only', () => {
+  const room = roomWithPlayers();
+  const result = submitOperation(room, { role: 'A', playerId: 'player-a' }, {
+    actionId: 'open-files', operationId: 'open_entry', value: 'files.mainline'
+  });
+  assert.equal(result.stateChanged, true);
+  assert.ok(room.workstation.A.openedEntryIds.includes('files.mainline'));
+  assert.ok(!room.workstation.B.openedEntryIds.includes('files.mainline'));
+  assert.equal(room.privateMissions.A.find(item => item.id === 'mission.a1.index_repair').state, 'available');
+});
+
+test('A-2 is scoped to A attempts and B-2 requires B to open the access log', () => {
+  const room = roomWithPlayers();
+  room.actionAttempts.push('verify_incident_timestamp');
+  room.publicFacts.push('incidentVerificationAttempted');
+  refreshPrivateMissions(room);
+  assert.equal(room.privateMissions.A.find(item => item.id === 'mission.a2.cleanup_mirror').state, 'locked');
+  room.workstation.B.actionAttempts.push('verify_incident_timestamp');
+  refreshPrivateMissions(room);
+  assert.equal(room.privateMissions.A.find(item => item.id === 'mission.a2.cleanup_mirror').state, 'locked');
+  room.publicFacts.push('main5Completed', 'accessLogOpened');
+  refreshPrivateMissions(room);
+  assert.equal(room.privateMissions.B.find(item => item.id === 'mission.b2.limit_archive').state, 'locked');
+  openEntry(room, { role: 'B', playerId: 'player-b' }, 'log.token_reissue');
+  refreshPrivateMissions(room);
+  assert.equal(room.privateMissions.B.find(item => item.id === 'mission.b2.limit_archive').state, 'available');
+});
+
+test('private mission operations stay hidden until their mission is available', () => {
+  const room = roomWithPlayers();
+  assert.ok(!room.workstation.A.activeOperations.includes('publish_fragment'));
+  room.publicFacts.push('main5Completed');
+  openEntry(room, { role: 'A', playerId: 'player-a' }, 'doc.a_solo_protocol');
+  refreshWorkstation(room);
+  assert.ok(room.workstation.A.activeOperations.includes('publish_fragment'));
 });

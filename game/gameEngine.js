@@ -153,11 +153,14 @@ function submitOperation(room, player, action, pendingEvents = []) {
     if (!current || current.state !== 'available') fail(current?.state === 'resolved' ? 'MISSION_RESOLVED' : 'MISSION_LOCKED', 423, 'Mission is locked or already resolved');
   }
 
-  const result = executeOperation(room, typeof player === 'object' ? player : { role }, action.operationId, action.value);
+  const failedAttempt = mission && typeof action.value === 'string'
+    && /^(failed|invalid|error)$/i.test(action.value.trim());
+  const result = executeOperation(room, typeof player === 'object' ? player : { role }, action.operationId, action.value,
+    { skipEffects: Boolean(failedAttempt) || action.operationId === 'commit_finale' });
   if (!result.stateChanged) return result;
 
   let outcome = OPERATION_OUTCOMES[action.operationId];
-  if (mission && typeof action.value === 'string' && /^(failed|invalid|error)$/i.test(action.value.trim())) outcome = 'failed';
+  if (failedAttempt) outcome = 'failed';
   if (mission && outcome) {
     resolvePrivateMission(room, role, mission.id, outcome, action.operationId);
   }
@@ -165,6 +168,9 @@ function submitOperation(room, player, action, pendingEvents = []) {
   if (action.operationId === 'commit_finale') {
     room.finaleCommittedByRole ??= {};
     room.finaleCommittedByRole[role] = true;
+    if (!room.workstation[role].roleFacts.includes('finaleCommitted')) {
+      room.workstation[role].roleFacts.push('finaleCommitted');
+    }
     room.completedNodes ??= [];
     const node = `finaleCommitted.${role}`;
     if (!room.completedNodes.includes(node)) room.completedNodes.push(node);

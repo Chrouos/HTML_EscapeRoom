@@ -166,8 +166,11 @@ export function createWorkstation(root, { onOperation } = {}) {
 
   function renderTerminal(container, view) {
     const terminal = view.terminal || {};
-    const operations = Array.isArray(terminal.operations) ? terminal.operations
-      : Array.isArray(view.operations) ? view.operations : [];
+    const declaredOperations = Array.isArray(terminal.operations) ? terminal.operations
+      : Array.isArray(view.operations) ? view.operations
+        : Array.isArray(terminal.activeOperations) ? terminal.activeOperations : [];
+    const operations = declaredOperations.map(operation => typeof operation === 'string'
+      ? { operationId: operation, label: operation } : operation);
     const panel = document.createElement('div');
     panel.className = 'workstation-terminal';
     panel.dataset.workstationTerminal = '';
@@ -258,6 +261,12 @@ export function createWorkstation(root, { onOperation } = {}) {
     }
     lastFocusId = entry.id;
     render(currentView);
+    // Opening a record is a stateful workstation action. Persist it so
+    // server-side mission triggers and role-local openedEntryIds stay in sync
+    // across refreshes and the other player's projection remains untouched.
+    if (typeof onOperation === 'function') {
+      onOperation({ operationId: 'open_entry', value: entry.id, actionId: randomId() });
+    }
   }
 
   function restoreFocus() {

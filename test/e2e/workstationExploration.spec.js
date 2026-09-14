@@ -73,6 +73,7 @@ test('explores Files folders and entries without leaking locked names', async ({
   await expect(workspace).not.toContainText('blackbox.txt');
   await workspace.getByRole('button', { name: 'incident.log', exact: true }).click();
   await expect(workspace.locator('[data-workstation-entry-content]')).toContainText('02:17');
+  await expect.poll(room.getOperation).toMatchObject({ operationId: 'open_entry', value: 'incident' });
   await workspace.getByRole('button', { name: /back/i }).click();
   await expect(workspace.getByRole('button', { name: 'incident.log', exact: true })).toBeVisible();
   await room.partnerContext.close();

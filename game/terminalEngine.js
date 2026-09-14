@@ -2,7 +2,7 @@ const { evaluatePredicate } = require('./content/contentSchema');
 const { terminalEntries } = require('./content/terminalEntries');
 const { operations } = require('./content/operations');
 const { createWorkstationState } = require('./createRoomState');
-const { refreshPrivateMissions } = require('./privateEventEngine');
+const { refreshPrivateMissions, missionForOperation } = require('./privateEventEngine');
 
 const ROLES = ['A', 'B'];
 const PRIVATE_OPERATION_ROLES = Object.freeze({
@@ -81,7 +81,7 @@ function predicateState(room, role) {
     role,
     roleFacts: { A: roleFacts('A'), B: roleFacts('B') },
     openedEntryIds: ws.openedEntryIds,
-    actionIds: [...room.actionAttempts, ...ws.actionAttempts]
+    actionIds: [...ws.actionAttempts]
   };
 }
 
@@ -100,6 +100,11 @@ function entryVisible(room, role, entry) {
 function operationVisible(room, role, operation) {
   const owner = PRIVATE_OPERATION_ROLES[operation.operationId];
   if (operation.kind === 'private' && owner !== role) return false;
+  const mission = operation.kind === 'private' && missionForOperation(operation.operationId);
+  if (mission) {
+    const state = room.privateMissions?.[role]?.find(item => item.id === mission.id);
+    if (!state || state.state !== 'available') return false;
+  }
   if (operation.kind === 'mainline' && operation.operationId !== 'verify_incident_timestamp'
     && room.completedOperations.includes(operation.operationId)) return false;
   if (operation.operationId === 'verify_incident_timestamp') {
@@ -184,7 +189,10 @@ function applyEffects(room, role, operation) {
   const effects = operation.effects || {};
   for (const fact of effects.publicFacts || []) if (!room.publicFacts.includes(fact)) room.publicFacts.push(fact);
   for (const fact of effects.roleFacts || []) if (!room.workstation[role].roleFacts.includes(fact)) room.workstation[role].roleFacts.push(fact);
-  for (const node of effects.completeNodeIds || []) if (!room.completedNodes.includes(node)) room.completedNodes.push(node);
+  const nodes = operation.kind === 'private'
+    ? (room.workstation[role].completedNodes ??= [])
+    : (room.completedNodes ??= []);
+  for (const node of effects.completeNodeIds || []) if (!nodes.includes(node)) nodes.push(node);
   for (const id of effects.unlockEntryIds || []) {
     for (const targetRole of ROLES) {
       if (audienceAllows(terminalEntries.find(entry => entry.id === id) || {}, targetRole)
@@ -193,7 +201,7 @@ function applyEffects(room, role, operation) {
   }
 }
 
-function executeOperation(room, player, operationId, value) {
+function executeOperation(room, player, operationId, value, options = {}) {
   const role = assertPlayer(room, player);
   ensureRoom(room);
   refreshWorkstation(room);
@@ -202,6 +210,19 @@ function executeOperation(room, player, operationId, value) {
     throw Object.assign(new Error('Operation is locked'), { code: 'OPERATION_LOCKED', status: 423 });
   }
   const ws = room.workstation[role];
+  if (operationId === 'open_entry') {
+    const entryId = typeof value === 'string' ? value : '';
+    const entry = terminalEntries.find(item => item.id === entryId);
+    if (!entry || !ws.unlockedEntryIds.includes(entryId)) {
+      throw Object.assign(new Error('Entry is locked or not visible'), { code: 'ENTRY_LOCKED', status: 423 });
+    }
+    if (ws.openedEntryIds.includes(entryId)) return { stateChanged: false, operationId, value };
+    ws.openedEntryIds.push(entryId);
+    ws.actionAttempts.push(operationId);
+    refreshWorkstation(room);
+    refreshPrivateMissions(room);
+    return { stateChanged: true, operationId, value };
+  }
   if (operation.kind === 'mainline' && operationId !== 'verify_incident_timestamp'
     && room.completedOperations.includes(operationId)) {
     return { stateChanged: false, operationId, value };
@@ -215,7 +236,7 @@ function executeOperation(room, player, operationId, value) {
     if (!room.publicFacts.includes('incidentVerificationAttempted')) room.publicFacts.push('incidentVerificationAttempted');
     if (!ws.roleFacts.includes('incidentVerificationAttempted')) ws.roleFacts.push('incidentVerificationAttempted');
   }
-  applyEffects(room, role, operation);
+  if (!options.skipEffects) applyEffects(room, role, operation);
   if (operation.kind === 'mainline' && operationId !== 'verify_incident_timestamp'
     && !room.completedOperations.includes(operationId)) room.completedOperations.push(operationId);
   if (!ws.completedOperations.includes(operationId) && operationId !== 'verify_incident_timestamp') ws.completedOperations.push(operationId);

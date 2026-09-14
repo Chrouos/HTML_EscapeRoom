@@ -2,6 +2,7 @@ const { createHash } = require('node:crypto');
 
 const { dialogue } = require('./content/dialogue');
 const { privateMissions } = require('./content/privateMissions');
+const { operations } = require('./content/operations');
 const { evaluatePredicate } = require('./content/contentSchema');
 const { createDialogueState } = require('./createRoomState');
 
@@ -11,6 +12,7 @@ const PUBLIC_INTENTS = new Set(['system', 'common_task']);
 const DIRECT_INTENTS = new Set(['rapport', 'observation', 'manipulation', 'private_task']);
 
 const MISSION_OUTCOMES = new Set(['completed', 'declined', 'skipped', 'failed']);
+const MISSION_STATES = new Set(['locked', 'available', 'resolved']);
 
 function missionForOperation(operationId) {
   return privateMissions.find(item => item.operationIds.includes(operationId)) || null;
@@ -33,10 +35,7 @@ function missionPredicateState(room, role) {
     role,
     roleFacts: { A: roleFactList('A'), B: roleFactList('B') },
     openedEntryIds: Array.isArray(workstation.openedEntryIds) ? workstation.openedEntryIds : [],
-    actionIds: [
-      ...(Array.isArray(room.actionAttempts) ? room.actionAttempts : []),
-      ...(Array.isArray(workstation.actionAttempts) ? workstation.actionAttempts : [])
-    ]
+    actionIds: [...(Array.isArray(workstation.actionAttempts) ? workstation.actionAttempts : [])]
   };
 }
 
@@ -48,7 +47,7 @@ function ensurePrivateMissions(room) {
     const byId = new Map(existing.map(item => [item.id, item]));
     room.privateMissions[role] = privateMissions.filter(item => item.role === role).map(item => {
       const previous = byId.get(item.id);
-      const state = previous?.state === 'resolved' ? 'resolved' : (previous?.state || 'locked');
+      const state = MISSION_STATES.has(previous?.state) ? previous.state : 'locked';
       return {
         id: item.id,
         missionId: item.missionId,
@@ -95,6 +94,19 @@ function resolvePrivateMission(room, role, missionId, outcome = 'completed', ope
   mission.state = 'resolved';
   mission.outcome = outcome;
   mission.operationId = operationId;
+  const workstation = room.workstation?.[role] || (room.workstation = { ...(room.workstation || {}), [role]: { roleFacts: [], completedNodes: [] } })[role];
+  workstation.roleFacts ??= [];
+  workstation.completedNodes ??= [];
+  if (outcome === 'skipped' && !operationId) {
+    const skipOperation = operations.find(item => item.kind === 'private'
+      && item.operationId.startsWith('skip_') && item.operationId.endsWith(mission.missionId.slice(0, 2)));
+    for (const fact of skipOperation?.effects?.roleFacts || []) if (!workstation.roleFacts.includes(fact)) workstation.roleFacts.push(fact);
+    for (const node of skipOperation?.effects?.completeNodeIds || []) if (!workstation.completedNodes.includes(node)) workstation.completedNodes.push(node);
+  }
+  if (outcome === 'failed' && operationId) {
+    const failedFact = `${operationId}Failed`;
+    if (!workstation.roleFacts.includes(failedFact)) workstation.roleFacts.push(failedFact);
+  }
   return { stateChanged: true, mission };
 }
 

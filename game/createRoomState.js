@@ -5,7 +5,8 @@ function createWorkstationState() {
     activeOperations: [],
     roleFacts: [],
     actionAttempts: [],
-    completedOperations: []
+    completedOperations: [],
+    completedNodes: []
   };
 }
 
