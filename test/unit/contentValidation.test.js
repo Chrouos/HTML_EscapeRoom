@@ -127,6 +127,19 @@ test('applies the same independent source and reachability checks to dialogue ve
   const terminalEntries = content.terminalEntries.map(item => ({ ...item }));
   terminalEntries.find(item => item.id === 'audio.original_incident_timestamp').sourceGroup = 'tampered_group';
   assert.match(errorsFor({ dialogue, terminalEntries }).join('\n'), /sourceGroup|target/i);
+
+  const sameSourceDialogue = content.dialogue.map(item => ({ ...item, verificationEntries: [...(item.verificationEntries || [])] }));
+  const sameSourceObservation = sameSourceDialogue.find(item => item.id === 'orpheus.observation.a');
+  sameSourceObservation.sourceGroup = 'raw_audio';
+  sameSourceObservation.verificationEntries = [{ entryId: 'audio.original_incident_timestamp', sourceGroup: 'raw_audio' }];
+  assert.match(errorsFor({ dialogue: sameSourceDialogue }).join('\n'), /sourceGroup|independent/i);
+
+  const unreachableDialogue = content.dialogue.map(item => ({ ...item, verificationEntries: [...(item.verificationEntries || [])] }));
+  const unreachableObservation = unreachableDialogue.find(item => item.id === 'orpheus.observation.a');
+  unreachableObservation.verificationEntries = [{ entryId: 'audio.original_incident_timestamp', sourceGroup: 'raw_audio' }];
+  const unreachableEntries = content.terminalEntries.map(item => ({ ...item }));
+  unreachableEntries.find(item => item.id === 'audio.original_incident_timestamp').unlockWhen = { publicFact: 'never_recorded' };
+  assert.match(errorsFor({ dialogue: unreachableDialogue, terminalEntries: unreachableEntries }).join('\n'), /reachable|verification/i);
 });
 
 test('rejects mainline action prerequisites that point at private operations', () => {

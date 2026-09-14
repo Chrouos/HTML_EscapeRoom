@@ -140,7 +140,11 @@ function validateContent(bundle = defaultContent) {
     for (const verification of item.verificationEntries || []) {
       const target = terminalEntries.find(entry => entry.id === verification.entryId);
       if (!target) errors.push(`dialogue ${item.id} references missing verification ${verification.entryId}`);
-      else if (target.sourceGroup !== verification.sourceGroup) errors.push(`dialogue ${item.id} verification sourceGroup does not match target`);
+      else {
+        if (target.sourceGroup !== verification.sourceGroup) errors.push(`dialogue ${item.id} verification sourceGroup does not match target`);
+        if (target.sourceGroup === item.sourceGroup) errors.push(`dialogue ${item.id} verification must use an independent sourceGroup`);
+        if (!publicReachable(target.unlockWhen, reach.facts)) errors.push(`dialogue ${item.id} verification target is unreachable`);
+      }
     }
   }
   const missionIds = new Set();
