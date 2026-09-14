@@ -4,6 +4,7 @@ const { createRoomState } = require('../../game/createRoomState');
 const { initializeGame, submitAction, submitOperation } = require('../../game/gameEngine');
 const { forPlayer } = require('../../game/safeState');
 const { operations } = require('../../game/content/operations');
+const { privateMissions } = require('../../game/content/privateMissions');
 const { traverseOperationGraph } = require('../../game/content/validateContent');
 
 const main = [
@@ -78,9 +79,17 @@ test('both actors can use the same action ID and retain both ending events', () 
 });
 
 test('operation graph traverses each declared room root and reaches finale without private outcomes', () => {
-  for (const root of ['roomCreated', 'hostJoined', 'guestJoined']) {
-    const graph = traverseOperationGraph(operations, { startFacts: [root], startNodes: [root] });
-    assert.ok(graph.nodes.has(root), `missing root ${root}`);
+  const roots = [
+    ['roomCreated'],
+    ['roomCreated', 'hostJoined'],
+    ['roomCreated', 'hostJoined', 'guestJoined']
+  ];
+  for (const startFacts of roots) {
+    const graph = traverseOperationGraph(operations, { startFacts, startNodes: startFacts });
+    for (const root of startFacts) assert.ok(graph.nodes.has(root), `missing root ${root}`);
+    for (const node of ['finale_ready', 'finaleCommitted.A', 'finaleCommitted.B', 'endingCommitted']) {
+      assert.ok(graph.nodes.has(node), `missing ${node} from ${startFacts.join(',')}`);
+    }
   }
   const graph = traverseOperationGraph(operations, { excludeKinds: ['private'] });
   for (const node of ['finale_ready', 'finaleCommitted.A', 'finaleCommitted.B', 'endingCommitted']) {
@@ -89,15 +98,27 @@ test('operation graph traverses each declared room root and reaches finale witho
   assert.ok(graph.reached.has('complete_main6'));
 });
 
-test('declined, skipped, and failed private outcomes still follow the shared route', () => {
-  const declined = ['decline_index_repair', 'decline_identity_check', 'decline_mirror_cleanup'];
-  const skipped = ['skip_a3', 'skip_b3'];
-  const graph = traverseOperationGraph(operations.filter(operation =>
-    operation.kind !== 'private' || declined.includes(operation.operationId) || skipped.includes(operation.operationId)));
-  assert.ok(graph.nodes.has('finale_ready'));
-  assert.ok(graph.nodes.has('endingCommitted'));
-  const failed = traverseOperationGraph(operations, { excludeKinds: ['private'] });
-  assert.ok(failed.nodes.has('finale_ready'));
+test('every mission outcome preserves shared reachability', () => {
+  const missionOutcomes = [
+    ['archive_index', 'decline_index_repair', 'skip_a1'],
+    ['flag_identity', 'decline_identity_check', 'skip_b1'],
+    ['delete_local_mirror', 'decline_mirror_cleanup', 'skip_a2'],
+    ['pause_local_mirror', 'keep_local_mirror', 'skip_b2'],
+    ['request_solo_validation', 'request_pair_validation', 'skip_a3'],
+    ['file_full_report', 'disclose_report', 'skip_b3']
+  ];
+  for (const outcomes of missionOutcomes) {
+    for (const operationId of outcomes) {
+      const graph = traverseOperationGraph(operations.filter(operation =>
+        operation.kind !== 'private' || operation.operationId === operationId));
+      assert.ok(graph.nodes.has('finale_ready'), `outcome ${operationId} blocked mainline`);
+      assert.ok(graph.nodes.has('endingCommitted'));
+    }
+    const mission = privateMissions.find(item => item.operationIds.includes(outcomes[0]));
+    const failedGraph = traverseOperationGraph(operations, { excludeOperationIds: mission.operationIds });
+    assert.ok(failedGraph.nodes.has('finale_ready'), `failed ${outcomes[0]} blocked mainline`);
+    assert.ok(failedGraph.nodes.has('endingCommitted'));
+  }
 });
 
 test('the first neutral finale commit has no shared ending effect', () => {

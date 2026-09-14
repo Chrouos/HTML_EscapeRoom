@@ -186,6 +186,8 @@ function submitOperation(room, player, action, pendingEvents = []) {
   }
 
   if (action.operationId === 'commit_finale') {
+    // Role commit lifecycle bookkeeping only; shared progress remains owned
+    // by the manifest effect applier in executeOperation.
     room.finaleCommittedByRole ??= {};
     room.finaleCommittedByRole[role] = true;
     // An unresolved private offer is an explicit omission, never a blocker.
