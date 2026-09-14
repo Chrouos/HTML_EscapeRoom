@@ -130,6 +130,11 @@ function visibleIntercom(room, role) {
 }
 
 function workstation(room, role) {
+  // Preserve the legacy clue-only projection for imported snapshots used by
+  // older clients; modern rooms carry unlockedEntryIds and activeOperations.
+  if (room.privateClues?.[role] && Object.hasOwn(room.privateClues[role], 'clue')) {
+    return cloneClientValue(room.privateClues[role]);
+  }
   if (room.workstation !== undefined) {
     if (room.workstation?.[role]?.unlockedEntryIds
       && Array.isArray(room.workstation?.[role]?.openedEntryIds)

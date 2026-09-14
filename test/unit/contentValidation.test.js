@@ -148,6 +148,16 @@ test('rejects mainline action prerequisites that point at private operations', (
   assert.match(errorsFor({ operations }).join('\n'), /private|mainline|action/i);
 });
 
+test('rejects mainline progress that depends on private facts or private fallback prerequisites', () => {
+  const operations = content.operations.map(item => ({ ...item, unlockWhen: structuredClone(item.unlockWhen), effects: structuredClone(item.effects) }));
+  operations.find(item => item.operationId === 'complete_main5').unlockWhen = { roleFact: 'aPublishedFragment' };
+  assert.match(errorsFor({ operations }).join('\n'), /mainline.*private|private.*mainline/i);
+
+  const missions = content.privateMissions.map(item => ({ ...item, mainlineFallbackOperationIds: [...item.mainlineFallbackOperationIds] }));
+  missions[0].mainlineFallbackOperationIds = ['archive_index'];
+  assert.match(errorsFor({ privateMissions: missions }).join('\n'), /fallback.*mainline|kind/i);
+});
+
 test('predicate evaluation fails closed for malformed runtime values and keeps empty all/any semantics', () => {
   assert.equal(evaluatePredicate(null), false);
   assert.equal(evaluatePredicate(undefined), false);

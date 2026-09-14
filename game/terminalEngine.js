@@ -39,6 +39,13 @@ function ensureRoom(room) {
   room.completedNodes ??= [];
   room.actionAttempts ??= [];
   room.completedOperations ??= [];
+  room.publicFacts ??= [];
+  // Rooms and joins are authoritative public facts. Older room snapshots did
+  // not persist these facts, so derive them once from the authenticated
+  // occupants before projecting operation availability.
+  if (room.roomCode && !room.publicFacts.includes('roomCreated')) room.publicFacts.push('roomCreated');
+  if (room.players?.A && !room.publicFacts.includes('hostJoined')) room.publicFacts.push('hostJoined');
+  if (room.players?.B && !room.publicFacts.includes('guestJoined')) room.publicFacts.push('guestJoined');
   room.workstation ??= {};
   for (const role of ROLES) {
     const current = room.workstation[role];

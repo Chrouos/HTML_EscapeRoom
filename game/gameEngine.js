@@ -5,7 +5,7 @@ const { story } = require('./content/story');
 const { endings } = require('./content/endings');
 const { appendStoryEvents } = require('./storyEngine');
 const { evaluate, evidenceIds } = require('./endingEngine');
-const { executeOperation, ensureRoom } = require('./terminalEngine');
+const { executeOperation, ensureRoom, refreshWorkstation } = require('./terminalEngine');
 const {
   ensurePrivateMissions,
   refreshPrivateMissions,
@@ -56,6 +56,24 @@ function setClues(room, puzzle, stepId, force = false) {
   room.clueStage = clueStage;
 }
 
+const MAINLINE_FACTS = Object.freeze([
+  ['main1', 'main1Completed'], ['main2', 'main2Completed'], ['main3', 'main3Completed'],
+  ['main4', 'main4Completed'], ['main5', 'main5Completed'], ['main6', 'mainCompleted']
+]);
+
+// Legacy clients still read mainProgress/chapter. Keep those projections
+// derived from the manifest facts so operation effects remain the only source
+// of shared progression mutations.
+function syncMainlineProjection(room) {
+  const facts = new Set(room.publicFacts || []);
+  // Backfill facts for snapshots written before manifest operations existed.
+  for (const [id, fact] of MAINLINE_FACTS) if (room.mainProgress?.includes(id)) facts.add(fact);
+  room.publicFacts = [...facts];
+  room.mainProgress = MAINLINE_FACTS.filter(([, fact]) => facts.has(fact)).map(([id]) => id);
+  room.chapter = Math.min(6, room.mainProgress.length + 1);
+  return room.mainProgress;
+}
+
 function sideViews(room) {
   const available = Object.values(sidePuzzles).filter(puzzle => room.chapter >= puzzle.chapter);
   if (!available.length) return;
@@ -88,6 +106,8 @@ function initializeGame(room, pendingEvents = []) {
   room.sideEvidence ??= [];
   room.attempts ??= {};
   room.hints ??= {};
+  ensureRoom(room);
+  syncMainlineProjection(room);
   const puzzle = mainPuzzles['main' + room.chapter];
   if (puzzle && !room.ending) {
     prepare(room, puzzle);
@@ -186,6 +206,8 @@ function submitOperation(room, player, action, pendingEvents = []) {
     role,
     ...(action.operationId === 'open_entry' ? { entryOpened: action.value } : {})
   }, pendingEvents);
+  syncMainlineProjection(room);
+  room.publicProgress = { ...(room.publicProgress || {}), chapter: room.chapter, mainProgress: [...room.mainProgress] };
   refreshPrivateMissions(room);
   const response = {
     stateChanged: true,
@@ -210,7 +232,9 @@ function submitAction(room, player, action, pendingEvents = []) {
   const isSide = Object.hasOwn(sidePuzzles, action.puzzleId);
   const puzzle = isSide ? sidePuzzles[action.puzzleId] : mainPuzzles[action.puzzleId];
   if (!puzzle || room.chapter < puzzle.chapter) fail('PUZZLE_LOCKED', 423, '這個謎題尚未解鎖');
-  if (room.mainProgress.includes(action.puzzleId)
+  const finaleProtocolStillOpen = action.puzzleId === 'main6' && !room.ending
+    && room.completedSteps?.main6?.includes('protocol');
+  if ((room.mainProgress.includes(action.puzzleId) && !finaleProtocolStillOpen)
     || (isSide && evidenceIds(room).has(puzzle.evidence.id))) return noOp();
   if (!isSide && room.chapter !== puzzle.chapter) fail('PUZZLE_LOCKED', 423, '這個謎題尚未解鎖');
   initializeGame(room, pendingEvents);
@@ -230,6 +254,11 @@ function submitAction(room, player, action, pendingEvents = []) {
   if (action.stepId !== stepId) fail('PUZZLE_LOCKED', 423, '請先完成目前的步驟');
   const step = puzzle.steps[stepId];
   if (step.kind === 'ending') {
+    if (!room.publicFacts?.includes('mainCompleted')
+      && room.workstation?.[role]?.activeOperations?.includes('complete_main6')) {
+      executeOperation(room, { role, playerId: room.players[role]?.playerId }, 'complete_main6');
+      syncMainlineProjection(room);
+    }
     const choice = action.value.trim().toUpperCase();
     const count = evidenceIds(room).size;
     if (!['COMPLY', 'RESIST', 'TRUTH'].includes(choice)) fail('INVALID_ACTION', 400, '請選擇一個出口協定');
@@ -241,7 +270,6 @@ function submitAction(room, player, action, pendingEvents = []) {
       audience: { kind: 'both' } };
     if (endingId) {
       room.ending = structuredClone(endings[endingId]);
-      room.mainProgress.push('main6');
       room.completedSteps.main6.push(stepId);
       event.text = room.ending.text;
       event.type = 'story';
@@ -276,8 +304,15 @@ function submitAction(room, player, action, pendingEvents = []) {
       events.push(...appendStoryEvents(room, [{ id: action.puzzleId + '-evidence', type: 'clue',
         text: puzzle.evidence.summary, audience: { kind: 'both' } }], pendingEvents));
     } else {
-      room.mainProgress.push(action.puzzleId);
-      room.chapter += 1;
+      const operationId = {
+        main1: 'complete_main1', main2: 'complete_main2', main3: 'complete_main3',
+        main4: 'complete_main4', main5: 'complete_main5', main6: 'complete_main6'
+      }[action.puzzleId];
+      refreshWorkstation(room);
+      if (operationId && room.workstation?.[role]?.activeOperations?.includes(operationId)) {
+        executeOperation(room, { role, playerId: room.players[role]?.playerId }, operationId, undefined, { skipEffects: false });
+      }
+      syncMainlineProjection(room);
     }
   } else if (!isSide) setClues(room, puzzle, nextStep, true);
   initializeGame(room, pendingEvents);

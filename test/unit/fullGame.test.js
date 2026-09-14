@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 const { createRoomState } = require('../../game/createRoomState');
 const { initializeGame, submitAction } = require('../../game/gameEngine');
 const { forPlayer } = require('../../game/safeState');
+const { operations } = require('../../game/content/operations');
+const { traverseOperationGraph } = require('../../game/content/validateContent');
 
 const main = [
   ['main1', [['identity', 'ORPHEUS-17'], ['startup', 'AUX CORE EMERGENCY']]],
@@ -73,6 +75,30 @@ test('both actors can use the same action ID and retain both ending events', () 
   assert.equal(new Set(endingEvents.map(event => event.id)).size, 2);
   assert.deepEqual(endingEvents.map(event => event.type), ['system', 'story']);
   assert.equal(endingEvents[1].text, room.ending.text);
+});
+
+test('operation graph reaches finale from the three room roots without private outcomes', () => {
+  const graph = traverseOperationGraph(operations, { excludeKinds: ['private'] });
+  for (const node of ['finale_ready', 'finaleCommitted.A', 'finaleCommitted.B', 'endingCommitted']) {
+    assert.ok(graph.nodes.has(node), `missing ${node}`);
+  }
+  assert.ok(graph.reached.has('complete_main6'));
+});
+
+test('each private mission can lose all outcome edges without blocking the finale', () => {
+  const missions = [
+    ['archive_index', 'decline_index_repair', 'skip_a1'],
+    ['flag_identity', 'share_roster', 'decline_identity_check', 'skip_b1'],
+    ['delete_local_mirror', 'share_mirror_first', 'decline_mirror_cleanup', 'skip_a2'],
+    ['pause_local_mirror', 'keep_local_mirror', 'warn_partner_first', 'skip_b2'],
+    ['request_solo_validation', 'publish_fragment', 'request_pair_validation', 'skip_a3'],
+    ['file_full_report', 'file_anonymous_summary', 'disclose_report', 'skip_b3']
+  ];
+  for (const operationIds of missions) {
+    const graph = traverseOperationGraph(operations.filter(operation => !operationIds.includes(operation.operationId)));
+    assert.ok(graph.nodes.has('finale_ready'), `private outcomes blocked finale: ${operationIds.join(',')}`);
+    assert.ok(graph.nodes.has('endingCommitted'));
+  }
 });
 
 for (const [count, choice, ending] of [[2, 'RESIST', 'resistance'], [4, 'TRUTH', 'truth']]) {

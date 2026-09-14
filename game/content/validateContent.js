@@ -56,23 +56,58 @@ function publicReachable(predicate, facts) {
   return false;
 }
 
-function operationReachability(operations) {
-  const facts = new Set(['roomCreated', 'hostJoined', 'guestJoined']);
-  const nodes = new Set(['roomCreated', 'hostJoined', 'guestJoined']);
+/**
+ * Explore the declarative operation graph until no new facts or nodes appear.
+ * Role-local predicates are treated as choices the relevant player can make;
+ * callers can remove operation kinds/IDs to prove that optional branches are
+ * not prerequisites for the shared route.
+ */
+function traverseOperationGraph(operations, options = {}) {
+  const excludedKinds = new Set(options.excludeKinds || []);
+  const excludedOperationIds = new Set(options.excludeOperationIds || []);
+  const facts = new Set(options.startFacts || ['roomCreated', 'hostJoined', 'guestJoined']);
+  const nodes = new Set(options.startNodes || ['roomCreated', 'hostJoined', 'guestJoined']);
+  const actionIds = new Set(options.startActionIds || []);
+  const roleFacts = { A: new Set(options.startRoleFacts?.A || []), B: new Set(options.startRoleFacts?.B || []) };
   const reached = new Set();
   let changed = true;
   while (changed) {
     changed = false;
     for (const operation of operations) {
       if (reached.has(operation.operationId)) continue;
-      if (!publicReachable(operation.unlockWhen, facts)) continue;
+      if (excludedKinds.has(operation.kind) || excludedOperationIds.has(operation.operationId)) continue;
+      if (!graphPredicateReachable(operation.unlockWhen, { facts, actionIds, roleFacts })) continue;
       reached.add(operation.operationId); changed = true;
       const effects = operation.effects || {};
       for (const fact of effects.publicFacts || []) facts.add(fact);
       for (const node of effects.completeNodeIds || []) nodes.add(node);
+      for (const fact of effects.roleFacts || []) {
+        // A manifest operation has a role at runtime. For graph safety, make
+        // the fact available to at least one actor (and never to mainline).
+        roleFacts.A.add(fact); roleFacts.B.add(fact);
+      }
+      actionIds.add(operation.operationId);
     }
   }
-  return { reached, facts, nodes };
+  return { reached, facts, nodes, actionIds, roleFacts };
+}
+
+function graphPredicateReachable(predicate, state) {
+  if (!predicate || typeof predicate !== 'object') return false;
+  if (Array.isArray(predicate.all)) return predicate.all.every(item => graphPredicateReachable(item, state));
+  if (Array.isArray(predicate.any)) return predicate.any.some(item => graphPredicateReachable(item, state));
+  if (predicate.not !== undefined) return !graphPredicateReachable(predicate.not, state);
+  if (predicate.publicFact !== undefined) return state.facts.has(predicate.publicFact);
+  if (predicate.actionAttempted !== undefined) return state.actionIds.has(predicate.actionAttempted);
+  // Entry discovery and role rapport are player-controlled decisions. They
+  // are possible whenever the operation itself is reachable.
+  if (predicate.roleFact !== undefined || predicate.entryOpened !== undefined) return true;
+  if (predicate.chapterAtLeast !== undefined) return Number(predicate.chapterAtLeast) <= 6;
+  return false;
+}
+
+function operationReachability(operations, options = {}) {
+  return traverseOperationGraph(operations, options);
 }
 
 function validateContent(bundle = defaultContent) {
@@ -208,6 +243,19 @@ function validateContent(bundle = defaultContent) {
   if (!operations.some(item => item.operationId === 'commit_finale' && item.kind === 'neutral_finale')) errors.push('missing neutral finale operation commit_finale');
   if (!reach.nodes.has('finale_ready')) errors.push('finale_ready is unreachable');
   if (!reach.nodes.has('finaleCommitted.A') || !reach.nodes.has('finaleCommitted.B') || !reach.nodes.has('endingCommitted')) errors.push('finale commit nodes are unreachable');
+
+  // Safety proof: the shared route must survive removal of every private edge,
+  // and removal of each mission's complete outcome set independently.
+  const requiredFinaleNodes = ['finale_ready', 'finaleCommitted.A', 'finaleCommitted.B', 'endingCommitted'];
+  const reportGraphFailure = (label, graph) => {
+    for (const node of requiredFinaleNodes) if (!graph.nodes.has(node)) errors.push(`${label} blocks ${node}`);
+  };
+  reportGraphFailure('private operation edges', traverseOperationGraph(operations, { excludeKinds: ['private'] }));
+  for (const mission of privateMissions) {
+    reportGraphFailure(`${mission.id} outcome edges`, traverseOperationGraph(
+      operations.filter(operation => !(mission.operationIds || []).includes(operation.operationId))
+    ));
+  }
   return errors;
 }
 
@@ -247,4 +295,5 @@ function assertValidContent(bundle = defaultContent) {
   return true;
 }
 
-module.exports = { validateContent, assertValidContent, operationReachability, predicateContainsRoleFact, predicateReferencesPrivateEntry, predicateReferencesPrivateAction };
+module.exports = { validateContent, assertValidContent, operationReachability, traverseOperationGraph,
+  predicateContainsRoleFact, predicateReferencesPrivateEntry, predicateReferencesPrivateAction };

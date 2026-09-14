@@ -149,3 +149,15 @@ test('a completed-step no-op does not consume its action ID before a later valid
   assert.equal(valid.body.state.publicProgress.chapter, 2);
   assert.equal(app.locals.roomStore.hasProcessedAction(code, 'reusable-action'), true);
 });
+
+test('semantic mainline operations expose the same public progress as legacy answers', async () => {
+  const { a, b, code } = await roomPair();
+  const first = await action(a, code, { actionId: 'mainline-1', operationId: 'complete_main1' });
+  assert.equal(first.status, 200);
+  assert.equal(first.body.publicResult.operationId, 'complete_main1');
+  const second = await action(b, code, { actionId: 'mainline-2', operationId: 'continue_file_index' });
+  assert.equal(second.status, 200);
+  assert.equal(second.body.publicResult.operationId, 'continue_file_index');
+  const state = await (await a.fetch(`${server.baseUrl}/api/rooms/${code}/state`)).json();
+  assert.deepEqual(state.state.publicProgress.mainProgress, ['main1']);
+});
