@@ -267,31 +267,6 @@ function submitAction(room, player, action, pendingEvents = []) {
   const step = puzzle.steps[stepId];
   if (step.kind === 'ending') {
     fail('INVALID_ACTION', 400, 'Finale requires the neutral commit_finale operation');
-    if (!room.publicFacts?.includes('mainCompleted')
-      && room.workstation?.[role]?.activeOperations?.includes('complete_main6')) {
-      executeOperation(room, { role, playerId: room.players[role]?.playerId }, 'complete_main6');
-      syncMainlineProjection(room);
-    }
-    const choice = action.value.trim().toUpperCase();
-    const count = evidenceIds(room).size;
-    if (!['COMPLY', 'RESIST', 'TRUTH'].includes(choice)) fail('INVALID_ACTION', 400, '請選擇一個出口協定');
-    if ((choice === 'RESIST' && count < 2) || (choice === 'TRUTH' && count < 4)) fail('PUZZLE_LOCKED', 423, '目前證據不足以執行這個協定');
-    if (room.pendingChoices[role] === choice) return noOp();
-    room.pendingChoices[role] = choice;
-    const endingId = evaluate(room);
-    const event = { id: 'choice-' + role + '-' + action.actionId, type: 'system', text: '角色 ' + role + ' 已確認出口協定。等待雙方達成一致。',
-      audience: { kind: 'both' } };
-    if (endingId) {
-      room.ending = structuredClone(endings[endingId]);
-      room.completedSteps.main6.push(stepId);
-      event.text = room.ending.text;
-      event.type = 'story';
-    } else if (room.pendingChoices.A && room.pendingChoices.B && room.pendingChoices.A !== room.pendingChoices.B) {
-      event.text = '雙方選擇不一致。請討論後重新確認，系統不會替你們決定。';
-    }
-    const events = appendStoryEvents(room, [event], pendingEvents);
-    initializeGame(room, pendingEvents);
-    return { stateChanged: true, events, publicResult: { message: event.text } };
   }
   const authorization = action.puzzleId === 'main4' && stepId === 'authorization';
   const correct = (authorization ? step.acceptedAnswers : [step.answer]).some(answer => answersMatch(action.value, answer));
