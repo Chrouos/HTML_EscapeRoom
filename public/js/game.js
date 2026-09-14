@@ -10,6 +10,7 @@
   const investigations = new Map();
   let state;
   let intercom;
+  let workstation;
   let liveTransport;
   let latestCountdown;
 
@@ -117,6 +118,7 @@
     text('[data-stage]', progress.title || '出口協定');
     countdown(next.countdown);
     intercom.render(next.intercom || []);
+    if (workstation) workstation.render(next.workstation || {});
     form.querySelector('button').disabled = busy.has(form) || !next.occupancy.ready || !progress.stepId || Boolean(next.ending);
     for (const side of progress.sidePuzzles || []) renderSide(side);
     const evidence = root.querySelector('[data-evidence]');
@@ -181,6 +183,26 @@
     }
   }
 
+  async function sendWorkstationOperation(operation) {
+    if (!operation || typeof operation.operationId !== 'string') return;
+    const request = {
+      actionId: operation.actionId || crypto.randomUUID(),
+      operationId: operation.operationId,
+      ...(typeof operation.value === 'string' ? { value: operation.value } : {})
+    };
+    try {
+      const response = await fetch(endpoint + '/actions', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(request)
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || 'Operation failed');
+      if (liveTransport && result.state) liveTransport.adopt(result);
+      else if (result.state) render(result.state, result.countdown);
+    } catch (error) {
+      text('[data-feedback]', error.message);
+    }
+  }
+
   form.addEventListener('submit', event => {
     event.preventDefault();
     if (!state || form.querySelector('button').disabled) return;
@@ -233,9 +255,11 @@
 
   Promise.all([
     import('/public/js/intercom.js'),
+    import('/public/js/workstation.js'),
     import('/public/js/live.js')
-  ]).then(([{ createIntercom }, { createLiveTransport }]) => {
+  ]).then(([{ createIntercom }, { createWorkstation }, { createLiveTransport }]) => {
     intercom = createIntercom(root);
+    workstation = createWorkstation(root, { onOperation: sendWorkstationOperation });
     liveTransport = createLiveTransport({
       roomCode: root.dataset.gameRoom,
       onSnapshot: render,
