@@ -4,7 +4,7 @@ const { sidePuzzles } = require('./content/sidePuzzles');
 const { story } = require('./content/story');
 const { endings } = require('./content/endings');
 const { appendStoryEvents } = require('./storyEngine');
-const { evaluate, evidenceIds } = require('./endingEngine');
+const { evidenceIds, commitEnding } = require('./endingEngine');
 const { executeOperation, ensureRoom, refreshWorkstation } = require('./terminalEngine');
 const {
   ensurePrivateMissions,
@@ -37,6 +37,11 @@ function progress(room, puzzle, stepId) {
   const step = puzzle.steps[stepId];
   let prompt = step.prompt;
   if (step.kind === 'ending') {
+    return { chapter: room.chapter, mainProgress: [...room.mainProgress], puzzleId: puzzle.puzzleId,
+      stepId, title: step.title, prompt: '雙方都完成最終程序後，系統會根據你們留下的紀錄產生結局。',
+      hints: [...room.hints[puzzle.puzzleId][stepId]] };
+  }
+  if (false) {
     const count = evidenceIds(room).size;
     prompt = '請各自確認出口協定：COMPLY（依 AI 指示完成程序）';
     if (count >= 2) prompt += '；RESIST（以證據執行手動脫離）';
@@ -197,6 +202,16 @@ function submitOperation(room, player, action, pendingEvents = []) {
     }
   }
 
+  const ending = action.operationId === 'commit_finale' ? commitEnding(room) : null;
+  if (ending) {
+    appendStoryEvents(room, [{
+      id: `ending-${ending.id}`,
+      type: 'story',
+      text: ending.text,
+      audience: { kind: 'both' }
+    }], pendingEvents);
+  }
+
   triggerDialogue(room, {
     operationId: action.operationId,
     role,
@@ -210,6 +225,7 @@ function submitOperation(room, player, action, pendingEvents = []) {
     events: pendingEvents,
     publicResult: {
       operationId: action.operationId,
+      ...(ending ? { endingId: ending.id } : {}),
       ...(mission ? { missionId: mission.id, outcome } : {})
     }
   };
@@ -250,6 +266,7 @@ function submitAction(room, player, action, pendingEvents = []) {
   if (action.stepId !== stepId) fail('PUZZLE_LOCKED', 423, '請先完成目前的步驟');
   const step = puzzle.steps[stepId];
   if (step.kind === 'ending') {
+    fail('INVALID_ACTION', 400, 'Finale requires the neutral commit_finale operation');
     if (!room.publicFacts?.includes('mainCompleted')
       && room.workstation?.[role]?.activeOperations?.includes('complete_main6')) {
       executeOperation(room, { role, playerId: room.players[role]?.playerId }, 'complete_main6');
