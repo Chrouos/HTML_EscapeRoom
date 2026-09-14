@@ -28,6 +28,17 @@ async function commitFinale(page, actionId) {
   }, { actionId });
 }
 
+async function completeMainline(page, actionId) {
+  return page.evaluate(async ({ actionId }) => {
+    const roomCode = document.querySelector('[data-game-room]').dataset.gameRoom;
+    const response = await fetch(`/api/rooms/${roomCode}/actions`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ actionId, operationId: 'complete_main6' })
+    });
+    return response.json();
+  }, { actionId });
+}
+
 test('both players commit neutrally and the server resolves one immutable ending', async ({ browser }) => {
   test.setTimeout(90000);
   const aContext = await browser.newContext();
@@ -47,6 +58,8 @@ test('both players commit neutrally and the server resolves one immutable ending
       await submitAnswer(index % 2 ? b : a, puzzleId, stepId, value);
     }
     await expect(a.locator('[data-game-room]')).toHaveAttribute('data-step', 'main6:ending');
+    const mainline = await completeMainline(a, 'e2e-main6-complete');
+    expect(mainline.stateChanged).toBe(true);
 
     const first = await commitFinale(a, 'e2e-final-a');
     expect(first.stateChanged).toBe(true);
@@ -67,4 +80,3 @@ test('both players commit neutrally and the server resolves one immutable ending
     await bContext.close();
   }
 });
-
