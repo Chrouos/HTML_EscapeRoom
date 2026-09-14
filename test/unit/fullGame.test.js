@@ -99,24 +99,15 @@ test('operation graph traverses each declared room root and reaches finale witho
 });
 
 test('every mission outcome preserves shared reachability', () => {
-  const missionOutcomes = [
-    ['archive_index', 'decline_index_repair', 'skip_a1'],
-    ['flag_identity', 'decline_identity_check', 'skip_b1'],
-    ['delete_local_mirror', 'decline_mirror_cleanup', 'skip_a2'],
-    ['pause_local_mirror', 'keep_local_mirror', 'skip_b2'],
-    ['request_solo_validation', 'request_pair_validation', 'skip_a3'],
-    ['file_full_report', 'disclose_report', 'skip_b3']
-  ];
-  for (const outcomes of missionOutcomes) {
-    for (const operationId of outcomes) {
+  for (const mission of privateMissions) {
+    for (const operationId of mission.operationIds) {
       const graph = traverseOperationGraph(operations.filter(operation =>
         operation.kind !== 'private' || operation.operationId === operationId));
       assert.ok(graph.nodes.has('finale_ready'), `outcome ${operationId} blocked mainline`);
       assert.ok(graph.nodes.has('endingCommitted'));
     }
-    const mission = privateMissions.find(item => item.operationIds.includes(outcomes[0]));
     const failedGraph = traverseOperationGraph(operations, { excludeOperationIds: mission.operationIds });
-    assert.ok(failedGraph.nodes.has('finale_ready'), `failed ${outcomes[0]} blocked mainline`);
+    assert.ok(failedGraph.nodes.has('finale_ready'), `failed ${mission.id} blocked mainline`);
     assert.ok(failedGraph.nodes.has('endingCommitted'));
   }
 });
