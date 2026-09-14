@@ -555,3 +555,94 @@ test('polling rejects an unchanged response that carries a malformed player stat
     await bContext.close();
   }
 });
+
+test('native polling fetch rejection keeps backoff and does not start snapshot resync', async ({ page }) => {
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    const realFetch = window.fetch;
+    const realWebSocket = window.WebSocket;
+    const pollingTimes = [];
+    let snapshotReads = 0;
+    let socketCount = 0;
+    let firstSocket;
+    let transport;
+
+    class ControlledSocket extends EventTarget {
+      static CONNECTING = 0;
+      static OPEN = 1;
+      static CLOSING = 2;
+      static CLOSED = 3;
+
+      constructor() {
+        super();
+        socketCount += 1;
+        this.readyState = socketCount === 1 ? ControlledSocket.OPEN : ControlledSocket.CONNECTING;
+        if (socketCount === 1) {
+          firstSocket = this;
+          window.setTimeout(() => this.dispatchEvent(new Event('open')), 0);
+        }
+      }
+
+      send() {}
+
+      close() {
+        this.readyState = ControlledSocket.CLOSED;
+        this.dispatchEvent(new Event('close'));
+      }
+    }
+
+    const state = {
+      occupancy: { ready: true },
+      publicProgress: { puzzleId: 'fixture', stepId: 'fixture', sidePuzzles: [] },
+      intercom: [],
+      workstation: {},
+      privateMissions: [],
+      discoveredEvidence: [],
+      ending: null
+    };
+
+    window.WebSocket = ControlledSocket;
+    window.fetch = async url => {
+      if (String(url).includes('sinceCursor=')) {
+        pollingTimes.push(performance.now());
+        throw new TypeError('Failed to fetch');
+      }
+      snapshotReads += 1;
+      return new Response(JSON.stringify({
+        success: true,
+        unchanged: false,
+        cursor: 1,
+        state,
+        countdown: { status: 'running', remainingMs: 1000 }
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    };
+
+    try {
+      const { createLiveTransport } = await import('/public/js/live.js');
+      transport = createLiveTransport({
+        roomCode: '123456',
+        onSnapshot() {},
+        onCountdown() {},
+        onStatus() {}
+      });
+      await transport.start();
+      await new Promise(resolve => window.setTimeout(resolve, 20));
+      firstSocket.close();
+      await new Promise(resolve => window.setTimeout(resolve, 3200));
+      return {
+        snapshotReads,
+        pollingCount: pollingTimes.length,
+        firstBackoffMs: pollingTimes[1] - pollingTimes[0]
+      };
+    } finally {
+      transport?.stop();
+      window.fetch = realFetch;
+      window.WebSocket = realWebSocket;
+    }
+  });
+
+  expect(result.snapshotReads).toBe(1);
+  expect(result.pollingCount).toBe(2);
+  expect(result.firstBackoffMs).toBeGreaterThanOrEqual(2000);
+});

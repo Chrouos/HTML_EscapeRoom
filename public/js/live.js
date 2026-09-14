@@ -2,6 +2,14 @@ const MODES = new Set(['websocket', 'polling', 'resyncing']);
 const BASE_DELAY = 1200;
 const MAX_DELAY = 10000;
 
+class StateValidationError extends TypeError {
+  constructor() {
+    super('Invalid state response');
+    this.name = 'StateValidationError';
+    this.code = 'INVALID_STATE_RESPONSE';
+  }
+}
+
 function isRecord(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -74,7 +82,7 @@ function validateStateResponse(result, snapshot) {
       || !isRecord(result.countdown)
       || (hasState && !isState(result.state))
       || ((snapshot || !result.unchanged) && !hasState)) {
-    throw new TypeError('Invalid state response');
+    throw new StateValidationError();
   }
   return result;
 }
@@ -208,7 +216,7 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
       pollDelay = BASE_DELAY;
     } catch (error) {
       if (stopped || mode !== 'polling' || token !== generation) return;
-      if (error instanceof TypeError) {
+      if (error instanceof StateValidationError) {
         resync();
         return;
       }
