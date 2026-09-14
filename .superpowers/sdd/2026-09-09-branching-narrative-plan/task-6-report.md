@@ -7,6 +7,8 @@
 - Added five ordered, mutually exclusive outcomes: exposed AI deception, A solo escape, B solo escape, cooperative escape, and ambiguous containment.
 - Added debrief catalog entries with recorded fact, surface claim, actual effect, and verification entry IDs. Skipped missions are surfaced as explicit omission facts when present.
 - Debrief is projected only after `room.ending` exists; no ending choice is accepted through the legacy puzzle endpoint.
+- Legacy ending requests are rejected before any progression mutation; `pair_validate_protocol` records the production `comparedSoloFiles` fact used by precedence.
+- The ending panel renders each debrief claim, effect, and verification entry only after the second neutral commit.
 
 ## Verification
 
