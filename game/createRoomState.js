@@ -1,3 +1,14 @@
+function createWorkstationState() {
+  return {
+    unlockedEntryIds: [],
+    openedEntryIds: [],
+    activeOperations: [],
+    roleFacts: [],
+    actionAttempts: [],
+    completedOperations: []
+  };
+}
+
 function createRoomState(roomCode, createdAt) {
   if (roomCode && typeof roomCode === 'object') {
     ({ roomCode, createdAt } = roomCode);
@@ -25,4 +36,4 @@ function createRoomState(roomCode, createdAt) {
   };
 }
 
-module.exports = { createRoomState };
+module.exports = { createRoomState, createWorkstationState };

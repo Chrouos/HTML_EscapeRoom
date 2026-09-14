@@ -1,4 +1,5 @@
 const { resolveRecipients } = require('./audience');
+const { projectWorkstation } = require('./terminalEngine');
 
 const SENSITIVE_KEYS = new Set([
   'acknowledgedcursor',
@@ -130,6 +131,11 @@ function visibleIntercom(room, role) {
 
 function workstation(room, role) {
   if (room.workstation !== undefined) {
+    if (room.workstation?.[role]?.unlockedEntryIds
+      && Array.isArray(room.workstation?.[role]?.openedEntryIds)
+      && Array.isArray(room.workstation?.[role]?.activeOperations)) {
+      return projectWorkstation(room, role);
+    }
     return actorValue(room.workstation, role, {});
   }
   const clues = room.privateClues && room.privateClues[role];

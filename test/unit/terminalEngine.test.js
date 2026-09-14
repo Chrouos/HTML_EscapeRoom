@@ -1,0 +1,98 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+const { createRoomState } = require('../../game/createRoomState');
+const { terminalEntries } = require('../../game/content/terminalEntries');
+const { openEntry, executeOperation, projectWorkstation, refreshWorkstation } = require('../../game/terminalEngine');
+
+function readyRoom() {
+  const room = createRoomState('ROOM42', 0);
+  room.players.A = { playerId: 'player-a' };
+  room.players.B = { playerId: 'player-b' };
+  room.publicFacts = ['roomCreated', 'hostJoined', 'guestJoined', 'main1Completed', 'main2Completed', 'main3Completed', 'main4Completed', 'main5Completed', 'accessLogOpened'];
+  room.chapter = 5;
+  refreshWorkstation(room);
+  return room;
+}
+
+function entry(room, player, id) {
+  return openEntry(room, player, id).entry;
+}
+
+test('content declares all nine deception groups and exact verification links', () => {
+  const byId = new Map(terminalEntries.map(item => [item.id, item]));
+  const deception = new Map(terminalEntries.filter(item => item.isDeception).map(item => [item.deceptionId, item]));
+  assert.deepEqual([...deception.keys()].sort(), ['A-1', 'A-2', 'A-3', 'B-1', 'B-2', 'B-3', 'D-1', 'D-2', 'L-1']);
+  assert.equal(byId.get('doc.a_incident_report').verificationEntries[0].entryId, 'audio.original_incident_timestamp');
+  assert.equal(byId.get('ai.a2.cleanup_request').verificationEntries[1].entryId, 'log.mirror_backup');
+  assert.equal(byId.get('ai.b2.pause_request').verificationEntries[0].entryId, 'log.token_reissue');
+  assert.equal(byId.get('doc.a_solo_protocol').verificationEntries[0].entryId, 'doc.protocol_signature_template');
+  assert.equal(byId.get('log.a_partner_unknown_access').verificationEntries[0].entryId, 'log.audit_checksum');
+});
+
+test('A and B receive conflicting incident and solo protocol projections while raw evidence is shared', () => {
+  const room = readyRoom();
+  const a = projectWorkstation(room, 'A');
+  const b = projectWorkstation(room, 'B');
+  assert.ok(a.files.entries.some(item => item.id === 'doc.a_incident_report'));
+  assert.ok(!a.files.entries.some(item => item.id === 'doc.b_incident_report'));
+  assert.ok(b.files.entries.some(item => item.id === 'doc.b_incident_report'));
+  assert.ok(!b.files.entries.some(item => item.id === 'doc.a_incident_report'));
+  assert.ok(a.files.entries.some(item => item.id === 'doc.a_solo_protocol'));
+  assert.ok(b.files.entries.some(item => item.id === 'doc.b_solo_protocol'));
+  assert.ok(a.logs.entries.some(item => item.id === 'audio.original_incident_timestamp'));
+  assert.ok(b.logs.entries.some(item => item.id === 'audio.original_incident_timestamp'));
+});
+
+test('wrong-role locked IDs and filenames are absent from the projection', () => {
+  const room = createRoomState('ROOM42', 0);
+  room.players.A = { playerId: 'player-a' };
+  room.players.B = { playerId: 'player-b' };
+  room.publicFacts = ['roomCreated'];
+  refreshWorkstation(room);
+  const a = projectWorkstation(room, 'A');
+  const b = projectWorkstation(room, 'B');
+  const aIds = JSON.stringify(a);
+  const bIds = JSON.stringify(b);
+  assert.doesNotMatch(aIds, /experiment_roster|b_incident_report|b_solo_protocol|blackbox/);
+  assert.doesNotMatch(bIds, /a_assignment_appendix|a_incident_report|a_solo_protocol|blackbox/);
+});
+
+test('opening a visible record is role-local and repeated opens are idempotent', () => {
+  const room = readyRoom();
+  const first = openEntry(room, { role: 'A', playerId: 'player-a' }, 'doc.a_incident_report');
+  assert.equal(first.stateChanged, true);
+  assert.equal(first.entry.id, 'doc.a_incident_report');
+  const second = openEntry(room, { role: 'A', playerId: 'player-a' }, 'doc.a_incident_report');
+  assert.equal(second.stateChanged, false);
+  assert.throws(() => openEntry(room, { role: 'B', playerId: 'player-b' }, 'doc.a_incident_report'), /locked|visible|entry/i);
+});
+
+test('verify_incident_timestamp requires both reports, records every attempt, and unlocks A-2', () => {
+  const room = readyRoom();
+  room.workstation.A.roleFacts.push('rapportCount2');
+  refreshWorkstation(room);
+  openEntry(room, { role: 'A', playerId: 'player-a' }, 'doc.a_incident_report');
+  assert.throws(() => executeOperation(room, { role: 'A', playerId: 'player-a' }, 'verify_incident_timestamp'), /reports|compare|locked/i);
+  openEntry(room, { role: 'B', playerId: 'player-b' }, 'doc.b_incident_report');
+  const attempt = executeOperation(room, { role: 'A', playerId: 'player-a' }, 'verify_incident_timestamp', 'wrong-value');
+  assert.equal(attempt.stateChanged, true);
+  assert.ok(room.workstation.A.roleFacts.includes('incidentVerificationAttempted'));
+  assert.ok(room.workstation.A.unlockedEntryIds.includes('ai.a2.cleanup_request'));
+  const retry = executeOperation(room, { role: 'A', playerId: 'player-a' }, 'verify_incident_timestamp', 'still-wrong');
+  assert.equal(retry.stateChanged, true);
+  assert.equal(room.workstation.A.actionAttempts.filter(id => id === 'verify_incident_timestamp').length, 2);
+});
+
+test('executeOperation applies role facts without mutating the other actor projection', () => {
+  const room = readyRoom();
+  room.publicFacts = ['roomCreated', 'hostJoined', 'guestJoined', 'main1Completed'];
+  room.workstation.A.roleFacts.push('rapportCount2');
+  refreshWorkstation(room);
+  openEntry(room, { role: 'A', playerId: 'player-a' }, 'files.mainline');
+  const before = JSON.stringify(projectWorkstation(room, 'B'));
+  const result = executeOperation(room, { role: 'A', playerId: 'player-a' }, 'archive_index');
+  assert.equal(result.stateChanged, true);
+  assert.ok(room.workstation.A.roleFacts.includes('aArchivedIndex'));
+  assert.equal(JSON.stringify(projectWorkstation(room, 'B')), before);
+});
