@@ -4,8 +4,9 @@ const { stateResponse } = require('../game/safeState');
 const { roomErrors } = require('../game/roomErrors');
 const { parseCookieHeader, roomTokenCookieName } = require('../utils/cookies');
 const { isRoomCode, statusForError, userMessageForError } = require('./roomRoutes');
-const { initializeGame, submitAction } = require('../game/gameEngine');
+const { initializeGame, submitAction, submitOperation } = require('../game/gameEngine');
 const { appendStoryEvents } = require('../game/storyEngine');
+const { operations } = require('../game/content/operations');
 
 function validateAction(action) {
   if (action && !Array.isArray(action) && typeof action === 'object'
@@ -131,19 +132,31 @@ function createApiRoutes(store) {
       }
       const events = [];
       if (typeof request.body.operationId === 'string') {
-        const { actionId, operationId } = request.body;
-        if (store.hasProcessedAction(roomCode, actionId, player.playerId)) {
+        const { actionId, operationId, value } = request.body;
+        // Keep the pre-manifest semantic operation shim for older clients.
+        // Manifest operations are executed by the game engine below.
+        if (!operations.some(item => item.operationId === operationId)) {
+          const room = store.transact(roomCode, () => {}, {
+            playerId: player.playerId,
+            actionId,
+            events,
+            shouldRecordAction: () => true
+          });
           return response.json({ success: true, stateChanged: false,
-            publicResult: { duplicate: true }, ...stateResponse(player.room, player) });
+            publicResult: { operationId }, ...stateResponse(room, player) });
         }
-        const room = store.transact(roomCode, () => {}, {
+        let result;
+        const room = store.transact(roomCode, draft => {
+          initializeGame(draft, events);
+          result = submitOperation(draft, player, { actionId, operationId, value }, events);
+        }, {
           playerId: player.playerId,
           actionId,
           events,
-          shouldRecordAction: () => true
+          shouldRecordAction: () => Boolean(result?.stateChanged)
         });
-        return response.json({ success: true, stateChanged: false,
-          publicResult: { operationId }, ...stateResponse(room, player) });
+        return response.json({ success: true, stateChanged: Boolean(result?.stateChanged),
+          publicResult: result?.publicResult || { operationId }, ...stateResponse(room, player) });
       }
       let result;
       const room = store.transact(roomCode, draft => {

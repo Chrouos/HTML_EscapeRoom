@@ -5,6 +5,14 @@ const { story } = require('./content/story');
 const { endings } = require('./content/endings');
 const { appendStoryEvents } = require('./storyEngine');
 const { evaluate, evidenceIds } = require('./endingEngine');
+const { executeOperation, ensureRoom } = require('./terminalEngine');
+const {
+  ensurePrivateMissions,
+  refreshPrivateMissions,
+  missionForOperation,
+  resolvePrivateMission,
+  triggerDialogue
+} = require('./privateEventEngine');
 
 function fail(code, status, message) {
   throw Object.assign(new Error(message), { code, status });
@@ -99,6 +107,88 @@ function initializeGame(room, pendingEvents = []) {
 
 function noOp() { return { stateChanged: false, events: [], publicResult: { completed: true } }; }
 
+const OPERATION_OUTCOMES = Object.freeze({
+  archive_index: 'completed', flag_identity: 'completed', share_roster: 'completed',
+  delete_local_mirror: 'completed', share_mirror_first: 'completed',
+  pause_local_mirror: 'completed', keep_local_mirror: 'completed', warn_partner_first: 'completed',
+  request_solo_validation: 'completed', publish_fragment: 'completed', request_pair_validation: 'completed',
+  file_full_report: 'completed', file_anonymous_summary: 'completed', disclose_report: 'completed',
+  decline_index_repair: 'declined', decline_identity_check: 'declined', decline_mirror_cleanup: 'declined',
+  skip_a1: 'skipped', skip_b1: 'skipped', skip_a2: 'skipped', skip_b2: 'skipped', skip_a3: 'skipped', skip_b3: 'skipped'
+});
+
+function operationActionKey(player, actionId) {
+  return `${player.playerId || player.role}:${actionId}`;
+}
+
+function submitOperation(room, player, action, pendingEvents = []) {
+  if (!action || Array.isArray(action)
+    || typeof action.actionId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(action.actionId)
+    || typeof action.operationId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(action.operationId)
+    || (action.value !== undefined && (typeof action.value !== 'string' || action.value.length > 1000))) {
+    fail('INVALID_ACTION', 400, 'Invalid workstation operation');
+  }
+  const role = typeof player === 'string' ? player : player?.role;
+  if (!['A', 'B'].includes(role)) fail('INVALID_PLAYER', 400, 'Invalid player role');
+  if (!room?.players?.A || !room?.players?.B) fail('ROOM_NOT_READY', 423, 'Room is not ready');
+  if (room.ending) return noOp();
+
+  ensureRoom(room);
+  ensurePrivateMissions(room);
+  refreshPrivateMissions(room);
+  room.operationActionResults ??= {};
+  const key = operationActionKey(typeof player === 'object' ? player : { role }, action.actionId);
+  if (room.operationActionResults[key]) {
+    const duplicate = structuredClone(room.operationActionResults[key]);
+    duplicate.stateChanged = false;
+    duplicate.publicResult = { ...(duplicate.publicResult || {}), duplicate: true };
+    duplicate.events = [];
+    return duplicate;
+  }
+
+  const mission = missionForOperation(action.operationId);
+  if (mission && mission.role !== role) fail('OPERATION_LOCKED', 423, 'Operation is not assigned to this player');
+  if (mission) {
+    const current = room.privateMissions[role].find(item => item.id === mission.id);
+    if (!current || current.state !== 'available') fail(current?.state === 'resolved' ? 'MISSION_RESOLVED' : 'MISSION_LOCKED', 423, 'Mission is locked or already resolved');
+  }
+
+  const result = executeOperation(room, typeof player === 'object' ? player : { role }, action.operationId, action.value);
+  if (!result.stateChanged) return result;
+
+  let outcome = OPERATION_OUTCOMES[action.operationId];
+  if (mission && typeof action.value === 'string' && /^(failed|invalid|error)$/i.test(action.value.trim())) outcome = 'failed';
+  if (mission && outcome) {
+    resolvePrivateMission(room, role, mission.id, outcome, action.operationId);
+  }
+
+  if (action.operationId === 'commit_finale') {
+    room.finaleCommittedByRole ??= {};
+    room.finaleCommittedByRole[role] = true;
+    room.completedNodes ??= [];
+    const node = `finaleCommitted.${role}`;
+    if (!room.completedNodes.includes(node)) room.completedNodes.push(node);
+    // An unresolved private offer is an explicit omission, never a blocker.
+    for (const item of room.privateMissions[role]) {
+      if (item.state !== 'available') continue;
+      resolvePrivateMission(room, role, item.id, 'skipped', null);
+    }
+  }
+
+  triggerDialogue(room, { operationId: action.operationId, role }, pendingEvents);
+  refreshPrivateMissions(room);
+  const response = {
+    stateChanged: true,
+    events: pendingEvents,
+    publicResult: {
+      operationId: action.operationId,
+      ...(mission ? { missionId: mission.id, outcome } : {})
+    }
+  };
+  room.operationActionResults[key] = structuredClone(response);
+  return response;
+}
+
 function submitAction(room, player, action, pendingEvents = []) {
   if (!action || Array.isArray(action) || !['actionId', 'puzzleId', 'stepId'].every(key =>
     typeof action[key] === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(action[key]))
@@ -185,4 +275,4 @@ function submitAction(room, player, action, pendingEvents = []) {
     nextChapter: room.chapter, hints: [], message: nextStep ? '核對完成，下一步已解鎖' : '紀錄已完成' } };
 }
 
-module.exports = { initializeGame, submitAction };
+module.exports = { initializeGame, submitAction, submitOperation };

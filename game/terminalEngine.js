@@ -2,6 +2,7 @@ const { evaluatePredicate } = require('./content/contentSchema');
 const { terminalEntries } = require('./content/terminalEntries');
 const { operations } = require('./content/operations');
 const { createWorkstationState } = require('./createRoomState');
+const { refreshPrivateMissions } = require('./privateEventEngine');
 
 const ROLES = ['A', 'B'];
 const PRIVATE_OPERATION_ROLES = Object.freeze({
@@ -48,6 +49,7 @@ function ensureRoom(room) {
       }
     }
   }
+  refreshPrivateMissions(room);
   return room;
 }
 
@@ -65,11 +67,19 @@ function audienceAllows(entry, role) {
 
 function predicateState(room, role) {
   const ws = room.workstation[role];
+  const roleFacts = targetRole => {
+    const facts = new Set(room.workstation[targetRole]?.roleFacts || []);
+    const dialogue = room.directDialogueState?.[targetRole] || {};
+    if (Number(dialogue.rapportCount) >= 1) facts.add('rapportReady');
+    if (Number(dialogue.rapportCount) >= 2) facts.add('rapportCount2');
+    if (Number(dialogue.rapportSincePressure) >= 1) facts.add('rapportSincePressure');
+    return [...facts];
+  };
   return {
     chapter: room.chapter,
     publicFacts: room.publicFacts,
     role,
-    roleFacts: { A: room.workstation.A.roleFacts, B: room.workstation.B.roleFacts },
+    roleFacts: { A: roleFacts('A'), B: roleFacts('B') },
     openedEntryIds: ws.openedEntryIds,
     actionIds: [...room.actionAttempts, ...ws.actionAttempts]
   };
@@ -166,6 +176,7 @@ function openEntry(room, player, entryId) {
   if (ws.openedEntryIds.includes(entryId)) return { stateChanged: false, entry: displayEntry(entry, true) };
   ws.openedEntryIds.push(entryId);
   refreshWorkstation(room);
+  refreshPrivateMissions(room);
   return { stateChanged: true, entry: displayEntry(entry, true) };
 }
 
@@ -209,6 +220,7 @@ function executeOperation(room, player, operationId, value) {
     && !room.completedOperations.includes(operationId)) room.completedOperations.push(operationId);
   if (!ws.completedOperations.includes(operationId) && operationId !== 'verify_incident_timestamp') ws.completedOperations.push(operationId);
   refreshWorkstation(room);
+  refreshPrivateMissions(room);
   return { stateChanged: true, operationId, value };
 }
 

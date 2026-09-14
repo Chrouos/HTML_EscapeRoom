@@ -1,6 +1,7 @@
 const { createHash } = require('node:crypto');
 
 const { dialogue } = require('./content/dialogue');
+const { privateMissions } = require('./content/privateMissions');
 const { evaluatePredicate } = require('./content/contentSchema');
 const { createDialogueState } = require('./createRoomState');
 
@@ -8,6 +9,94 @@ const ROLES = Object.freeze(['A', 'B']);
 const PRESSURE_INTENTS = new Set(['manipulation', 'private_task']);
 const PUBLIC_INTENTS = new Set(['system', 'common_task']);
 const DIRECT_INTENTS = new Set(['rapport', 'observation', 'manipulation', 'private_task']);
+
+const MISSION_OUTCOMES = new Set(['completed', 'declined', 'skipped', 'failed']);
+
+function missionForOperation(operationId) {
+  return privateMissions.find(item => item.operationIds.includes(operationId)) || null;
+}
+
+function missionPredicateState(room, role) {
+  const workstation = room.workstation?.[role] || {};
+  const roleFactList = targetRole => {
+    const ws = room.workstation?.[targetRole] || {};
+    const direct = room.directDialogueState?.[targetRole] || {};
+    const facts = new Set(Array.isArray(ws.roleFacts) ? ws.roleFacts : []);
+    if (Number(direct.rapportCount) >= 1) facts.add('rapportReady');
+    if (Number(direct.rapportCount) >= 2) facts.add('rapportCount2');
+    if (Number(direct.rapportSincePressure) >= 1) facts.add('rapportSincePressure');
+    return [...facts];
+  };
+  return {
+    chapter: room.chapter,
+    publicFacts: Array.isArray(room.publicFacts) ? room.publicFacts : [],
+    role,
+    roleFacts: { A: roleFactList('A'), B: roleFactList('B') },
+    openedEntryIds: Array.isArray(workstation.openedEntryIds) ? workstation.openedEntryIds : [],
+    actionIds: [
+      ...(Array.isArray(room.actionAttempts) ? room.actionAttempts : []),
+      ...(Array.isArray(workstation.actionAttempts) ? workstation.actionAttempts : [])
+    ]
+  };
+}
+
+function ensurePrivateMissions(room) {
+  if (!room || typeof room !== 'object') throw new TypeError('Room is required');
+  room.privateMissions ??= {};
+  for (const role of ROLES) {
+    const existing = Array.isArray(room.privateMissions[role]) ? room.privateMissions[role] : [];
+    const byId = new Map(existing.map(item => [item.id, item]));
+    room.privateMissions[role] = privateMissions.filter(item => item.role === role).map(item => {
+      const previous = byId.get(item.id);
+      const state = previous?.state === 'resolved' ? 'resolved' : (previous?.state || 'locked');
+      return {
+        id: item.id,
+        missionId: item.missionId,
+        role: item.role,
+        state,
+        outcome: state === 'resolved' ? (previous.outcome || null) : null,
+        operationId: state === 'resolved' ? (previous.operationId || null) : null,
+        sourceEntryId: item.sourceEntryId,
+        operationIds: [...item.operationIds],
+        mainlineFallbackOperationIds: [...item.mainlineFallbackOperationIds],
+        debriefFactIds: [...item.debriefFactIds]
+      };
+    });
+  }
+  return room.privateMissions;
+}
+
+function refreshPrivateMissions(room) {
+  ensurePrivateMissions(room);
+  for (const role of ROLES) {
+    for (const mission of room.privateMissions[role]) {
+      if (mission.state !== 'locked') continue;
+      const definition = privateMissions.find(item => item.id === mission.id);
+      if (definition && evaluatePredicate(definition.unlockWhen, missionPredicateState(room, role))) {
+        mission.state = 'available';
+      }
+    }
+  }
+  return room.privateMissions;
+}
+
+function resolvePrivateMission(room, role, missionId, outcome = 'completed', operationId = null) {
+  if (role && typeof role === 'object') role = role.role;
+  if (!ROLES.includes(role)) throw Object.assign(new Error('Invalid player role'), { code: 'INVALID_PLAYER', status: 400 });
+  if (!MISSION_OUTCOMES.has(outcome)) throw Object.assign(new Error('Invalid mission outcome'), { code: 'INVALID_OUTCOME', status: 400 });
+  refreshPrivateMissions(room);
+  const mission = room.privateMissions[role].find(item => item.id === missionId);
+  if (!mission) throw Object.assign(new Error('Mission is not assigned to this player'), { code: 'MISSION_NOT_FOUND', status: 404 });
+  if (mission.state === 'resolved') {
+    if (mission.outcome === outcome && (!operationId || mission.operationId === operationId)) return { stateChanged: false, mission };
+    throw Object.assign(new Error('Mission is already resolved'), { code: 'MISSION_RESOLVED', status: 423 });
+  }
+  if (mission.state !== 'available') throw Object.assign(new Error('Mission is locked'), { code: 'MISSION_LOCKED', status: 423 });
+  mission.state = 'resolved';
+  mission.outcome = outcome;
+  mission.operationId = operationId;
+  return { stateChanged: true, mission };
+}
 
 function roleName(role) {
   return role === 'A' ? 'host' : 'guest';
@@ -187,6 +276,10 @@ function emitDirect(room, role, intent, events) {
 
 function triggerDialogue(room, trigger = {}, pendingEvents = []) {
   ensureDialogueState(room);
+  // Dialogue and workstation triggers share the same deterministic mission
+  // predicates; refresh here so callers that only dispatch a trigger still
+  // observe the lifecycle transition in the same transaction.
+  refreshPrivateMissions(room);
   const role = normalizeRole(trigger.role || trigger.player);
   const operationId = trigger.operationId;
   const entryOpened = trigger.entryOpened;
@@ -230,6 +323,7 @@ function triggerDialogue(room, trigger = {}, pendingEvents = []) {
     'file_full_report', 'file_anonymous_summary', 'disclose_report'
   ]);
   if (role && privateOperations.has(operationId)) emitDirect(room, role, 'private_task', pendingEvents);
+  refreshPrivateMissions(room);
   return pendingEvents;
 }
 
@@ -240,6 +334,11 @@ const resolveBroadcast = (room, item) => projectDialogueEvent(item, { kind: 'bot
 const resolveDirect = (room, role, item) => projectDialogueEvent(item, { kind: 'role', role: roleName(role) }, resolveText(room, item, role));
 
 module.exports = {
+  MISSION_OUTCOMES,
+  missionForOperation,
+  ensurePrivateMissions,
+  refreshPrivateMissions,
+  resolvePrivateMission,
   ensureDialogueState,
   resolveSeed,
   eligibleDialogue,
