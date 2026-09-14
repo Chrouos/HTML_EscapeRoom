@@ -38,4 +38,13 @@ function appendEvents(room, events, pendingEvents) {
   return appendStoryEvents(room, events, pendingEvents);
 }
 
-module.exports = { appendMessage, appendStoryEvents, appendEvents };
+function appendDialogueEvents(room, trigger, pendingEvents = []) {
+  // Lazy require avoids coupling the low-level story append helper to the
+  // dialogue selector during module initialisation.
+  const { triggerDialogue } = require('./privateEventEngine');
+  const generated = [];
+  triggerDialogue(room, trigger, generated);
+  return appendStoryEvents(room, generated, pendingEvents);
+}
+
+module.exports = { appendMessage, appendStoryEvents, appendEvents, appendDialogueEvents };

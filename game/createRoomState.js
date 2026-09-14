@@ -9,6 +9,16 @@ function createWorkstationState() {
   };
 }
 
+function createDialogueState() {
+  return {
+    publicDialogueState: { deliveredContentIds: [] },
+    directDialogueState: {
+      A: { rapportCount: 0, rapportSincePressure: 0, lastIntent: null, deliveredContentIds: [] },
+      B: { rapportCount: 0, rapportSincePressure: 0, lastIntent: null, deliveredContentIds: [] }
+    }
+  };
+}
+
 function createRoomState(roomCode, createdAt) {
   if (roomCode && typeof roomCode === 'object') {
     ({ roomCode, createdAt } = roomCode);
@@ -36,4 +46,4 @@ function createRoomState(roomCode, createdAt) {
   };
 }
 
-module.exports = { createRoomState, createWorkstationState };
+module.exports = { createRoomState, createWorkstationState, createDialogueState };
