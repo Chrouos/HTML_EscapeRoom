@@ -1,5 +1,17 @@
 const { test, expect } = require('@playwright/test');
 
+async function openPairedRoom(aContext, bContext) {
+  const a = await aContext.newPage();
+  const b = await bContext.newPage();
+  await a.goto('/');
+  await a.locator('form[action="/rooms"] button').click();
+  await expect(a).toHaveURL(/\/rooms\/\d{6}$/);
+  await b.goto(a.url());
+  await b.locator('form[action="/rooms/join"] button').click();
+  await expect(a.locator('[data-clues]')).toContainText('ORPHEUS');
+  return { a, b };
+}
+
 test('a lost socket falls back to cursor polling and reconnects without duplicate messages', async ({ browser }) => {
   const aContext = await browser.newContext();
   const bContext = await browser.newContext();
@@ -445,6 +457,100 @@ test('socket close during resync never overlaps the snapshot with polling', asyn
     await expect(a.locator('[data-connection]')).not.toHaveText('SIGNAL LOST');
   } finally {
     releaseSnapshot?.();
+    await aContext.close();
+    await bContext.close();
+  }
+});
+
+test('direct adopt rejects an unchanged response that carries a malformed player state', async ({ browser }) => {
+  const aContext = await browser.newContext();
+  const bContext = await browser.newContext();
+  let snapshotReads = 0;
+
+  await aContext.route('**/api/rooms/*/state*', async route => {
+    if (!route.request().url().includes('sinceCursor=')) snapshotReads += 1;
+    await route.continue();
+  });
+  await aContext.route('**/api/rooms/*/chat', async route => {
+    const response = await route.fetch();
+    const result = await response.json();
+    result.unchanged = true;
+    result.state.intercom.push({
+      id: 'malformed-adopt-player', type: 'player', text: 'MALFORMED ADOPT'
+    });
+    await route.fulfill({ response, json: result });
+  });
+
+  try {
+    const { a } = await openPairedRoom(aContext, bContext);
+    const readsBeforeAdopt = snapshotReads;
+    await a.locator('[data-chat-form] input[name="text"]').fill('adopt validation');
+    await a.locator('[data-chat-form] button').click();
+
+    await expect.poll(() => snapshotReads - readsBeforeAdopt).toBe(1);
+    await expect(a.getByRole('log')).not.toContainText('MALFORMED ADOPT');
+  } finally {
+    await aContext.close();
+    await bContext.close();
+  }
+});
+
+test('polling rejects an unchanged response that carries a malformed player state', async ({ browser }) => {
+  const aContext = await browser.newContext();
+  const bContext = await browser.newContext();
+  let liveSocket;
+  let injectMalformedPoll = false;
+  let latestState;
+  let latestCursor = 0;
+  let pollingReads = 0;
+  let snapshotReads = 0;
+
+  await aContext.routeWebSocket(/\/live\?roomCode=/, socket => {
+    liveSocket = socket;
+    socket.connectToServer();
+  });
+  await aContext.route('**/api/rooms/*/state*', async route => {
+    const isPoll = route.request().url().includes('sinceCursor=');
+    if (isPoll && injectMalformedPoll) {
+      injectMalformedPoll = false;
+      pollingReads += 1;
+      const state = structuredClone(latestState);
+      state.intercom.push({
+        id: 'malformed-poll-player', type: 'player', text: 'MALFORMED POLL', payload: { role: 'C' }
+      });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        success: true,
+        unchanged: true,
+        cursor: latestCursor + 1,
+        state,
+        countdown: { status: 'running', remainingMs: 1000 }
+      }) });
+      return;
+    }
+
+    const response = await route.fetch();
+    const result = await response.json();
+    if (isPoll) {
+      pollingReads += 1;
+    } else {
+      snapshotReads += 1;
+      if (result.state) latestState = result.state;
+      latestCursor = result.cursor;
+    }
+    await route.fulfill({ response });
+  });
+
+  try {
+    const { a } = await openPairedRoom(aContext, bContext);
+    await expect.poll(() => Boolean(liveSocket && latestState)).toBe(true);
+    const snapshotsBeforePoll = snapshotReads;
+    injectMalformedPoll = true;
+    liveSocket.close();
+
+    await expect.poll(() => pollingReads).toBeGreaterThan(0);
+    await expect.poll(() => snapshotReads - snapshotsBeforePoll).toBe(1);
+    await expect(a.getByRole('log')).not.toContainText('MALFORMED POLL');
+  } finally {
     await aContext.close();
     await bContext.close();
   }

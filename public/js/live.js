@@ -67,11 +67,13 @@ function isState(value) {
 }
 
 function validateStateResponse(result, snapshot) {
+  const hasState = isRecord(result) && Object.hasOwn(result, 'state');
   if (!isRecord(result) || result.success !== true
       || typeof result.unchanged !== 'boolean'
       || !Number.isSafeInteger(result.cursor) || result.cursor < 0
       || !isRecord(result.countdown)
-      || ((snapshot || !result.unchanged) && !isState(result.state))) {
+      || (hasState && !isState(result.state))
+      || ((snapshot || !result.unchanged) && !hasState)) {
     throw new TypeError('Invalid state response');
   }
   return result;
@@ -206,6 +208,10 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
       pollDelay = BASE_DELAY;
     } catch (error) {
       if (stopped || mode !== 'polling' || token !== generation) return;
+      if (error instanceof TypeError) {
+        resync();
+        return;
+      }
       if (error.name !== 'AbortError') pollDelay = Math.min(pollDelay * 2, MAX_DELAY);
     }
     schedulePoll(token);
