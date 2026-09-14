@@ -40,6 +40,19 @@ test('rejects deception without an independently sourced reachable verification 
     { entryId: 'doc.b_incident_report', sourceGroup: 'edited_reports' }
   ];
   assert.match(errorsFor({ terminalEntries: sameSource }).join('\n'), /sourceGroup|different|independent/i);
+
+  const bogusGroup = content.terminalEntries.map(item => ({ ...item }));
+  bogusGroup.find(item => item.id === 'doc.a_incident_report').verificationEntries = [
+    { entryId: 'audio.original_incident_timestamp', sourceGroup: 'not_the_real_group' }
+  ];
+  assert.match(errorsFor({ terminalEntries: bogusGroup }).join('\n'), /sourceGroup|declared|actual/i);
+
+  const unreachable = content.terminalEntries.map(item => ({ ...item }));
+  unreachable.find(item => item.id === 'doc.a_incident_report').verificationEntries = [
+    { entryId: 'files.experiment_roster', sourceGroup: 'experiment_roster' }
+  ];
+  unreachable.find(item => item.id === 'files.experiment_roster').unlockWhen = { publicFact: 'never_recorded' };
+  assert.match(errorsFor({ terminalEntries: unreachable }).join('\n'), /reachable|verification/i);
 });
 
 test('rejects private facts used to unlock mainline operations', () => {
@@ -47,11 +60,29 @@ test('rejects private facts used to unlock mainline operations', () => {
   const mainline = operations.find(item => item.operationId === 'continue_file_index');
   mainline.unlockWhen = { roleFact: 'aArchivedIndex' };
   assert.match(errorsFor({ operations }).join('\n'), /private.*fact|mainline/i);
+
+  const viaEntry = content.operations.map(item => ({ ...item, unlockWhen: structuredClone(item.unlockWhen) }));
+  viaEntry.find(item => item.operationId === 'continue_file_index').unlockWhen = { entryOpened: 'private-only' };
+  const terminalEntries = content.terminalEntries.map(item => ({ ...item }));
+  terminalEntries.push({ ...terminalEntries[0], id: 'private-only', requiresPrivateFacts: ['secretFact'] });
+  assert.match(errorsFor({ operations: viaEntry, terminalEntries }).join('\n'), /private|mainline/i);
 });
 
 test('rejects unreachable private mission fallbacks', () => {
   const operations = content.operations.filter(item => item.operationId !== 'continue_file_index');
   assert.match(errorsFor({ operations }).join('\n'), /fallback|reachable/i);
+
+  const privateFallback = content.operations.map(item => ({ ...item, effects: structuredClone(item.effects) }));
+  privateFallback.find(item => item.operationId === 'continue_file_index').kind = 'private';
+  assert.match(errorsFor({ operations: privateFallback }).join('\n'), /fallback|mainline|kind/i);
+
+  const badReference = content.operations.map(item => ({ ...item, effects: structuredClone(item.effects) }));
+  badReference.find(item => item.operationId === 'complete_main1').effects.unlockEntryIds.push('missing.entry');
+  assert.match(errorsFor({ operations: badReference }).join('\n'), /reference|missing|entry/i);
+
+  const badNode = content.operations.map(item => ({ ...item, effects: structuredClone(item.effects) }));
+  badNode.find(item => item.operationId === 'complete_main1').effects.completeNodeIds.push('missing.node');
+  assert.match(errorsFor({ operations: badNode }).join('\n'), /reference|missing|node/i);
 });
 
 test('rejects missing debrief outcome facts', () => {
@@ -65,6 +96,33 @@ test('rejects visible copy containing delivery labels', () => {
   const dialogue = content.dialogue.map(item => ({ ...item, variants: [...item.variants] }));
   dialogue[0].variants[0] = `${dialogue[0].variants[0]} AI_DIRECT`;
   assert.match(errorsFor({ dialogue }).join('\n'), /visible|delivery|AI_DIRECT/i);
+
+  const debrief = content.debrief.map(item => ({ ...item }));
+  debrief[0].surfaceClaim = 'broadcast instruction';
+  assert.match(errorsFor({ debrief }).join('\n'), /visible|delivery|broadcast/i);
+});
+
+test('rejects malformed empty or mixed predicates and requires all deception groups', () => {
+  const operations = content.operations.map(item => ({ ...item, unlockWhen: structuredClone(item.unlockWhen) }));
+  operations[0].unlockWhen = {};
+  assert.match(errorsFor({ operations }).join('\n'), /predicate|empty/i);
+  operations[0].unlockWhen = { all: [], publicFact: 'roomCreated' };
+  assert.match(errorsFor({ operations }).join('\n'), /predicate|combination|mixed/i);
+  operations[0].unlockWhen = { all: [], any: [] };
+  assert.match(errorsFor({ operations }).join('\n'), /predicate|combination/i);
+
+  const terminalEntries = content.terminalEntries.filter(item => item.id !== 'ai.a1.index_request');
+  assert.match(errorsFor({ terminalEntries }).join('\n'), /deception|A-1|group/i);
+});
+
+test('rejects missing or duplicate debrief facts and broken content references', () => {
+  const debrief = [...content.debrief, { ...content.debrief[0] }];
+  assert.match(errorsFor({ debrief }).join('\n'), /duplicate.*(id|fact)/i);
+  const terminalEntries = content.terminalEntries.map(item => ({ ...item, debriefFactIds: [...item.debriefFactIds] }));
+  terminalEntries[0].debriefFactIds.push('missing-fact');
+  assert.match(errorsFor({ terminalEntries }).join('\n'), /debrief|fact/i);
+  const missions = content.privateMissions.map(item => ({ ...item, sourceEntryId: 'missing-source' }));
+  assert.match(errorsFor({ privateMissions: missions }).join('\n'), /source|entry|missing/i);
 });
 
 test('exports a throwing assertion for CI and authoring scripts', () => {

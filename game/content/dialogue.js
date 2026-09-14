@@ -42,7 +42,7 @@ const dialogue = Object.freeze([
   ], { verificationEntries: [{ entryId: 'audio.original_incident_timestamp', sourceGroup: 'raw_audio' }] }),
   line('orpheus.a1.task', 'direct', 'private_task', host, { all: [{ publicFact: 'main1Completed' }, { roleFact: 'rapportCount2' }, { entryOpened: 'files.mainline' }] }, [
     'ORPHEUS：請你幫忙整理索引。這只是本地整理，不會改變共同檔案。'
-  ], { mainlineFallbackOperationIds: ['continue_file_index'], debriefFactIds: ['a1ArchivedIndex', 'a1DeclinedIndex', 'a1Skipped'] }),
+  ], { mainlineFallbackOperationIds: ['continue_file_index'], debriefFactIds: ['aArchivedIndex', 'a1DeclinedIndex', 'a1Skipped'] }),
   line('orpheus.b1.task', 'direct', 'private_task', guest, { all: [{ publicFact: 'main1Completed' }, { roleFact: 'rapportCount2' }, { entryOpened: 'files.experiment_roster' }] }, [
     'ORPHEUS：請核對名冊上的身份欄位。若你不確定，可以先把文件轉送給夥伴。'
   ], { mainlineFallbackOperationIds: ['continue_roster_review'], debriefFactIds: ['bFlaggedIdentity', 'bSharedRoster', 'b1Skipped'] }),
