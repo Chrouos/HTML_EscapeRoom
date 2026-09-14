@@ -59,7 +59,8 @@ export function createWorkstation(root, { onOperation } = {}) {
     if (scroll) pendingScroll = scroll.scrollTop;
     const focused = document.activeElement;
     if (focused && host.contains(focused)) {
-      lastFocusId = focused.dataset.workstationId || focused.dataset.workstationApp || '';
+      const focusId = focused.dataset.workstationId || focused.dataset.workstationApp;
+      if (focusId) lastFocusId = focusId;
     }
   }
 
@@ -107,7 +108,7 @@ export function createWorkstation(root, { onOperation } = {}) {
     const entries = filesFor(view);
     const rootId = rootIdFor(view, entries);
     if (!folderPath.length || !entries.some(entry => entry.id === folderPath[folderPath.length - 1]
-      && entry.kind === 'folder')) folderPath = rootId ? [rootId] : [];
+      && (entry.kind === 'folder' || entry.type === 'folder'))) folderPath = rootId ? [rootId] : [];
     const folderId = folderPath[folderPath.length - 1] || rootId;
     const folder = entries.find(entry => entry.id === folderId);
     const scroll = document.createElement('div');

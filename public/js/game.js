@@ -260,6 +260,7 @@
   ]).then(([{ createIntercom }, { createWorkstation }, { createLiveTransport }]) => {
     intercom = createIntercom(root);
     workstation = createWorkstation(root, { onOperation: sendWorkstationOperation });
+    root.workstation = workstation;
     liveTransport = createLiveTransport({
       roomCode: root.dataset.gameRoom,
       onSnapshot: render,

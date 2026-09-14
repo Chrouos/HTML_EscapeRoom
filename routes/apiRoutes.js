@@ -8,6 +8,18 @@ const { initializeGame, submitAction } = require('../game/gameEngine');
 const { appendStoryEvents } = require('../game/storyEngine');
 
 function validateAction(action) {
+  if (action && !Array.isArray(action) && typeof action === 'object'
+    && typeof action.operationId === 'string') {
+    if (typeof action.actionId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(action.actionId)
+      || !/^[a-zA-Z0-9_-]{1,100}$/.test(action.operationId)
+      || (action.value !== undefined && (typeof action.value !== 'string' || action.value.length > 1000))) {
+      const error = new Error('Invalid workstation operation');
+      error.code = 'INVALID_ACTION';
+      error.status = 400;
+      throw error;
+    }
+    return;
+  }
   if (!action || Array.isArray(action) || typeof action !== 'object'
     || !['actionId', 'puzzleId', 'stepId'].every(key => (
       typeof action[key] === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(action[key])
@@ -118,6 +130,21 @@ function createApiRoutes(store) {
           publicResult: { duplicate: true }, ...stateResponse(player.room, player) });
       }
       const events = [];
+      if (typeof request.body.operationId === 'string') {
+        const { actionId, operationId } = request.body;
+        if (store.hasProcessedAction(roomCode, actionId, player.playerId)) {
+          return response.json({ success: true, stateChanged: false,
+            publicResult: { duplicate: true }, ...stateResponse(player.room, player) });
+        }
+        const room = store.transact(roomCode, () => {}, {
+          playerId: player.playerId,
+          actionId,
+          events,
+          shouldRecordAction: () => true
+        });
+        return response.json({ success: true, stateChanged: false,
+          publicResult: { operationId }, ...stateResponse(room, player) });
+      }
       let result;
       const room = store.transact(roomCode, draft => {
         initializeGame(draft, events);

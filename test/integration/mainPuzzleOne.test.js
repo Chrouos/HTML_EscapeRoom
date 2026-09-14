@@ -42,6 +42,21 @@ test('action API rejects missing identity and malformed actions without mutation
   assert.equal(app.locals.roomStore.getRoom(code).revision, before.revision);
 });
 
+test('operation actions are accepted through the production route with semantic IDs', async () => {
+  const { a, code } = await roomPair();
+  const result = await action(a, code, {
+    actionId: 'operation-action-1', operationId: 'open_aux', value: 'OPEN AUX'
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.publicResult.operationId, 'open_aux');
+  assert.equal(result.body.publicResult.duplicate, undefined);
+  const duplicate = await action(a, code, {
+    actionId: 'operation-action-1', operationId: 'open_aux', value: 'OPEN AUX'
+  });
+  assert.equal(duplicate.status, 200);
+  assert.equal(duplicate.body.publicResult.duplicate, true);
+});
+
 test('locked chapter does not consume action ID or change room progress', async () => {
   const { a, code } = await roomPair();
   const before = app.locals.roomStore.getRoom(code);
