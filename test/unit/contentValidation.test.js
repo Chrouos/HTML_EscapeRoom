@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { validateContent, assertValidContent } = require('../../game/content/validateContent');
-const { content } = require('../../game/content/contentSchema');
+const { content, evaluatePredicate } = require('../../game/content/contentSchema');
 
 function cloneBundle(overrides = {}) {
   return {
@@ -83,6 +83,9 @@ test('rejects unreachable private mission fallbacks', () => {
   const badNode = content.operations.map(item => ({ ...item, effects: structuredClone(item.effects) }));
   badNode.find(item => item.operationId === 'complete_main1').effects.completeNodeIds.push('missing.node');
   assert.match(errorsFor({ operations: badNode }).join('\n'), /reference|missing|node/i);
+  const badMissionNode = content.operations.map(item => ({ ...item, effects: structuredClone(item.effects) }));
+  badMissionNode.find(item => item.operationId === 'archive_index').effects.completeNodeIds.push('mission.a1.not_real');
+  assert.match(errorsFor({ operations: badMissionNode }).join('\n'), /reference|missing|node/i);
 });
 
 test('rejects missing debrief outcome facts', () => {
@@ -113,6 +116,32 @@ test('rejects malformed empty or mixed predicates and requires all deception gro
 
   const terminalEntries = content.terminalEntries.filter(item => item.id !== 'ai.a1.index_request');
   assert.match(errorsFor({ terminalEntries }).join('\n'), /deception|A-1|group/i);
+});
+
+test('applies the same independent source and reachability checks to dialogue verification', () => {
+  const dialogue = content.dialogue.map(item => ({ ...item, verificationEntries: [...(item.verificationEntries || [])] }));
+  const observation = dialogue.find(item => item.id === 'orpheus.observation.a');
+  observation.verificationEntries = [{ entryId: 'audio.original_incident_timestamp', sourceGroup: 'wrong_group' }];
+  assert.match(errorsFor({ dialogue }).join('\n'), /sourceGroup|verification/i);
+
+  const terminalEntries = content.terminalEntries.map(item => ({ ...item }));
+  terminalEntries.find(item => item.id === 'audio.original_incident_timestamp').sourceGroup = 'tampered_group';
+  assert.match(errorsFor({ dialogue, terminalEntries }).join('\n'), /sourceGroup|target/i);
+});
+
+test('rejects mainline action prerequisites that point at private operations', () => {
+  const operations = content.operations.map(item => ({ ...item, unlockWhen: structuredClone(item.unlockWhen) }));
+  operations.find(item => item.operationId === 'continue_file_index').unlockWhen = { actionAttempted: 'archive_index' };
+  assert.match(errorsFor({ operations }).join('\n'), /private|mainline|action/i);
+});
+
+test('predicate evaluation fails closed for malformed runtime values and keeps empty all/any semantics', () => {
+  assert.equal(evaluatePredicate(null), false);
+  assert.equal(evaluatePredicate(undefined), false);
+  assert.equal(evaluatePredicate({ unknown: true }), false);
+  assert.equal(evaluatePredicate({ all: [] }), true);
+  assert.equal(evaluatePredicate({ any: [] }), false);
+  assert.equal(evaluatePredicate({ all: [], publicFact: 'roomCreated' }), false);
 });
 
 test('rejects missing or duplicate debrief facts and broken content references', () => {

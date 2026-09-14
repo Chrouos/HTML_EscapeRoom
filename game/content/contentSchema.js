@@ -17,7 +17,7 @@ function predicateList(value) {
 }
 
 function evaluatePredicate(predicate, state = {}) {
-  if (!predicate || typeof predicate !== 'object') return true;
+  if (!isPredicateShapeValid(predicate)) return false;
   if (Array.isArray(predicate.all)) return predicate.all.every(item => evaluatePredicate(item, state));
   if (Array.isArray(predicate.any)) return predicate.any.some(item => evaluatePredicate(item, state));
   if (predicate.not !== undefined) return !evaluatePredicate(predicate.not, state);
@@ -35,6 +35,20 @@ function evaluatePredicate(predicate, state = {}) {
   if (predicate.entryOpened !== undefined) return new Set(state.openedEntryIds || []).has(predicate.entryOpened);
   if (predicate.actionAttempted !== undefined) return new Set(state.actionIds || []).has(predicate.actionAttempted);
   return false;
+}
+
+function isPredicateShapeValid(predicate) {
+  if (!predicate || typeof predicate !== 'object' || Array.isArray(predicate)) return false;
+  const keys = Object.keys(predicate);
+  if (!keys.length) return false;
+  const combinators = keys.filter(key => ['all', 'any', 'not'].includes(key));
+  const leaves = keys.filter(key => PREDICATES.includes(key));
+  if (keys.some(key => !['all', 'any', 'not', ...PREDICATES].includes(key))) return false;
+  if (combinators.length > 1 || (combinators.length && leaves.length) || leaves.length > 1) return false;
+  if (predicate.all !== undefined && (!Array.isArray(predicate.all) || !predicate.all.every(isPredicateShapeValid))) return false;
+  if (predicate.any !== undefined && (!Array.isArray(predicate.any) || !predicate.any.every(isPredicateShapeValid))) return false;
+  if (predicate.not !== undefined && !isPredicateShapeValid(predicate.not)) return false;
+  return true;
 }
 
 function buildContent() {
@@ -55,5 +69,6 @@ module.exports = {
   PREDICATES,
   predicateList,
   evaluatePredicate,
+  isPredicateShapeValid,
   get content() { return buildContent(); }
 };

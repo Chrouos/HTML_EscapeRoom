@@ -4,6 +4,14 @@ const { content: defaultContent, AUDIENCE_KINDS, CHANNELS, INTENTS, OPERATION_KI
 const DELIVERY_LABEL_RE = /AI_BROADCAST|AI_DIRECT|\bbroadcast\b|\bdirect\b|公開頻道|私人頻道/i;
 const REQUIRED_ENTRY_KEYS = ['id', 'sourceEntryId', 'sourceGroup', 'audience', 'unlockWhen', 'verificationEntries', 'requiresPrivateFacts', 'mainlineFallbackOperationIds', 'debriefFactIds'];
 const REQUIRED_OPERATION_KEYS = ['operationId', 'kind', 'unlockWhen', 'effects'];
+const KNOWN_MISSION_NODES = new Set([
+  'mission.a1.completed', 'mission.a1.declined', 'mission.a1.skipped',
+  'mission.b1.completed', 'mission.b1.shared', 'mission.b1.declined', 'mission.b1.skipped',
+  'mission.a2.completed', 'mission.a2.shared', 'mission.a2.declined', 'mission.a2.skipped',
+  'mission.b2.completed', 'mission.b2.kept', 'mission.b2.warned', 'mission.b2.skipped',
+  'mission.a3.requested', 'mission.a3.published', 'mission.a3.paired', 'mission.a3.skipped',
+  'mission.b3.filed', 'mission.b3.anonymous', 'mission.b3.disclosed', 'mission.b3.skipped'
+]);
 
 function allStrings(value, path = '') {
   if (typeof value === 'string') return [{ path, value }];
@@ -179,7 +187,7 @@ function validateContent(bundle = defaultContent) {
     const refs = operation.effects || {};
     for (const id of refs.unlockEntryIds || []) if (!entryIds.has(id)) errors.push(`operation ${operation.operationId} references missing entry ${id}`);
     for (const id of refs.appendContentIds || []) if (!contentIds.has(id)) errors.push(`operation ${operation.operationId} references missing content ${id}`);
-    for (const id of refs.completeNodeIds || []) if (!knownNodes.has(id) && !String(id).startsWith('mission.')) errors.push(`operation ${operation.operationId} references missing node ${id}`);
+    for (const id of refs.completeNodeIds || []) if (!knownNodes.has(id) && !KNOWN_MISSION_NODES.has(id)) errors.push(`operation ${operation.operationId} references missing node ${id}`);
     for (const id of refs.appendContentIds || []) {
       const target = [...terminalEntries, ...dialogue].find(item => item.id === id);
       if (target?.requiresPrivateFacts?.length && operation.kind === 'mainline') errors.push(`mainline operation ${operation.operationId} appends private content ${id}`);
@@ -191,6 +199,7 @@ function validateContent(bundle = defaultContent) {
       if (target?.requiresPrivateFacts?.length) errors.push(`mainline operation ${operation.operationId} unlocks private content ${id}`);
     }
     if (predicateReferencesPrivateEntry(operation.unlockWhen, terminalEntries)) errors.push(`mainline operation ${operation.operationId} has private entry prerequisite`);
+    if (predicateReferencesPrivateAction(operation.unlockWhen, operations)) errors.push(`mainline operation ${operation.operationId} has private action prerequisite`);
   }
   if (!operations.some(item => item.operationId === 'commit_finale' && item.kind === 'neutral_finale')) errors.push('missing neutral finale operation commit_finale');
   if (!reach.nodes.has('finale_ready')) errors.push('finale_ready is unreachable');
@@ -217,10 +226,21 @@ function predicateReferencesPrivateEntry(predicate, entries) {
   return predicate.not !== undefined && predicateReferencesPrivateEntry(predicate.not, entries);
 }
 
+function predicateReferencesPrivateAction(predicate, operations) {
+  if (!predicate || typeof predicate !== 'object') return false;
+  if (predicate.actionAttempted !== undefined) {
+    const operation = operations.find(item => item.operationId === predicate.actionAttempted);
+    return operation?.kind === 'private';
+  }
+  if (Array.isArray(predicate.all) && predicate.all.some(item => predicateReferencesPrivateAction(item, operations))) return true;
+  if (Array.isArray(predicate.any) && predicate.any.some(item => predicateReferencesPrivateAction(item, operations))) return true;
+  return predicate.not !== undefined && predicateReferencesPrivateAction(predicate.not, operations);
+}
+
 function assertValidContent(bundle = defaultContent) {
   const errors = validateContent(bundle);
   if (errors.length) throw new Error(`Narrative content validation failed:\n${errors.map(error => `- ${error}`).join('\n')}`);
   return true;
 }
 
-module.exports = { validateContent, assertValidContent, operationReachability, predicateContainsRoleFact, predicateReferencesPrivateEntry };
+module.exports = { validateContent, assertValidContent, operationReachability, predicateContainsRoleFact, predicateReferencesPrivateEntry, predicateReferencesPrivateAction };
