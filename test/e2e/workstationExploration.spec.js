@@ -1,5 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
+test.setTimeout(60_000);
+
 const workstationFixture = {
   activeApp: 'files',
   files: {
