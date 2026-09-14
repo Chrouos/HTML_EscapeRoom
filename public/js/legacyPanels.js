@@ -103,12 +103,26 @@ export function createLegacyPanels(root, { sendAction, isBusy } = {}) {
         ending.replaceChildren();
         const title = document.createElement('h2');
         const body = document.createElement('p');
+        const debriefList = document.createElement('ol');
+        debriefList.dataset.debrief = '';
         const back = document.createElement('a');
         title.textContent = state.ending.title;
         body.textContent = state.ending.text;
+        for (const item of Array.isArray(state.debrief) ? state.debrief : []) {
+          const record = document.createElement('li');
+          const claim = document.createElement('strong');
+          const effect = document.createElement('p');
+          const sources = document.createElement('small');
+          claim.textContent = item.surfaceClaim || item.factId || '';
+          effect.textContent = item.actualEffect || '';
+          sources.textContent = Array.isArray(item.verificationEntryIds)
+            ? item.verificationEntryIds.join(', ') : '';
+          record.append(claim, effect, sources);
+          debriefList.append(record);
+        }
         back.href = '/';
         back.textContent = '回到大廳，開始新的實驗';
-        ending.append(title, body, back);
+        ending.append(title, body, debriefList, back);
       }
     }
   }

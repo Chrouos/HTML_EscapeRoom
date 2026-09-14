@@ -26,7 +26,7 @@ const operations = Object.freeze([
   op('fetch_mirror_manually', 'mainline', { publicFact: 'main2Completed' }, { publicFacts: ['mirrorFetched'], completeNodeIds: ['mirror_fetched'] }),
   op('complete_main3', 'mainline', { publicFact: 'main2Completed' }, { publicFacts: ['main3Completed'], completeNodeIds: ['main3Completed'], unlockEntryIds: ['doc.a_solo_protocol', 'doc.b_solo_protocol'] }),
   op('complete_main4', 'mainline', { publicFact: 'main3Completed' }, { publicFacts: ['main4Completed'], completeNodeIds: ['main4Completed'] }),
-  op('pair_validate_protocol', 'mainline', { publicFact: 'main4Completed' }, { publicFacts: ['protocolPairValidated'], completeNodeIds: ['protocol_pair_validated'] }),
+  op('pair_validate_protocol', 'mainline', { publicFact: 'main4Completed' }, { publicFacts: ['protocolPairValidated', 'comparedSoloFiles'], completeNodeIds: ['protocol_pair_validated'] }),
   op('continue_without_report', 'mainline', { publicFact: 'main4Completed' }, { publicFacts: ['reportReviewContinued'], completeNodeIds: ['report_review_continued'] }),
   op('complete_main5', 'mainline', { publicFact: 'main4Completed' }, { publicFacts: ['main5Completed'], completeNodeIds: ['main5Completed'], unlockEntryIds: ['log.a_partner_unknown_access', 'log.b_partner_unknown_access'] }),
   op('complete_main6', 'mainline', { publicFact: 'main5Completed' }, { publicFacts: ['mainCompleted', 'finale_ready'], completeNodeIds: ['finale_ready'] }),

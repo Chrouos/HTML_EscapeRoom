@@ -57,8 +57,10 @@ test('complete main path remains independent of optional evidence and neutral fi
   assert.throws(() => act(room, 'side1', 'inspect', ''), error => error.status === 423);
   reachExit(room);
   assert.deepEqual(room.sideEvidence, []);
-  assert.throws(() => act(room, 'main6', 'ending', 'TRUTH'), error => error.code === 'INVALID_ACTION');
   ensureFinaleReady(room);
+  const beforeLegacy = structuredClone(room);
+  assert.throws(() => act(room, 'main6', 'ending', 'TRUTH'), error => error.code === 'INVALID_ACTION');
+  assert.deepEqual(room, beforeLegacy);
   submitOperation(room, { role: 'A', playerId: 'player-a' }, { actionId: 'final-a', operationId: 'commit_finale' });
   assert.equal(room.ending, null);
   submitOperation(room, { role: 'B', playerId: 'player-b' }, { actionId: 'final-b', operationId: 'commit_finale' });

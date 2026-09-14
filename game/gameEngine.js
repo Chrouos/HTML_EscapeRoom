@@ -266,13 +266,6 @@ function submitAction(room, player, action, pendingEvents = []) {
   if (action.stepId !== stepId) fail('PUZZLE_LOCKED', 423, '請先完成目前的步驟');
   const step = puzzle.steps[stepId];
   if (step.kind === 'ending') {
-    // Completing the protocol opens the neutral finale operation.  The
-    // client cannot choose an ending through this legacy puzzle endpoint.
-    if (!room.publicFacts?.includes('mainCompleted')
-      && room.workstation?.[role]?.activeOperations?.includes('complete_main6')) {
-      executeOperation(room, { role, playerId: room.players[role]?.playerId }, 'complete_main6');
-      syncMainlineProjection(room);
-    }
     fail('INVALID_ACTION', 400, 'Finale requires the neutral commit_finale operation');
     if (!room.publicFacts?.includes('mainCompleted')
       && room.workstation?.[role]?.activeOperations?.includes('complete_main6')) {
