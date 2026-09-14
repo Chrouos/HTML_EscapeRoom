@@ -79,11 +79,22 @@ test('390px viewport exposes keyboard-operated monitor tabs and one active pane'
 
     await intercomTab.focus();
     await expect(intercomTab).toBeFocused();
+    await player.keyboard.press('Tab');
+    await expect(player.getByLabel('傳訊給另一位受試者')).toBeFocused();
+    await expect(player.getByLabel('提交答案', { exact: true })).not.toBeFocused();
+    await player.keyboard.press('Shift+Tab');
+    await expect(intercomTab).toBeFocused();
+
     await player.keyboard.press('ArrowRight');
     await expect(operationsTab).toBeFocused();
     await expect(operationsTab).toBeChecked();
     await expect(intercom).toBeHidden();
     await expect(operations).toBeVisible();
+    await player.keyboard.press('Tab');
+    await expect(player.getByLabel('提交答案', { exact: true })).toBeFocused();
+    await expect(player.getByLabel('傳訊給另一位受試者')).not.toBeFocused();
+    await player.keyboard.press('Shift+Tab');
+    await expect(operationsTab).toBeFocused();
 
     expect(await player.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await expectUniqueLabelRelationships(player);
