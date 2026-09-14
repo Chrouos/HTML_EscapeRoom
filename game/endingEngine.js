@@ -47,15 +47,33 @@ function evaluate(room) {
   const facts = recordedFacts(room);
   const a = roleFacts(room, 'A');
   const b = roleFacts(room, 'B');
+  const verifiedDifferences = [
+    'bFlaggedIdentity',
+    'comparedIncidentTimes',
+    'comparedSoloFiles',
+    'verifiedAuditForgery'
+  ].filter(fact => facts.has(fact));
+  const completeEvidence = evidenceIds(room).size >= 4;
+  const latePrivateTask = a.has('aPublishedFragment') || b.has('bDisclosedReport');
 
   // Ordered and mutually exclusive: once the audit trail exposes ORPHEUS,
   // no later behavioural label can overwrite that finding.
-  if (facts.has('verifiedAuditForgery') || facts.has('comparedIncidentTimes')) return 'exposed_ai_deception';
-  if (a.has('aRequestedSoloRoute') || a.has('aPublishedFragment')) return 'a_solo_escape';
-  if (b.has('bRequestedSoloRoute') || b.has('bPublishedFragment')) return 'b_solo_escape';
-  const aPair = a.has('a3RequestedPair') || a.has('aPublishedFragment');
-  const bPair = b.has('b3RequestedPair') || b.has('bDisclosedReport') || b.has('b3DeclinedReport');
-  if (aPair && bPair) return 'cooperative_escape';
+  if (completeEvidence && verifiedDifferences.length >= 3 && latePrivateTask) return 'exposed_ai_deception';
+  const aSolo = a.has('aRequestedSoloRoute')
+    && !a.has('aPublishedFragment') && !b.has('bFiledReport')
+    && b.has('bPausedLocalMirror') && !b.has('bWarnedPartner')
+    && verifiedDifferences.length < 3;
+  if (aSolo) return 'a_solo_escape';
+  const bSolo = b.has('bFiledReport')
+    && !b.has('bDisclosedReport') && !a.has('aRequestedSoloRoute')
+    && a.has('aDeletedMirror') && !a.has('aSharedMirrorFirst')
+    && verifiedDifferences.length < 3;
+  if (bSolo) return 'b_solo_escape';
+  const cooperativeFacts = [
+    'aSharedMirrorFirst', 'bWarnedPartner', 'comparedIncidentTimes',
+    'comparedSoloFiles', 'aPublishedFragment', 'bDisclosedReport', 'verifiedAuditForgery'
+  ].filter(fact => facts.has(fact));
+  if (cooperativeFacts.length >= 2) return 'cooperative_escape';
   return 'ambiguous_containment';
 }
 

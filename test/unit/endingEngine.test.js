@@ -49,7 +49,7 @@ test('finale requires main completion and both neutral commits', () => {
 });
 
 test('first commit does not choose an ending and repeated action is idempotent', () => {
-  const state = room({ aFacts: ['aPublishedFragment'] });
+  const state = room({ aFacts: ['aRequestedSoloRoute'], bFacts: ['bPausedLocalMirror'] });
   const first = commit(state, 'A', 'finale-a');
   assert.equal(first.stateChanged, true);
   assert.equal(state.ending, null);
@@ -66,14 +66,15 @@ test('first commit does not choose an ending and repeated action is idempotent',
 
 test('ordered outcome precedence produces all five endings', () => {
   const fixtures = [
-    [{ publicFacts: ['verifiedAuditForgery'], aFacts: ['aPublishedFragment'], bFacts: ['bDisclosedReport'] }, 'exposed_ai_deception'],
-    [{ aFacts: ['aRequestedSoloRoute'] }, 'a_solo_escape'],
-    [{ bFacts: ['bRequestedSoloRoute'] }, 'b_solo_escape'],
-    [{ aFacts: ['a3RequestedPair'], bFacts: ['b3DeclinedReport'] }, 'cooperative_escape'],
+    [{ publicFacts: ['verifiedAuditForgery', 'bFlaggedIdentity', 'comparedIncidentTimes'], aFacts: ['aPublishedFragment'], bFacts: ['bDisclosedReport'], evidence: ['side1', 'side2', 'side3', 'side4'] }, 'exposed_ai_deception'],
+    [{ aFacts: ['aRequestedSoloRoute'], bFacts: ['bPausedLocalMirror'] }, 'a_solo_escape'],
+    [{ aFacts: ['aDeletedMirror'], bFacts: ['bFiledReport'] }, 'b_solo_escape'],
+    [{ aFacts: ['aSharedMirrorFirst'], bFacts: ['bWarnedPartner'] }, 'cooperative_escape'],
     [{}, 'ambiguous_containment']
   ];
   for (const [fixture, expected] of fixtures) {
     const state = room(fixture);
+    state.sideEvidence = fixture.evidence || [];
     assert.equal(commit(state, 'A').stateChanged, true);
     assert.equal(commit(state, 'B').stateChanged, true);
     assert.equal(state.ending.id, expected);
@@ -82,10 +83,10 @@ test('ordered outcome precedence produces all five endings', () => {
 
 test('every ending has three recorded, cross-referenced debrief facts', () => {
   const endings = [
-    room({ publicFacts: ['verifiedAuditForgery'], commits: ['A', 'B'] }),
-    room({ aFacts: ['aRequestedSoloRoute'], commits: ['A', 'B'] }),
-    room({ bFacts: ['bRequestedSoloRoute'], commits: ['A', 'B'] }),
-    room({ aFacts: ['a3RequestedPair'], bFacts: ['b3DeclinedReport'], commits: ['A', 'B'] }),
+    room({ publicFacts: ['verifiedAuditForgery', 'bFlaggedIdentity', 'comparedIncidentTimes'], aFacts: ['aPublishedFragment'], bFacts: ['bDisclosedReport'], commits: ['A', 'B'] }),
+    room({ aFacts: ['aRequestedSoloRoute'], bFacts: ['bPausedLocalMirror'], commits: ['A', 'B'] }),
+    room({ aFacts: ['aDeletedMirror'], bFacts: ['bFiledReport'], commits: ['A', 'B'] }),
+    room({ aFacts: ['aSharedMirrorFirst'], bFacts: ['bWarnedPartner'], commits: ['A', 'B'] }),
     room({ commits: ['A', 'B'] })
   ];
   for (const state of endings) {
@@ -102,7 +103,7 @@ test('every ending has three recorded, cross-referenced debrief facts', () => {
 });
 
 test('an ignored available mission is recorded as an omission when it affects the ending', () => {
-  const state = room({ aFacts: ['a1Skipped', 'aRequestedSoloRoute'] });
+  const state = room({ aFacts: ['a1Skipped', 'aRequestedSoloRoute'], bFacts: ['bPausedLocalMirror'] });
   state.privateMissions = { A: [{ id: 'mission.a1.index_repair', state: 'available', outcome: null }], B: [] };
   commit(state, 'A');
   commit(state, 'B');
@@ -111,7 +112,8 @@ test('an ignored available mission is recorded as an omission when it affects th
 });
 
 test('final ending and debrief are immutable after the second commit', () => {
-  const state = room({ publicFacts: ['verifiedAuditForgery'] });
+  const state = room({ publicFacts: ['verifiedAuditForgery', 'bFlaggedIdentity', 'comparedIncidentTimes'], aFacts: ['aPublishedFragment'], bFacts: ['bDisclosedReport'] });
+  state.sideEvidence = ['side1', 'side2', 'side3', 'side4'];
   commit(state, 'A');
   commit(state, 'B');
   assert.ok(Object.isFrozen(state.ending));

@@ -5,7 +5,7 @@ function fact(factId, surfaceClaim, actualEffect, verificationEntryIds = []) {
 const verification = ['log.audit_checksum'];
 const ids = [
   'aArchivedIndex', 'a1DeclinedIndex', 'a1Skipped', 'bFlaggedIdentity', 'bSharedRoster',
-  'b1DeclinedIdentity', 'b1Skipped', 'comparedIncidentTimes', 'aDeletedMirror',
+  'b1DeclinedIdentity', 'b1Skipped', 'comparedIncidentTimes', 'comparedSoloFiles', 'aDeletedMirror',
   'aSharedMirrorFirst', 'a2DeclinedCleanup', 'a2Skipped', 'bPausedLocalMirror',
   'b2KeptMirror', 'bWarnedPartner', 'b2Skipped', 'aRequestedSoloRoute',
   'aPublishedFragment', 'a3RequestedPair', 'a3Skipped', 'bRequestedSoloRoute',
