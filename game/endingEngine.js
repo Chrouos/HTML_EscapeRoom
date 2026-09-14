@@ -86,10 +86,17 @@ function buildDebrief(room, endingId = evaluate(room)) {
   const facts = recordedFacts(room);
   const byId = catalogById();
   const requested = endings[endingId].debriefFactIds || [];
-  const omissionIds = [...facts].filter(id => /Skipped$/.test(id) && byId.has(id));
-  const ids = [...new Set([...omissionIds, ...requested,
-    'finaleCommittedA', 'finaleCommittedB', 'neutralFinaleCommitted', 'ambiguousContainment'])];
-  return ids.filter(id => facts.has(id) && byId.has(id)).slice(0, 6)
+  const relevantOmissions = {
+    exposed_ai_deception: ['a3Skipped', 'b3Skipped'],
+    a_solo_escape: ['a1Skipped', 'a2Skipped', 'a3Skipped', 'b2Skipped'],
+    b_solo_escape: ['b1Skipped', 'b2Skipped', 'b3Skipped', 'a2Skipped'],
+    cooperative_escape: ['a3Skipped', 'b3Skipped'],
+    ambiguous_containment: ['a1Skipped', 'b1Skipped', 'a2Skipped', 'b2Skipped', 'a3Skipped', 'b3Skipped']
+  }[endingId] || [];
+  const omissionIds = relevantOmissions.filter(id => facts.has(id) && byId.has(id));
+  const ids = [...new Set([...requested, ...omissionIds,
+    'finaleCommittedA', 'finaleCommittedB', 'neutralFinaleCommitted'])];
+  return ids.filter(id => facts.has(id) && byId.has(id)).slice(0, 5)
     .map(id => structuredClone(byId.get(id)));
 }
 

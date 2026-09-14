@@ -14,6 +14,7 @@
 
 - `node --test test/unit/endingEngine.test.js test/unit/contentValidation.test.js` — 22 passing.
 - `node --test test/unit/fullGame.test.js` — 8 passing after migrating legacy finale assertions to neutral commits.
+- `node --test test/unit/endingEngine.test.js test/unit/terminalEngine.test.js` — 20 passing, including all-six-omission and dual-document comparison gates.
 - `npm run validate:content` — Narrative content valid.
 - `npx playwright test test/e2e/fullEndings.spec.js --reporter=line` — 1 passing after clearing an orphaned local test server.
 

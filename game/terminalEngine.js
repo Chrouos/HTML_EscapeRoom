@@ -119,6 +119,8 @@ function operationVisible(room, role, operation) {
     const openedB = room.workstation.B.openedEntryIds.includes('doc.b_incident_report');
     return openedA && openedB && evaluatePredicate(operation.unlockWhen || { all: [] }, predicateState(room, role));
   }
+  if (operation.operationId === 'pair_validate_protocol'
+    && !room.publicFacts.includes('soloProtocolsReady')) return false;
   return evaluatePredicate(operation.unlockWhen || { all: [] }, predicateState(room, role));
 }
 
@@ -189,6 +191,10 @@ function openEntry(room, player, entryId) {
   const ws = room.workstation[role];
   if (ws.openedEntryIds.includes(entryId)) return { stateChanged: false, entry: displayEntry(entry, true) };
   ws.openedEntryIds.push(entryId);
+  if (room.workstation.A.openedEntryIds.includes('doc.a_solo_protocol')
+    && room.workstation.B.openedEntryIds.includes('doc.b_solo_protocol')) {
+    if (!room.publicFacts.includes('soloProtocolsReady')) room.publicFacts.push('soloProtocolsReady');
+  }
   refreshWorkstation(room);
   refreshPrivateMissions(room);
   return { stateChanged: true, entry: displayEntry(entry, true) };
@@ -218,6 +224,9 @@ function executeOperation(room, player, operationId, value, options = {}) {
   if (!operation || (operationId !== 'open_entry' && !room.workstation[role].activeOperations.includes(operationId))) {
     throw Object.assign(new Error('Operation is locked'), { code: 'OPERATION_LOCKED', status: 423 });
   }
+  if (operationId === 'pair_validate_protocol' && !room.publicFacts.includes('soloProtocolsReady')) {
+    throw Object.assign(new Error('Operation is locked'), { code: 'OPERATION_LOCKED', status: 423 });
+  }
   const ws = room.workstation[role];
   if (operationId === 'open_entry') {
     const entryId = typeof value === 'string' ? value : '';
@@ -228,6 +237,10 @@ function executeOperation(room, player, operationId, value, options = {}) {
     if (ws.openedEntryIds.includes(entryId)) return { stateChanged: false, operationId, value };
     ws.openedEntryIds.push(entryId);
     ws.actionAttempts.push(operationId);
+    if (room.workstation.A.openedEntryIds.includes('doc.a_solo_protocol')
+      && room.workstation.B.openedEntryIds.includes('doc.b_solo_protocol')) {
+      if (!room.publicFacts.includes('soloProtocolsReady')) room.publicFacts.push('soloProtocolsReady');
+    }
     refreshWorkstation(room);
     refreshPrivateMissions(room);
     return { stateChanged: true, operationId, value };

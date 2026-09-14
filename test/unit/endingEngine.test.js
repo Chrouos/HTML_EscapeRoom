@@ -92,7 +92,7 @@ test('every ending has three recorded, cross-referenced debrief facts', () => {
   for (const state of endings) {
     const endingId = resolveEnding(state);
     const items = buildDebrief(state, endingId);
-    assert.ok(items.length >= 3, endingId);
+    assert.ok(items.length >= 3 && items.length <= 5, endingId);
     for (const item of items) {
       assert.ok(item.factId);
       assert.ok(item.surfaceClaim);
@@ -109,6 +109,25 @@ test('an ignored available mission is recorded as an omission when it affects th
   commit(state, 'B');
   assert.equal(state.ending.id, 'a_solo_escape');
   assert.ok(state.debrief.some(item => item.factId === 'a1Skipped'));
+});
+
+test('all six skipped missions keep core ending causality within the 3-5 item limit', () => {
+  const state = room({
+    aFacts: ['a1Skipped', 'a2Skipped', 'a3Skipped'],
+    bFacts: ['b1Skipped', 'b2Skipped', 'b3Skipped'],
+    commits: ['A', 'B']
+  });
+  state.privateMissions = {
+    A: [1, 2, 3].map(index => ({ missionId: `a${index}.mission`, state: 'resolved', outcome: 'skipped' })),
+    B: [1, 2, 3].map(index => ({ missionId: `b${index}.mission`, state: 'resolved', outcome: 'skipped' }))
+  };
+  const items = buildDebrief(state, resolveEnding(state));
+  assert.ok(items.length >= 3 && items.length <= 5);
+  const ids = items.map(item => item.factId);
+  assert.ok(ids.includes('neutralFinaleCommitted'));
+  assert.ok(ids.includes('finaleCommittedA'));
+  assert.ok(ids.includes('finaleCommittedB'));
+  assert.ok(ids.includes('a1Skipped'));
 });
 
 test('final ending and debrief are immutable after the second commit', () => {

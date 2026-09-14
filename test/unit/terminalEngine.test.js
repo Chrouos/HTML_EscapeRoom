@@ -97,6 +97,20 @@ test('verification progress is applied only from its manifest effects', () => {
   assert.ok(room.workstation.A.roleFacts.includes(manifest.effects.roleFacts[0]));
 });
 
+test('pair protocol comparison requires both solo protocol documents', () => {
+  const room = readyRoom();
+  assert.ok(!room.workstation.A.activeOperations.includes('pair_validate_protocol'));
+  openEntry(room, { role: 'A', playerId: 'player-a' }, 'doc.a_solo_protocol');
+  refreshWorkstation(room);
+  assert.ok(!room.workstation.A.activeOperations.includes('pair_validate_protocol'));
+  openEntry(room, { role: 'B', playerId: 'player-b' }, 'doc.b_solo_protocol');
+  refreshWorkstation(room);
+  assert.ok(room.publicFacts.includes('soloProtocolsReady'));
+  assert.ok(room.workstation.A.activeOperations.includes('pair_validate_protocol'));
+  executeOperation(room, { role: 'A', playerId: 'player-a' }, 'pair_validate_protocol');
+  assert.ok(room.publicFacts.includes('comparedSoloFiles'));
+});
+
 test('executeOperation applies role facts without mutating the other actor projection', () => {
   const room = readyRoom();
   room.publicFacts = ['roomCreated', 'hostJoined', 'guestJoined', 'main1Completed'];
