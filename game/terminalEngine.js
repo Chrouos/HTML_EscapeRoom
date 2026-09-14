@@ -194,8 +194,8 @@ function openEntry(room, player, entryId) {
   return { stateChanged: true, entry: displayEntry(entry, true) };
 }
 
-function applyEffects(room, role, operation) {
-  const effects = operation.effects || {};
+function applyEffects(room, role, operation, overrides = {}) {
+  const effects = { ...(operation.effects || {}), ...overrides };
   for (const fact of effects.publicFacts || []) if (!room.publicFacts.includes(fact)) room.publicFacts.push(fact);
   for (const fact of effects.roleFacts || []) if (!room.workstation[role].roleFacts.includes(fact)) room.workstation[role].roleFacts.push(fact);
   const nodes = operation.kind === 'private'
@@ -241,11 +241,13 @@ function executeOperation(room, player, operationId, value, options = {}) {
   }
   room.actionAttempts.push(operationId);
   ws.actionAttempts.push(operationId);
-  if (operationId === 'verify_incident_timestamp') {
-    if (!room.publicFacts.includes('incidentVerificationAttempted')) room.publicFacts.push('incidentVerificationAttempted');
-    if (!ws.roleFacts.includes('incidentVerificationAttempted')) ws.roleFacts.push('incidentVerificationAttempted');
+  if (!options.skipEffects) {
+    const overrides = operation.kind === 'neutral_finale'
+      ? { completeNodeIds: [`finaleCommitted.${role}`,
+          ...(Object.values(room.finaleCommittedByRole || {}).some(Boolean) ? ['endingCommitted'] : [])] }
+      : {};
+    applyEffects(room, role, operation, overrides);
   }
-  if (!options.skipEffects) applyEffects(room, role, operation);
   if (operation.kind === 'mainline' && operationId !== 'verify_incident_timestamp'
     && !room.completedOperations.includes(operationId)) room.completedOperations.push(operationId);
   if (!ws.completedOperations.includes(operationId) && operationId !== 'verify_incident_timestamp') ws.completedOperations.push(operationId);

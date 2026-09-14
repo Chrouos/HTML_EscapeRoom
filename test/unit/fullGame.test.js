@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createRoomState } = require('../../game/createRoomState');
-const { initializeGame, submitAction } = require('../../game/gameEngine');
+const { initializeGame, submitAction, submitOperation } = require('../../game/gameEngine');
 const { forPlayer } = require('../../game/safeState');
 const { operations } = require('../../game/content/operations');
 const { traverseOperationGraph } = require('../../game/content/validateContent');
@@ -77,12 +77,41 @@ test('both actors can use the same action ID and retain both ending events', () 
   assert.equal(endingEvents[1].text, room.ending.text);
 });
 
-test('operation graph reaches finale from the three room roots without private outcomes', () => {
+test('operation graph traverses each declared room root and reaches finale without private outcomes', () => {
+  for (const root of ['roomCreated', 'hostJoined', 'guestJoined']) {
+    const graph = traverseOperationGraph(operations, { startFacts: [root], startNodes: [root] });
+    assert.ok(graph.nodes.has(root), `missing root ${root}`);
+  }
   const graph = traverseOperationGraph(operations, { excludeKinds: ['private'] });
   for (const node of ['finale_ready', 'finaleCommitted.A', 'finaleCommitted.B', 'endingCommitted']) {
     assert.ok(graph.nodes.has(node), `missing ${node}`);
   }
   assert.ok(graph.reached.has('complete_main6'));
+});
+
+test('declined, skipped, and failed private outcomes still follow the shared route', () => {
+  const declined = ['decline_index_repair', 'decline_identity_check', 'decline_mirror_cleanup'];
+  const skipped = ['skip_a3', 'skip_b3'];
+  const graph = traverseOperationGraph(operations.filter(operation =>
+    operation.kind !== 'private' || declined.includes(operation.operationId) || skipped.includes(operation.operationId)));
+  assert.ok(graph.nodes.has('finale_ready'));
+  assert.ok(graph.nodes.has('endingCommitted'));
+  const failed = traverseOperationGraph(operations, { excludeKinds: ['private'] });
+  assert.ok(failed.nodes.has('finale_ready'));
+});
+
+test('the first neutral finale commit has no shared ending effect', () => {
+  const room = ready();
+  room.publicFacts.push('finale_ready');
+  const first = submitOperation(room, { role: 'A', playerId: 'player-a' }, { actionId: 'neutral-a', operationId: 'commit_finale' });
+  assert.equal(first.stateChanged, true);
+  assert.ok(room.completedNodes.includes('finaleCommitted.A'));
+  assert.ok(!room.completedNodes.includes('finaleCommitted.B'));
+  assert.ok(!room.completedNodes.includes('endingCommitted'));
+  assert.equal(room.ending, null);
+  submitOperation(room, { role: 'B', playerId: 'player-b' }, { actionId: 'neutral-b', operationId: 'commit_finale' });
+  assert.ok(room.completedNodes.includes('endingCommitted'));
+  assert.equal(room.ending, null);
 });
 
 test('each private mission can lose all outcome edges without blocking the finale', () => {

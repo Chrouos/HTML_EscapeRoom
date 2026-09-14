@@ -176,7 +176,7 @@ function submitOperation(room, player, action, pendingEvents = []) {
   const failedAttempt = mission && typeof action.value === 'string'
     && /^(failed|invalid|error)$/i.test(action.value.trim());
   const result = executeOperation(room, typeof player === 'object' ? player : { role }, action.operationId, action.value,
-    { skipEffects: Boolean(failedAttempt) || action.operationId === 'commit_finale' });
+    { skipEffects: Boolean(failedAttempt) });
   if (!result.stateChanged) return result;
 
   let outcome = OPERATION_OUTCOMES[action.operationId];
@@ -188,12 +188,6 @@ function submitOperation(room, player, action, pendingEvents = []) {
   if (action.operationId === 'commit_finale') {
     room.finaleCommittedByRole ??= {};
     room.finaleCommittedByRole[role] = true;
-    if (!room.workstation[role].roleFacts.includes('finaleCommitted')) {
-      room.workstation[role].roleFacts.push('finaleCommitted');
-    }
-    room.completedNodes ??= [];
-    const node = `finaleCommitted.${role}`;
-    if (!room.completedNodes.includes(node)) room.completedNodes.push(node);
     // An unresolved private offer is an explicit omission, never a blocker.
     for (const item of room.privateMissions[role]) {
       if (item.state !== 'available') continue;

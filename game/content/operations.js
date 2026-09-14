@@ -20,7 +20,7 @@ const operations = Object.freeze([
   }),
   op('continue_file_index', 'mainline', { publicFact: 'main1Completed' }, { publicFacts: ['fileIndexContinued'], completeNodeIds: ['file_index_ready'] }),
   op('continue_roster_review', 'mainline', { publicFact: 'main1Completed' }, { publicFacts: ['rosterReviewContinued'], completeNodeIds: ['roster_review_ready'] }),
-  op('verify_incident_timestamp', 'mainline', { publicFact: 'main1Completed' }, { publicFacts: ['incidentVerificationAttempted'], completeNodeIds: ['incident_verification_ready'], unlockEntryIds: ['doc.a_incident_report', 'doc.b_incident_report'] }),
+  op('verify_incident_timestamp', 'mainline', { publicFact: 'main1Completed' }, { publicFacts: ['incidentVerificationAttempted'], roleFacts: ['incidentVerificationAttempted'], completeNodeIds: ['incident_verification_ready'], unlockEntryIds: ['doc.a_incident_report', 'doc.b_incident_report'] }),
   op('complete_main2', 'mainline', { publicFact: 'main1Completed' }, { publicFacts: ['main2Completed', 'accessLogOpened'], completeNodeIds: ['main2Completed'], unlockEntryIds: ['log.mirror_backup', 'log.token_reissue'] }),
   op('restore_mirror_from_backup', 'mainline', { publicFact: 'main2Completed' }, { publicFacts: ['mirrorRestored'], completeNodeIds: ['mirror_restored'] }),
   op('fetch_mirror_manually', 'mainline', { publicFact: 'main2Completed' }, { publicFacts: ['mirrorFetched'], completeNodeIds: ['mirror_fetched'] }),
@@ -57,7 +57,7 @@ const operations = Object.freeze([
   op('skip_b3', 'private', { all: [{ publicFact: 'main5Completed' }, { entryOpened: 'log.b_partner_unknown_access' }] }, { roleFacts: ['b3Skipped'], completeNodeIds: ['mission.b3.skipped'] }),
 
   op('commit_finale', 'neutral_finale', { publicFact: 'finale_ready' }, {
-    publicFacts: ['finaleCommitted'], completeNodeIds: ['finaleCommitted.A', 'finaleCommitted.B', 'endingCommitted'], appendContentIds: ['neutral_finale']
+    publicFacts: ['finaleCommitted'], roleFacts: ['finaleCommitted'], completeNodeIds: ['finaleCommitted.A', 'finaleCommitted.B', 'endingCommitted'], appendContentIds: ['neutral_finale']
   })
 ]);
 

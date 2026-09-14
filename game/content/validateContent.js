@@ -137,7 +137,9 @@ function validateContent(bundle = defaultContent) {
     for (const key of ['publicFacts', 'roleFacts', 'unlockEntryIds', 'completeNodeIds', 'appendContentIds']) {
       if (!Array.isArray(effects[key])) errors.push(`operation ${operation.operationId}.effects.${key} must be an array`);
     }
-    if (operation.kind === 'mainline' && (effects.roleFacts || []).length) errors.push(`mainline operation ${operation.operationId} depends on private facts`);
+    // A mainline operation may record an actor-local audit fact (for example
+    // a verification attempt); only its unlock predicate may not depend on
+    // private facts.
     if (operation.kind === 'mainline' && predicateContainsRoleFact(operation.unlockWhen)) errors.push(`mainline operation ${operation.operationId} depends on private role fact`);
   }
   const entryIds = new Set(terminalEntries.map(item => item.id));

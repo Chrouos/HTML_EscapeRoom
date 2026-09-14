@@ -84,6 +84,19 @@ test('verify_incident_timestamp requires both reports, records every attempt, an
   assert.equal(room.workstation.A.actionAttempts.filter(id => id === 'verify_incident_timestamp').length, 2);
 });
 
+test('verification progress is applied only from its manifest effects', () => {
+  const { operations } = require('../../game/content/operations');
+  const manifest = operations.find(operation => operation.operationId === 'verify_incident_timestamp');
+  assert.deepEqual(manifest.effects.publicFacts, ['incidentVerificationAttempted']);
+  assert.deepEqual(manifest.effects.roleFacts, ['incidentVerificationAttempted']);
+  const room = readyRoom({ publicFacts: ['roomCreated', 'hostJoined', 'guestJoined', 'main1Completed'] });
+  openEntry(room, { role: 'A', playerId: 'player-a' }, 'doc.a_incident_report');
+  openEntry(room, { role: 'B', playerId: 'player-b' }, 'doc.b_incident_report');
+  executeOperation(room, { role: 'A', playerId: 'player-a' }, 'verify_incident_timestamp');
+  assert.ok(room.publicFacts.includes(manifest.effects.publicFacts[0]));
+  assert.ok(room.workstation.A.roleFacts.includes(manifest.effects.roleFacts[0]));
+});
+
 test('executeOperation applies role facts without mutating the other actor projection', () => {
   const room = readyRoom();
   room.publicFacts = ['roomCreated', 'hostJoined', 'guestJoined', 'main1Completed'];
