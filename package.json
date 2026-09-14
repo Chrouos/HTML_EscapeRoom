@@ -10,7 +10,8 @@
     "test:integration": "node --test \"test/integration/**/*.test.js\"",
     "test": "npm run test:unit && npm run test:integration",
     "test:e2e": "playwright test",
-    "check": "npm test && npm run test:e2e"
+    "validate:content": "node scripts/validate-content.js",
+    "check": "npm run validate:content && npm test && npm run test:e2e"
   },
   "engines": {
     "node": ">=20"
