@@ -97,7 +97,7 @@ test('Backspace and keyboard navigation stay inside the workstation', async ({ p
   await workspace.focus();
   await page.keyboard.press('Backspace');
   expect(page.url()).toBe(before);
-  await expect(workspace.getByRole('button', { name: 'incident.log', exact: true })).toBeVisible();
+  await expect(workspace.getByRole('button', { name: 'BRIEFS', exact: true })).toBeVisible();
   await room.partnerContext.close();
 });
 

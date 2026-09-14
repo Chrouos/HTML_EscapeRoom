@@ -10,6 +10,7 @@ export function createWorkstation(root, { onOperation } = {}) {
     ? root
     : root?.querySelector?.('[data-workstation]') || root;
   if (!host) throw new TypeError('Workstation root is required');
+  if (!host.hasAttribute('tabindex')) host.tabIndex = -1;
   if (typeof onOperation !== 'function' && onOperation !== undefined) {
     throw new TypeError('onOperation must be a function');
   }
