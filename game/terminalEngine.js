@@ -160,11 +160,13 @@ function projectWorkstation(room, player) {
   }
   return {
     files: { entries: buckets.files },
-    terminal: { entries: buckets.terminal, activeOperations: [...ws.activeOperations] },
+    terminal: { entries: buckets.terminal, activeOperations: ws.activeOperations.filter(operationId => operationId !== 'open_entry') },
     logs: { entries: buckets.logs },
     unlockedEntryIds: [...ws.unlockedEntryIds],
     openedEntryIds: [...ws.openedEntryIds],
-    activeOperations: [...ws.activeOperations],
+    // `open_entry` is a transport-only callback used by Files clicks; it is
+    // intentionally not rendered as a generic Terminal button.
+    activeOperations: ws.activeOperations.filter(operationId => operationId !== 'open_entry'),
     roleFacts: [...ws.roleFacts]
   };
 }
@@ -206,7 +208,7 @@ function executeOperation(room, player, operationId, value, options = {}) {
   ensureRoom(room);
   refreshWorkstation(room);
   const operation = operations.find(item => item.operationId === operationId);
-  if (!operation || !room.workstation[role].activeOperations.includes(operationId)) {
+  if (!operation || (operationId !== 'open_entry' && !room.workstation[role].activeOperations.includes(operationId))) {
     throw Object.assign(new Error('Operation is locked'), { code: 'OPERATION_LOCKED', status: 423 });
   }
   const ws = room.workstation[role];

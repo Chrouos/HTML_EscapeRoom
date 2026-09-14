@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { createRoomState } = require('../../game/createRoomState');
-const { ensureRoom, refreshWorkstation, openEntry } = require('../../game/terminalEngine');
+const { ensureRoom, refreshWorkstation, openEntry, projectWorkstation } = require('../../game/terminalEngine');
 const {
   ensurePrivateMissions,
   refreshPrivateMissions,
@@ -152,6 +152,7 @@ test('open_entry semantic operation persists entry triggers for the acting role 
   assert.equal(result.stateChanged, true);
   assert.ok(room.workstation.A.openedEntryIds.includes('files.mainline'));
   assert.ok(!room.workstation.B.openedEntryIds.includes('files.mainline'));
+  assert.ok(!projectWorkstation(room, { role: 'A', playerId: 'player-a' }).activeOperations.includes('open_entry'));
   assert.equal(room.privateMissions.A.find(item => item.id === 'mission.a1.index_repair').state, 'available');
 });
 

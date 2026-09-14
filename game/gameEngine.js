@@ -181,7 +181,11 @@ function submitOperation(room, player, action, pendingEvents = []) {
     }
   }
 
-  triggerDialogue(room, { operationId: action.operationId, role }, pendingEvents);
+  triggerDialogue(room, {
+    operationId: action.operationId,
+    role,
+    ...(action.operationId === 'open_entry' ? { entryOpened: action.value } : {})
+  }, pendingEvents);
   refreshPrivateMissions(room);
   const response = {
     stateChanged: true,
