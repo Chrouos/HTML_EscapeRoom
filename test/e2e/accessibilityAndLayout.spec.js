@@ -91,7 +91,7 @@ test('390px viewport exposes keyboard-operated monitor tabs and one active pane'
     await expect(intercom).toBeHidden();
     await expect(operations).toBeVisible();
     await player.keyboard.press('Tab');
-    await expect(player.getByLabel('提交答案', { exact: true })).toBeFocused();
+    await expect(operations.locator('[data-workstation-app="files"]')).toBeFocused();
     await expect(player.getByLabel('傳訊給另一位受試者')).not.toBeFocused();
     await player.keyboard.press('Shift+Tab');
     await expect(operationsTab).toBeFocused();

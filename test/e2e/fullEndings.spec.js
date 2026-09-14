@@ -29,18 +29,22 @@ for (const [count, choice, title] of [[0, 'COMPLY', '程序完成'], [2, 'RESIST
       await b.goto('/');
       await b.getByLabel('六位數房號').fill(code);
       await b.getByRole('button', { name: '加入房間（玩家 B）' }).click();
+      const operations = page => page.locator('[data-operations-workspace]');
+      const intercom = page => page.locator('.intercom-monitor');
       for (const [index, [puzzle, step, value]] of main.entries()) {
         const page = index % 2 ? b : a;
         await expect(page.locator('[data-game-room]')).toHaveAttribute('data-step', `${puzzle}:${step}`);
-        await page.getByLabel('提交答案', { exact: true }).fill(value);
-        await page.getByRole('button', { name: '送出', exact: true }).click();
-        await expect(page.getByLabel('提交答案', { exact: true })).toHaveValue('');
+        await operations(page).getByLabel('提交答案', { exact: true }).fill(value);
+        await operations(page).getByRole('button', { name: '送出', exact: true }).click();
+        await expect(operations(page).getByLabel('提交答案', { exact: true })).toHaveValue('');
       }
       await expect(a.locator('[data-game-room]')).toHaveAttribute('data-step', 'main6:ending');
+      const mainA = operations(a);
+      const mainB = operations(b);
       for (const [name, steps] of sides.slice(0, count)) {
-        const section = a.locator('.investigation').filter({ has: a.getByRole('heading', { name, exact: true }) });
+        const section = mainA.locator('.investigation').filter({ hasText: name });
         await section.getByRole('button', { name: '查看異常紀錄' }).click();
-        const partnerSection = b.locator('.investigation').filter({ has: b.getByRole('heading', { name, exact: true }) });
+        const partnerSection = mainB.locator('.investigation').filter({ hasText: name });
         for (const [step, value] of steps) {
           await expect(section).toHaveAttribute('data-step', step);
           await expect(partnerSection).toHaveAttribute('data-step', step);
@@ -52,16 +56,16 @@ for (const [count, choice, title] of [[0, 'COMPLY', '程序完成'], [2, 'RESIST
         }
         await expect(section.getByRole('button', { name: '已歸檔' })).toBeDisabled();
       }
-      await a.getByLabel('提交答案', { exact: true }).fill('COMPLY');
-      await a.getByRole('button', { name: '送出', exact: true }).click();
-      await expect(a.getByLabel('提交答案', { exact: true })).toHaveValue('');
+      await mainA.getByLabel('提交答案', { exact: true }).fill('COMPLY');
+      await mainA.getByRole('button', { name: '送出', exact: true }).click();
+      await expect(mainA.getByLabel('提交答案', { exact: true })).toHaveValue('');
       await expect(b.locator('[data-game-room]')).toHaveAttribute('data-step', 'main6:ending');
-      await b.getByLabel('提交答案', { exact: true }).fill(choice);
-      await b.getByRole('button', { name: '送出', exact: true }).click();
+      await mainB.getByLabel('提交答案', { exact: true }).fill(choice);
+      await mainB.getByRole('button', { name: '送出', exact: true }).click();
       if (count) {
-        await expect(a.getByRole('log')).toContainText('雙方選擇不一致');
-        await a.getByLabel('提交答案', { exact: true }).fill(choice);
-        await a.getByRole('button', { name: '送出', exact: true }).click();
+        await expect(intercom(a).getByRole('log')).toContainText('雙方選擇不一致');
+        await mainA.getByLabel('提交答案', { exact: true }).fill(choice);
+        await mainA.getByRole('button', { name: '送出', exact: true }).click();
       }
       await expect(a.locator('[data-ending]')).toContainText(title);
       await b.reload();

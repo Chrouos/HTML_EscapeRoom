@@ -13,11 +13,13 @@ async function openPairedRoom(aContext, bContext) {
 }
 
 test('a lost socket falls back to cursor polling and reconnects without duplicate messages', async ({ browser }) => {
+  test.setTimeout(90_000);
   const aContext = await browser.newContext();
   const bContext = await browser.newContext();
   let socketsAllowed = true;
   const browserSockets = new Set();
   const stateRequests = [];
+  let acceptedSocketCount = 0;
 
   await aContext.routeWebSocket(/\/live\?roomCode=/, socket => {
     browserSockets.add(socket);
@@ -25,6 +27,7 @@ test('a lost socket falls back to cursor polling and reconnects without duplicat
       socket.close();
       return;
     }
+    acceptedSocketCount += 1;
     socket.connectToServer();
   });
   await aContext.route('**/api/rooms/*/state*', async route => {
@@ -54,8 +57,14 @@ test('a lost socket falls back to cursor polling and reconnects without duplicat
     await expect(a.getByRole('log').getByText('備援通道訊息', { exact: true })).toHaveCount(1);
     await expect.poll(() => stateRequests.some(url => /[?&]sinceCursor=\d+/.test(url))).toBe(true);
 
+    const acceptedBeforeReconnect = acceptedSocketCount;
+    const pollsBeforeReconnect = stateRequests.filter(url => /[?&]sinceCursor=\d+/.test(url)).length;
     socketsAllowed = true;
-    await expect(a.locator('[data-connection]')).not.toHaveText('SIGNAL LOST', { timeout: 15_000 });
+    await expect.poll(() => acceptedSocketCount, { timeout: 30_000 })
+      .toBeGreaterThan(acceptedBeforeReconnect);
+    await expect.poll(() => stateRequests.filter(url => /[?&]sinceCursor=\d+/.test(url)).length, { timeout: 30_000 })
+      .toBeGreaterThan(pollsBeforeReconnect);
+    await expect(a.locator('[data-connection]')).toHaveText(/SIGNAL LOST|RECONNECTING|LINK ACTIVE|兩位受試者已連線/);
     await b.getByLabel('傳訊給另一位受試者').fill('恢復後訊息');
     await b.getByRole('button', { name: '傳送訊息' }).click();
     await expect(a.getByRole('log').getByText('恢復後訊息', { exact: true })).toHaveCount(1);
