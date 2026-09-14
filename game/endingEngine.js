@@ -31,8 +31,7 @@ function recordedFacts(room) {
 }
 
 function mainCompleted(room) {
-  return Boolean(room?.publicFacts?.includes('mainCompleted')
-    || room?.mainProgress?.includes('main6'));
+  return Boolean(room?.publicFacts?.includes('mainCompleted'));
 }
 
 /**
