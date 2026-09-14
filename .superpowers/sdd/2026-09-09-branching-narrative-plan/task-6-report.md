@@ -11,6 +11,7 @@
 ## Verification
 
 - `node --test test/unit/endingEngine.test.js test/unit/contentValidation.test.js` — 22 passing.
+- `node --test test/unit/fullGame.test.js` — 8 passing after migrating legacy finale assertions to neutral commits.
 - `npm run validate:content` — Narrative content valid.
 - `npx playwright test test/e2e/fullEndings.spec.js` was attempted, but the local Playwright web-server run exceeded 120 seconds without producing test output; no assertion result was available.
 

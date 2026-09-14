@@ -25,6 +25,12 @@ let serial = 0;
 function act(room, puzzleId, stepId, value, role = 'A') {
   return submitAction(room, { role }, { actionId: `test-${++serial}`, puzzleId, stepId, value });
 }
+function ensureFinaleReady(room) {
+  if (room.publicFacts?.includes('mainCompleted')) return;
+  submitOperation(room, { role: 'A', playerId: 'player-a' }, {
+    actionId: `complete-final-${++serial}`, operationId: 'complete_main6'
+  });
+}
 function ready() {
   const room = createRoomState('123456', 0);
   room.players = {
@@ -46,36 +52,38 @@ function reachExit(room) {
   assert.equal(room.ending, null);
 }
 
-test('complete main path remains independent of side answers and final choices can change', () => {
+test('complete main path remains independent of optional evidence and neutral finale commits', () => {
   const room = ready();
   assert.throws(() => act(room, 'side1', 'inspect', ''), error => error.status === 423);
   reachExit(room);
   assert.deepEqual(room.sideEvidence, []);
-  assert.throws(() => act(room, 'main6', 'ending', 'TRUTH'), error => error.status === 423);
-  act(room, 'main6', 'ending', 'COMPLY');
+  assert.throws(() => act(room, 'main6', 'ending', 'TRUTH'), error => error.code === 'INVALID_ACTION');
+  ensureFinaleReady(room);
+  submitOperation(room, { role: 'A', playerId: 'player-a' }, { actionId: 'final-a', operationId: 'commit_finale' });
   assert.equal(room.ending, null);
-  act(room, 'main6', 'ending', 'COMPLY', 'B');
-  assert.equal(room.ending.id, 'compliance');
+  submitOperation(room, { role: 'B', playerId: 'player-b' }, { actionId: 'final-b', operationId: 'commit_finale' });
+  assert.equal(room.ending.id, 'ambiguous_containment');
   assert.equal(room.mainProgress.length, 6);
 });
 
-test('both actors can use the same action ID and retain both ending events', () => {
+test('both actors can use the same action ID and the second commit emits the ending', () => {
   const room = ready();
   reachExit(room);
+  ensureFinaleReady(room);
   const events = [];
 
-  submitAction(room, { role: 'A', playerId: 'player-a' }, {
-    actionId: 'same-ending', puzzleId: 'main6', stepId: 'ending', value: 'COMPLY'
+  submitOperation(room, { role: 'A', playerId: 'player-a' }, {
+    actionId: 'same-ending', operationId: 'commit_finale'
   }, events);
-  submitAction(room, { role: 'B', playerId: 'player-b' }, {
-    actionId: 'same-ending', puzzleId: 'main6', stepId: 'ending', value: 'COMPLY'
+  submitOperation(room, { role: 'B', playerId: 'player-b' }, {
+    actionId: 'same-ending', operationId: 'commit_finale'
   }, events);
 
-  const endingEvents = events.filter(event => event.id.includes('same-ending'));
-  assert.equal(endingEvents.length, 2);
-  assert.equal(new Set(endingEvents.map(event => event.id)).size, 2);
-  assert.deepEqual(endingEvents.map(event => event.type), ['system', 'story']);
-  assert.equal(endingEvents[1].text, room.ending.text);
+  const endingEvents = events.filter(event => event.id.startsWith('ending-'));
+  assert.equal(endingEvents.length, 1);
+  assert.equal(new Set(endingEvents.map(event => event.id)).size, 1);
+  assert.deepEqual(endingEvents.map(event => event.type), ['story']);
+  assert.equal(endingEvents[0].text, room.ending.text);
 });
 
 test('operation graph traverses each declared room root and reaches finale without private outcomes', () => {
@@ -142,8 +150,8 @@ test('each private mission can lose all outcome edges without blocking the final
   }
 });
 
-for (const [count, choice, ending] of [[2, 'RESIST', 'resistance'], [4, 'TRUTH', 'truth']]) {
-  test(`${count} optional investigations unlock ${ending} and conflict remains recoverable`, () => {
+for (const count of [2, 4]) {
+  test(`${count} optional investigations remain recoverable before neutral finale`, () => {
     const room = ready();
     reachExit(room);
     for (const [puzzleId, steps] of sides.slice(0, count)) {
@@ -157,11 +165,11 @@ for (const [count, choice, ending] of [[2, 'RESIST', 'resistance'], [4, 'TRUTH',
       assert.equal(act(room, puzzleId, steps[1][0], steps[1][1]).stateChanged, false);
     }
     assert.equal(room.sideEvidence.length, count);
-    act(room, 'main6', 'ending', 'COMPLY');
-    act(room, 'main6', 'ending', choice, 'B');
+    ensureFinaleReady(room);
+    submitOperation(room, { role: 'A', playerId: 'player-a' }, { actionId: `neutral-a-${count}`, operationId: 'commit_finale' });
     assert.equal(room.ending, null);
-    act(room, 'main6', 'ending', choice);
-    assert.equal(room.ending.id, ending);
+    submitOperation(room, { role: 'B', playerId: 'player-b' }, { actionId: `neutral-b-${count}`, operationId: 'commit_finale' });
+    assert.equal(room.ending.id, 'ambiguous_containment');
     assert.equal(room.mainProgress.length, 6);
     const state = JSON.stringify(forPlayer(room, { role: 'A', playerId: 'player-a' }));
     assert.doesNotMatch(state, /A-token|B-token|"answer"|"acceptedAnswers"/);
