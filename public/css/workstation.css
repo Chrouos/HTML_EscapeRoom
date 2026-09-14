@@ -171,6 +171,7 @@
     width: 1px;
     height: 1px;
     opacity: 0;
+    pointer-events: none;
   }
 
   .monitor-tab {
@@ -244,5 +245,34 @@
 @media (prefers-reduced-motion: reduce) {
   .status-light {
     animation: none;
+  }
+}
+
+/* Diegetic transport readouts: technical recovery details stay out of the UI. */
+.connection-band[data-signal="lost"] {
+  color: var(--status-attention);
+}
+
+.connection-band[data-signal="reconnecting"] {
+  color: var(--status-attention);
+}
+
+.connection-band[data-signal="ready"] {
+  color: var(--phosphor);
+}
+
+.connection-band .readout-dot-lost {
+  background: var(--status-attention);
+  box-shadow: 0 0 10px var(--status-attention);
+}
+
+.connection-band .readout-dot-reconnecting {
+  background: var(--status-attention);
+  box-shadow: 0 0 10px var(--status-attention);
+}
+
+@media (max-width: 759px) {
+  .monitor-frame[aria-hidden="true"] {
+    display: none;
   }
 }

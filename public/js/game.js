@@ -13,6 +13,98 @@
   let workstation;
   let liveTransport;
   let latestCountdown;
+  let transportStatus = 'booting';
+
+  // The two monitors share one DOM tree. On narrow screens we only hide the
+  // inactive monitor; its form values, scroll position, and focus target stay
+  // mounted so switching panes never loses player input.
+  function setupPaneController() {
+    const selector = root.querySelector('.monitor-selector');
+    const tabs = [...root.querySelectorAll('.monitor-tab-input')];
+    const monitors = {
+      'monitor-intercom': root.querySelector('.intercom-monitor'),
+      'monitor-operations': root.querySelector('.operations-monitor')
+    };
+    if (!selector || tabs.length === 0) return;
+
+    const focusByMonitor = new Map();
+    const media = window.matchMedia('(max-width: 759px)');
+    let activeId = tabs.find(tab => tab.checked)?.id || tabs[0].id;
+
+    function alignWorkstationTabOrder() {
+      if (!media.matches || activeId !== 'monitor-operations') return;
+      const hasWorkstationContent = root.querySelector(
+        '[data-workstation-entry], [data-terminal-operation]'
+      );
+      root.querySelectorAll('.workstation-apps button').forEach(button => {
+        button.tabIndex = hasWorkstationContent ? 0 : -1;
+      });
+    }
+
+    function rememberFocus() {
+      const active = document.activeElement;
+      for (const [id, monitor] of Object.entries(monitors)) {
+        if (monitor?.contains(active)) {
+          const key = active.id || active.dataset.workstationId || active.dataset.workstationApp;
+          if (key) focusByMonitor.set(id, key);
+        }
+      }
+    }
+
+    function restoreFocus(id) {
+      const key = focusByMonitor.get(id);
+      if (!key) return;
+      const monitor = monitors[id];
+      if (!monitor) return;
+      const target = monitor.querySelector(`#${CSS.escape(key)}, [data-workstation-id="${CSS.escape(key)}"], [data-workstation-app="${CSS.escape(key)}"]`);
+      if (target && typeof target.focus === 'function') target.focus({ preventScroll: true });
+    }
+
+    function apply() {
+      const mobile = media.matches;
+      for (const tab of tabs) {
+        const selected = tab.id === activeId;
+        tab.setAttribute('aria-selected', String(selected));
+        tab.setAttribute('aria-checked', String(selected));
+        const monitor = monitors[tab.id];
+        if (monitor && !monitor.id) monitor.id = `${tab.id}-pane`;
+        const label = root.querySelector(`label[for="${CSS.escape(tab.id)}"]`);
+        if (label) {
+          label.setAttribute('role', 'tab');
+          label.setAttribute('aria-selected', String(selected));
+          if (monitor?.id) label.setAttribute('aria-controls', monitor.id);
+        }
+        if (!monitor) continue;
+        monitor.hidden = mobile && !selected;
+        monitor.setAttribute('aria-hidden', String(mobile && !selected));
+        monitor.toggleAttribute('inert', mobile && !selected);
+      }
+      // With no actor-visible workstation entries, keep the main answer field
+      // as the first keyboard stop on the operations pane. Once entries or
+      // operations exist, the workstation controls remain keyboard reachable.
+      alignWorkstationTabOrder();
+      selector.dataset.activeMonitor = activeId;
+    }
+
+    for (const tab of tabs) {
+      tab.setAttribute('role', 'radio');
+      tab.addEventListener('change', () => {
+        rememberFocus();
+        activeId = tab.id;
+        apply();
+        window.queueMicrotask(() => restoreFocus(activeId));
+      });
+    }
+    const onResize = () => apply();
+    media.addEventListener?.('change', onResize);
+    window.addEventListener('resize', onResize);
+    const observer = new MutationObserver(alignWorkstationTabOrder);
+    const workstationHost = root.querySelector('[data-workstation]');
+    if (workstationHost) observer.observe(workstationHost, { childList: true, subtree: true });
+    apply();
+  }
+
+  setupPaneController();
 
   function text(selector, value) {
     const node = root.querySelector(selector);
@@ -95,7 +187,9 @@
       text('[data-feedback]', '');
     }
     state = next;
-    connection.textContent = next.occupancy.ready ? '兩位受試者已連線' : '等待另一位受試者';
+    if (transportStatus !== 'lost' && transportStatus !== 'reconnecting') {
+      connection.textContent = next.occupancy.ready ? '兩位受試者已連線' : '等待另一位受試者';
+    }
     text('[data-occupancy]', next.occupancy.ready ? '房間狀態：兩位玩家已就緒' : '房間狀態：等待另一位玩家加入');
     const progress = next.publicProgress;
     root.dataset.step = `${progress.puzzleId || ''}:${progress.stepId || ''}`;
@@ -244,12 +338,22 @@
   });
 
   function updateConnection(status) {
-    if (status === 'lost') {
-      connection.textContent = 'SIGNAL LOST';
-      return;
+    transportStatus = status || 'ready';
+    const band = root.querySelector('.connection-band');
+    const light = root.querySelector('[data-connection-light]') || root.querySelector('.readout-dot');
+    const labels = { lost: 'SIGNAL LOST', reconnecting: 'RECONNECTING', ready: 'LINK ACTIVE' };
+    const label = labels[status];
+    if (label) connection.textContent = label;
+    else if (state) connection.textContent = state.occupancy.ready ? '兩位受試者已連線' : '等待另一位受試者';
+    if (band) {
+      band.dataset.signal = status || 'ready';
+      band.classList.toggle('signal-lost', status === 'lost');
+      band.classList.toggle('signal-reconnecting', status === 'reconnecting');
+      band.classList.toggle('signal-ready', status === 'ready' || !status);
     }
-    if (state) {
-      connection.textContent = state.occupancy.ready ? '兩位受試者已連線' : '等待另一位受試者';
+    if (light) {
+      light.classList.toggle('readout-dot-lost', status === 'lost');
+      light.classList.toggle('readout-dot-reconnecting', status === 'reconnecting');
     }
   }
 

@@ -41,11 +41,13 @@ test('a lost socket falls back to cursor polling and reconnects without duplicat
     await b.goto(a.url());
     await b.getByRole('button', { name: '加入房間（玩家 B）' }).click();
     await expect(a.locator('[data-clues]')).toContainText('ORPHEUS');
+    await expect(a.locator('[data-connection]')).not.toContainText(/websocket|polling|cursor|private/i);
     await expect.poll(() => browserSockets.size).toBeGreaterThan(0);
 
     socketsAllowed = false;
     for (const socket of browserSockets) socket.close();
-    await expect(a.locator('[data-connection]')).toHaveText('SIGNAL LOST');
+    await expect(a.locator('[data-connection]')).toHaveText(/SIGNAL LOST|RECONNECTING/);
+    await expect(a.locator('[data-connection]')).not.toContainText(/websocket|polling|cursor|private/i);
 
     await b.getByLabel('傳訊給另一位受試者').fill('備援通道訊息');
     await b.getByRole('button', { name: '傳送訊息' }).click();
@@ -452,7 +454,7 @@ test('socket close during resync never overlaps the snapshot with polling', asyn
     liveSocket.close();
     await expect.poll(() => liveSockets.length, { timeout: 15_000 }).toBeGreaterThan(1);
     expect(maxActiveRequests).toBe(1);
-    await expect(a.locator('[data-connection]')).toHaveText('SIGNAL LOST');
+    await expect(a.locator('[data-connection]')).toHaveText(/SIGNAL LOST|RECONNECTING/);
     releaseSnapshot();
     await expect(a.locator('[data-connection]')).not.toHaveText('SIGNAL LOST');
   } finally {

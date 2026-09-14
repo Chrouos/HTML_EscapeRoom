@@ -194,7 +194,11 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
     if (stopped || reconnectTimer || socket) return;
     reconnectTimer = window.setTimeout(() => {
       reconnectTimer = undefined;
-      connect();
+      try {
+        onStatus('reconnecting');
+      } finally {
+        connect();
+      }
     }, reconnectDelay);
     reconnectDelay = Math.min(reconnectDelay * 2, MAX_DELAY);
   }
@@ -253,7 +257,7 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
           generation += 1;
           setMode('websocket');
           send({ type: 'resume', cursor });
-          onStatus('connected');
+          onStatus('ready');
         } else if (!initial) {
           enterPolling();
         }
@@ -329,7 +333,7 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
       pollDelay = reconnectDelay = BASE_DELAY;
       setMode('websocket');
       send({ type: 'resume', cursor });
-      onStatus('connected');
+      onStatus('ready');
     });
     candidate.addEventListener('message', event => {
       if (candidate === socket && !stopped) handleFrame(event.data);
