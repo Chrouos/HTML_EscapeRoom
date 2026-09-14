@@ -51,8 +51,9 @@ export function createWorkstation(root, { onOperation } = {}) {
   function rootIdFor(view, entries) {
     const candidate = id(view.files?.rootId) || id(view.rootId);
     if (candidate && entries.some(entry => entry.id === candidate)) return candidate;
-    return entries.find(entry => entry.kind === 'folder' && entry.parentId == null)?.id
-      || entries.find(entry => entry.kind === 'folder')?.id || '';
+    const isFolder = entry => entry.kind === 'folder' || entry.type === 'folder';
+    return entries.find(entry => isFolder(entry) && entry.parentId == null)?.id
+      || entries.find(entry => isFolder(entry))?.id || '';
   }
 
   function captureViewState() {

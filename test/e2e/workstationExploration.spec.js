@@ -114,3 +114,28 @@ test('Logs is explorable and live renders preserve the current folder', async ({
   await expect(workspace.locator('[data-workstation-log]')).toContainText('Console ready.');
   await room.partnerContext.close();
 });
+
+test('accepts type-only folder roots and returns to the parent', async ({ page }) => {
+  const room = await mount(page);
+  const workspace = page.locator('[data-workstation]');
+  await expect(workspace.getByRole('button', { name: 'Files', exact: true })).toBeVisible();
+  const typeOnly = structuredClone(workstationFixture);
+  delete typeOnly.files.rootId;
+  typeOnly.files.entries = typeOnly.files.entries.map(entry => {
+    const copy = { ...entry };
+    delete copy.kind;
+    if (entry.kind === 'folder') copy.type = 'folder';
+    return copy;
+  });
+  await page.evaluate(() => {
+    const workstation = document.querySelector('[data-game-room]').workstation;
+    workstation.openApp('terminal');
+  });
+  await page.evaluate(fixture => document.querySelector('[data-game-room]').workstation.render(fixture), typeOnly);
+  await page.evaluate(() => document.querySelector('[data-game-room]').workstation.openApp('files'));
+  await workspace.getByRole('button', { name: 'BRIEFS', exact: true }).click();
+  await expect(workspace.getByRole('button', { name: 'incident.log', exact: true })).toBeVisible();
+  await workspace.getByRole('button', { name: /back/i }).click();
+  await expect(workspace.getByRole('button', { name: 'BRIEFS', exact: true })).toBeVisible();
+  await room.partnerContext.close();
+});
