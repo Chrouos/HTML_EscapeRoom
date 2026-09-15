@@ -232,10 +232,24 @@ test('Files projection exposes nested folders and locked metadata without conten
   const locked = a.files.entries.find(item => item.id === 'doc.a_incident_report');
   assert.equal(root.kind, 'folder');
   assert.equal(root.parentId, null);
+  assert.equal(a.files.rootId, 'folder.root');
   assert.equal(locked.locked, true);
   assert.equal(locked.parentId, 'folder.private_a');
   assert.equal(locked.text, undefined);
   assert.equal(a.files.entries.some(item => item.id === 'files.experiment_roster'), false);
+});
+
+test('Files projection keeps the folder root through the actor-safe state adapter', () => {
+  const room = createRoomState('ROOM42', 0);
+  room.players.A = { playerId: 'player-a' };
+  room.players.B = { playerId: 'player-b' };
+  room.publicFacts = ['roomCreated'];
+  refreshWorkstation(room);
+  const { projectForPlayer } = require('../../game/safeState');
+  const state = projectForPlayer(room, { role: 'A', playerId: 'player-a' });
+  assert.equal(state.workstation.files.rootId, 'folder.root');
+  assert.equal(state.workstation.files.entries.find(item => item.id === 'folder.case').parentId, 'folder.root');
+  assert.equal(state.workstation.files.entries.find(item => item.id === 'answer.main1').parentId, 'folder.case');
 });
 
 test('opening the current answer gate is actor-local and unlocks only that actor form state', () => {

@@ -417,6 +417,10 @@ function projectWorkstation(room, player) {
     buckets[appForEntry(item)].push(displayEntry(item, opened.has(item.id), !unlocked,
       archiveIds.has(item.archive?.id || item.archiveId)));
   }
+  // Keep the filesystem anchor explicit in the actor-safe projection.  The
+  // client can then render the root deterministically even when a future
+  // content pack adds another top-level folder or reorders authored entries.
+  const fileRoot = buckets.files.find(item => item.kind === 'folder' && item.parentId == null);
   const answer = authoredEntries().find(item => item.answerGate?.puzzleId === currentMainPuzzleId(room)
     && audienceAllows(item, role));
   const answerGate = answer ? {
@@ -431,7 +435,7 @@ function projectWorkstation(room, player) {
     // silently remove each role's starting clue.
     text: room.privateClues?.[role]?.text || '',
     audioUrl: room.privateClues?.[role]?.audioUrl || '',
-    files: { entries: buckets.files },
+    files: { rootId: fileRoot?.id || null, entries: buckets.files },
     terminal: { entries: buckets.terminal, activeOperations: ws.activeOperations.filter(operationId => operationId !== 'open_entry') },
     logs: { entries: buckets.logs },
     unlockedEntryIds: [...ws.unlockedEntryIds],
