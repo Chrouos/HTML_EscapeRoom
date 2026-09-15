@@ -45,8 +45,30 @@ function discoveredEvidenceEntries(room) {
   }));
 }
 
+function investigationEntries(room) {
+  const views = Array.isArray(room?.publicProgress?.sidePuzzles) ? room.publicProgress.sidePuzzles : [];
+  return views.filter(view => view && typeof view.puzzleId === 'string' && view.puzzleId).map(view => ({
+    id: `investigation.${view.puzzleId}`,
+    sourceEntryId: `investigation.${view.puzzleId}`,
+    sourceGroup: 'side_investigation',
+    audience: { kind: 'both' },
+    kind: 'document',
+    parentId: 'folder.notes',
+    filename: `${view.puzzleId}.case`,
+    text: typeof view.prompt === 'string' && view.opened ? view.prompt
+      : typeof view.hook === 'string' ? view.hook : typeof view.title === 'string' ? view.title : '',
+    title: view.title,
+    puzzleId: view.puzzleId,
+    stepId: view.stepId || 'inspect',
+    opened: view.opened === true,
+    complete: view.complete === true,
+    hook: view.hook || '',
+    prompt: view.prompt || ''
+  }));
+}
+
 function allEntries(room) {
-  return [...authoredEntries(), ...discoveredEvidenceEntries(room)];
+  return [...authoredEntries(), ...discoveredEvidenceEntries(room), ...investigationEntries(room)];
 }
 
 const TERMINAL_HINTS = Object.freeze([
@@ -411,9 +433,14 @@ function displayEntry(entry, opened, locked = false, archiveExpanded = false) {
     kind: entry.kind || 'document',
     locked: Boolean(locked),
     metadataVisible: true,
-    opened: Boolean(opened),
+    opened: Boolean(opened || entry.opened),
     answerGate: entry.answerGate || null
   };
+  if (entry.puzzleId) {
+    result.puzzleId = entry.puzzleId;
+    result.stepId = entry.stepId || 'inspect';
+    result.investigation = { opened: entry.opened === true, complete: entry.complete === true };
+  }
   if (entry.archive) result.archive = { id: entry.archive.id, expanded: Boolean(archiveExpanded) };
   if (entry.archiveId && entry.archiveOnly) result.archive = { id: entry.archiveId, expanded: Boolean(archiveExpanded) };
   if (locked) return result;
@@ -434,9 +461,11 @@ function projectWorkstation(room, player) {
   for (const item of allEntries(room)) {
     if (item.archiveOnly && !archiveIds.has(item.archiveId)) continue;
     if (!audienceAllows(item, role)) continue;
-    const unlocked = visible.has(item.id) || item.sourceGroup === 'discovered_evidence';
+    const app = appForEntry(item);
+    const unlocked = visible.has(item.id) || item.sourceGroup === 'discovered_evidence' || item.sourceGroup === 'side_investigation';
     if (!unlocked && item.archiveOnly) continue;
-    buckets[appForEntry(item)].push(displayEntry(item, opened.has(item.id), !unlocked,
+    if (!unlocked && app !== 'files') continue;
+    buckets[app].push(displayEntry(item, opened.has(item.id), !unlocked,
       archiveIds.has(item.archive?.id || item.archiveId)));
   }
   // Keep the filesystem anchor explicit in the actor-safe projection.  The
@@ -475,8 +504,8 @@ function openEntry(room, player, entryId) {
   ensureRoom(room);
   refreshWorkstation(room);
   const entry = allEntries(room).find(item => item.id === entryId);
-  const dynamicEvidence = entry?.sourceGroup === 'discovered_evidence';
-  if (!entry || (!dynamicEvidence && !room.workstation[role].unlockedEntryIds.includes(entryId))) {
+    const dynamicEntry = entry?.sourceGroup === 'discovered_evidence' || entry?.sourceGroup === 'side_investigation';
+    if (!entry || (!dynamicEntry && !room.workstation[role].unlockedEntryIds.includes(entryId))) {
     throw Object.assign(new Error('Entry is locked or not visible'), { code: 'ENTRY_LOCKED', status: 423 });
   }
   const ws = room.workstation[role];
@@ -522,8 +551,8 @@ function executeOperation(room, player, operationId, value, options = {}) {
   if (operationId === 'open_entry') {
     const entryId = typeof value === 'string' ? value : '';
     const entry = allEntries(room).find(item => item.id === entryId);
-    const dynamicEvidence = entry?.sourceGroup === 'discovered_evidence';
-    if (!entry || (!dynamicEvidence && !ws.unlockedEntryIds.includes(entryId))) {
+    const dynamicEntry = entry?.sourceGroup === 'discovered_evidence' || entry?.sourceGroup === 'side_investigation';
+    if (!entry || (!dynamicEntry && !ws.unlockedEntryIds.includes(entryId))) {
       throw Object.assign(new Error('Entry is locked or not visible'), { code: 'ENTRY_LOCKED', status: 423 });
     }
     if (ws.openedEntryIds.includes(entryId)) return { stateChanged: false, operationId, value };

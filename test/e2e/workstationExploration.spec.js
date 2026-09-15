@@ -101,6 +101,24 @@ test('renders controlled Terminal operations and sends a fresh action id', async
   await room.partnerContext.close();
 });
 
+test('does not expose lifecycle or transport operations as Terminal shortcuts', async ({ page }) => {
+  const room = await mount(page);
+  const fixture = structuredClone(workstationFixture);
+  fixture.terminal.operations.push(
+    { operationId: 'terminal_command', label: 'terminal_command' },
+    { operationId: 'open_entry', label: 'open_entry' },
+    { operationId: 'commit_finale', label: 'commit_finale' }
+  );
+  await page.evaluate(f => document.querySelector('[data-game-room]').workstation.render(f), fixture);
+  const workspace = page.locator('[data-workstation]');
+  await workspace.getByRole('button', { name: 'Terminal', exact: true }).click();
+  await expect(workspace.locator('[data-terminal-operation="open_aux"]')).toBeVisible();
+  await expect(workspace.locator('[data-terminal-operation="terminal_command"]')).toHaveCount(0);
+  await expect(workspace.locator('[data-terminal-operation="open_entry"]')).toHaveCount(0);
+  await expect(workspace.locator('[data-terminal-operation="commit_finale"]')).toHaveCount(0);
+  await room.partnerContext.close();
+});
+
 test('accepts a real Terminal command and renders echo plus safe output', async ({ page }) => {
   const room = await mount(page);
   const workspace = page.locator('[data-workstation]');
@@ -221,6 +239,47 @@ test('places discovered evidence in Files notes and hides the bottom report pane
   await expect(workspace.getByRole('button', { name: 'timestamp.note', exact: true })).toBeVisible();
   await expect(page.locator('[data-evidence]')).toHaveCount(0);
   await expect(page.locator('[data-sides]')).toHaveCount(0);
+  await room.partnerContext.close();
+});
+
+test('launches an available side investigation from Files/NOTES', async ({ page }) => {
+  const room = await mount(page);
+  const fixture = structuredClone(workstationFixture);
+  fixture.sidePuzzles = [{ puzzleId: 'side2', title: 'ANOMALY', hook: 'Inspect the anomaly.', opened: false, complete: false }];
+  await page.evaluate(f => document.querySelector('[data-game-room]').workstation.render(f), fixture);
+  const workspace = page.locator('[data-workstation]');
+  await workspace.getByRole('button', { name: 'NOTES', exact: true }).click();
+  await expect(workspace.getByRole('button', { name: /side2/i })).toBeVisible();
+  await workspace.getByRole('button', { name: /side2/i }).click();
+  await expect.poll(room.getOperation).toMatchObject({ puzzleId: 'side2', stepId: 'inspect' });
+  await room.partnerContext.close();
+});
+
+test('submits the current side-investigation step from its opened Files note', async ({ page }) => {
+  const room = await mount(page);
+  const fixture = structuredClone(workstationFixture);
+  fixture.sidePuzzles = [{ puzzleId: 'side2', title: 'ANOMALY', hook: 'Inspect the anomaly.', opened: true, complete: false,
+    stepId: 'pattern', prompt: 'Enter the pattern.' }];
+  await page.evaluate(f => document.querySelector('[data-game-room]').workstation.render(f), fixture);
+  const workspace = page.locator('[data-workstation]');
+  await workspace.getByRole('button', { name: 'NOTES', exact: true }).click();
+  await workspace.getByRole('button', { name: /side2/i }).click();
+  const form = workspace.locator('[data-investigation-form="side2"]');
+  await expect(form).toBeVisible();
+  await form.locator('input[name="value"]').fill('LUCID');
+  await form.locator('button').click();
+  await expect.poll(room.getOperation).toMatchObject({ puzzleId: 'side2', stepId: 'pattern', value: 'LUCID' });
+  await room.partnerContext.close();
+});
+
+test('shows the safe startup note inside Files without a clue report heading', async ({ page }) => {
+  const room = await mount(page);
+  const fixture = structuredClone(workstationFixture);
+  fixture.text = 'Check the shared index before touching the archive.';
+  await page.evaluate(f => document.querySelector('[data-game-room]').workstation.render(f), fixture);
+  const workspace = page.locator('[data-workstation]');
+  await expect(workspace.locator('[data-startup-note]')).toContainText('Check the shared index');
+  await expect(workspace).not.toContainText('你的線索');
   await room.partnerContext.close();
 });
 

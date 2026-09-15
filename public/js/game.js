@@ -132,7 +132,10 @@
     text('[data-stage]', progress.title || '出口協定');
     countdown(next.countdown);
     intercom.render(next.intercom || []);
-    if (workstation) workstation.render(next.workstation || {});
+    if (workstation) workstation.render({
+      ...(next.workstation || {}),
+      sidePuzzles: next.publicProgress?.sidePuzzles || []
+    });
     if (legacyPanels) legacyPanels.render(next);
     form.querySelector('button').disabled = busy.has(form) || !next.occupancy.ready || !progress.stepId || Boolean(next.ending);
   }
@@ -193,6 +196,23 @@
         error: error instanceof Error ? error.message : String(error || 'Operation failed')
       });
       text('[data-feedback]', error.message);
+    }
+  }
+
+  async function sendPuzzleAction(action) {
+    if (!action || typeof action.puzzleId !== 'string' || typeof action.stepId !== 'string') return;
+    try {
+      const response = await fetch(endpoint + '/actions', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ actionId: action.actionId || crypto.randomUUID(), puzzleId: action.puzzleId,
+          stepId: action.stepId, value: typeof action.value === 'string' ? action.value : '' })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || 'Investigation action failed');
+      if (liveTransport && result.state) liveTransport.adopt(result);
+      else if (result.state) render(result.state, result.countdown);
+    } catch (error) {
+      text('[data-feedback]', error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -263,7 +283,7 @@
     import('/public/js/legacyPanels.js')
   ]).then(([{ createIntercom }, { createWorkstation }, { createLiveTransport }, { createLegacyPanels }]) => {
     intercom = createIntercom(root);
-    workstation = createWorkstation(root, { onOperation: sendWorkstationOperation });
+    workstation = createWorkstation(root, { onOperation: sendWorkstationOperation, onPuzzleAction: sendPuzzleAction });
     legacyPanels = createLegacyPanels(root, { sendAction, isBusy: target => busy.has(target) });
     root.workstation = workstation;
     liveTransport = createLiveTransport({

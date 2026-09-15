@@ -81,6 +81,28 @@ test('discovered evidence opens as an actor-safe note under Files/NOTES', () => 
   assert.ok(!room.workstation.B.openedEntryIds.includes('evidence.timestamp'));
 });
 
+test('terminal projection omits locked or future contextual entries', () => {
+  const room = createRoomState('ROOM42', 0);
+  room.players.A = { playerId: 'player-a' };
+  room.players.B = { playerId: 'player-b' };
+  room.publicFacts = ['roomCreated', 'hostJoined', 'guestJoined'];
+  refreshWorkstation(room);
+  const terminal = projectWorkstation(room, { role: 'A', playerId: 'player-a' }).terminal.entries;
+  assert.ok(terminal.every(item => item.locked !== true));
+  assert.ok(!terminal.some(item => item.id === 'ai.a2.cleanup_request'));
+});
+
+test('available side investigations project as Files/NOTES launch entries', () => {
+  const room = readyRoom();
+  room.publicProgress = { sidePuzzles: [{ puzzleId: 'side2', title: 'ANOMALY', hook: 'Inspect the anomaly.', opened: false, complete: false }] };
+  const files = projectWorkstation(room, { role: 'A', playerId: 'player-a' }).files.entries;
+  const note = files.find(item => item.id === 'investigation.side2');
+  assert.equal(note.parentId, 'folder.notes');
+  assert.equal(note.puzzleId, 'side2');
+  assert.equal(note.opened, false);
+  assert.equal(note.text, 'Inspect the anomaly.');
+});
+
 test('verify_incident_timestamp requires both reports, records every attempt, and unlocks A-2', () => {
   const room = readyRoom();
   room.workstation.A.roleFacts.push('rapportCount2');

@@ -8,6 +8,9 @@
 - Terminal entries now render as contextual, openable notes with safe content and an `open_entry` callback.
 - Workstation live/poll renders preserve the currently open file or note while that entry remains in the incoming projection.
 - Removed the old visible evidence report and demoted the legacy side-investigation panel to a hidden compatibility shell.
+- Added current side investigations as `Files/NOTES/*.case` entries. Opening a case sends the existing `puzzleId + stepId=inspect` action; once opened, its current step can be answered from the note pane.
+- Terminal contextual notes now omit locked/future records and lifecycle/transport shortcut IDs; server-side command locking remains authoritative.
+- Moved the safe startup text into a low-key `STARTUP NOTE // README` inside Files.
 
 ## Verification
 
@@ -16,6 +19,7 @@
 - `npm run validate:content` — Narrative content valid.
 - `npx playwright test test/e2e/workstationExploration.spec.js --grep "opened note|terminal entries as|discovered evidence" --workers=1 --trace=off` — 3/3 passed.
 - `git diff --check` — clean.
+- Focused side-investigation/startup/shortcut E2E — 7/7 passed.
 
 ## Compatibility tradeoff
 

@@ -5,7 +5,7 @@
  * entries and terminal operations it receives; it never tries to infer files
  * that are not present in the projection.
  */
-export function createWorkstation(root, { onOperation } = {}) {
+export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
   const host = root?.matches?.('[data-workstation]')
     ? root
     : root?.querySelector?.('[data-workstation]') || root;
@@ -13,6 +13,9 @@ export function createWorkstation(root, { onOperation } = {}) {
   if (!host.hasAttribute('tabindex')) host.tabIndex = -1;
   if (typeof onOperation !== 'function' && onOperation !== undefined) {
     throw new TypeError('onOperation must be a function');
+  }
+  if (typeof onPuzzleAction !== 'function' && onPuzzleAction !== undefined) {
+    throw new TypeError('onPuzzleAction must be a function');
   }
 
   let currentView = {};
@@ -46,9 +49,35 @@ export function createWorkstation(root, { onOperation } = {}) {
       ? files
       : Array.isArray(files?.entries) ? files.entries
         : Array.isArray(view.entries) ? view.entries : [];
-    return entries.filter(entry => entry && id(entry.id)
+    const safeEntries = entries.filter(entry => entry && id(entry.id)
       && entry.available !== false && entry.visible !== false
       && (entry.locked !== true || entry.metadataVisible === true));
+    const investigations = Array.isArray(view.sidePuzzles) ? view.sidePuzzles
+      .filter(item => item && id(item.puzzleId))
+      .map(item => ({
+        id: `investigation.${item.puzzleId}`,
+        name: `${item.puzzleId}.case`,
+        kind: 'document',
+        parentId: 'folder.notes',
+        text: item.opened && typeof item.prompt === 'string' ? item.prompt : item.hook || item.title || '',
+        puzzleId: item.puzzleId,
+        stepId: item.stepId || 'inspect',
+        opened: item.opened === true,
+        complete: item.complete === true
+      })) : [];
+    const known = new Set(safeEntries.map(entry => entry.id));
+    const needsNotesFolder = investigations.length && !known.has('folder.notes');
+    return [
+      ...safeEntries,
+      ...(needsNotesFolder ? [{ id: 'folder.notes', name: 'NOTES', kind: 'folder', parentId: rootIdHint(view, safeEntries) }] : []),
+      ...investigations.filter(entry => !known.has(entry.id))
+    ];
+  }
+
+  function rootIdHint(view, entries) {
+    const candidate = id(view.files?.rootId) || id(view.rootId);
+    if (candidate) return candidate;
+    return entries.find(entry => (entry.kind === 'folder' || entry.type === 'folder') && entry.parentId == null)?.id || null;
   }
 
   function projectedEntries(view) {
@@ -108,6 +137,12 @@ export function createWorkstation(root, { onOperation } = {}) {
     return labels[id] || label(operation?.label || operation?.name || id).replace(/_/g, ' ');
   }
 
+  function visibleShortcut(operation) {
+    const operationId = String(operation?.operationId || '').toLowerCase();
+    return operationId && !['terminal_command', 'open_entry', 'commit_finale'].includes(operationId)
+      && !/^(debug|lifecycle|reset|boot)_/.test(operationId);
+  }
+
   function renderApps(container, apps) {
     const nav = document.createElement('nav');
     nav.className = 'workstation-apps';
@@ -141,6 +176,17 @@ export function createWorkstation(root, { onOperation } = {}) {
     const heading = document.createElement('h3');
     heading.textContent = label(folder?.name || 'FILES');
     scroll.append(heading);
+    if (folderId === rootId && typeof view.text === 'string' && view.text.trim()) {
+      const startup = document.createElement('section');
+      startup.dataset.startupNote = '';
+      startup.className = 'workstation-startup-note';
+      const startupLabel = document.createElement('span');
+      startupLabel.textContent = 'STARTUP NOTE // README';
+      const startupText = document.createElement('p');
+      startupText.textContent = view.text;
+      startup.append(startupLabel, startupText);
+      scroll.append(startup);
+    }
     if (folderPath.length > 1 || currentView.__openedEntry) {
       const back = createButton('Back', { 'data-workstation-back': '' });
       back.addEventListener('click', () => {
@@ -187,6 +233,23 @@ export function createWorkstation(root, { onOperation } = {}) {
         content.textContent = typeof opened.content === 'string' ? opened.content
           : typeof opened.text === 'string' ? opened.text : '';
         scroll.append(content);
+        if (opened.puzzleId && opened.opened === true && opened.complete !== true && typeof onPuzzleAction === 'function') {
+          const puzzleForm = document.createElement('form');
+          puzzleForm.dataset.investigationForm = opened.puzzleId;
+          const puzzleInput = document.createElement('input');
+          puzzleInput.name = 'value';
+          puzzleInput.maxLength = 1000;
+          puzzleInput.autocomplete = 'off';
+          puzzleInput.placeholder = 'enter response';
+          const puzzleButton = createButton('SUBMIT NOTE');
+          puzzleButton.type = 'submit';
+          puzzleForm.append(puzzleInput, puzzleButton);
+          puzzleForm.addEventListener('submit', event => {
+            event.preventDefault();
+            onPuzzleAction({ puzzleId: opened.puzzleId, stepId: opened.stepId || 'inspect', value: puzzleInput.value, actionId: randomId() });
+          });
+          scroll.append(puzzleForm);
+        }
       }
     }
     container.append(scroll);
@@ -270,6 +333,23 @@ export function createWorkstation(root, { onOperation } = {}) {
           content.textContent = typeof opened.content === 'string' ? opened.content
             : typeof opened.text === 'string' ? opened.text : '';
           notesSection.append(content);
+          if (opened.puzzleId && opened.opened === true && opened.complete !== true && typeof onPuzzleAction === 'function') {
+            const puzzleForm = document.createElement('form');
+            puzzleForm.dataset.investigationForm = opened.puzzleId;
+            const puzzleInput = document.createElement('input');
+            puzzleInput.name = 'value';
+            puzzleInput.maxLength = 1000;
+            puzzleInput.autocomplete = 'off';
+            puzzleInput.placeholder = 'enter response';
+            const puzzleButton = createButton('SUBMIT NOTE');
+            puzzleButton.type = 'submit';
+            puzzleForm.append(puzzleInput, puzzleButton);
+            puzzleForm.addEventListener('submit', event => {
+              event.preventDefault();
+              onPuzzleAction({ puzzleId: opened.puzzleId, stepId: opened.stepId || 'inspect', value: puzzleInput.value, actionId: randomId() });
+            });
+            notesSection.append(puzzleForm);
+          }
         }
       }
       panel.append(notesSection);
@@ -331,7 +411,7 @@ export function createWorkstation(root, { onOperation } = {}) {
     const shortcutList = document.createElement('div');
     shortcutList.className = 'terminal-shortcut-list';
     for (const operation of operations.filter(item => item && id(item.operationId)
-      && item.locked !== true && item.available !== false)) {
+      && visibleShortcut(item) && item.locked !== true && item.available !== false)) {
       const button = createButton(friendlyOperationLabel(operation), {
         'data-terminal-operation': operation.operationId,
         'data-operation-id': operation.operationId
@@ -436,7 +516,9 @@ export function createWorkstation(root, { onOperation } = {}) {
     // Opening a record is a stateful workstation action. Persist it so
     // server-side mission triggers and role-local openedEntryIds stay in sync
     // across refreshes and the other player's projection remains untouched.
-    if (typeof onOperation === 'function') {
+    if (entry.puzzleId && typeof onPuzzleAction === 'function' && entry.opened !== true) {
+      onPuzzleAction({ puzzleId: entry.puzzleId, stepId: 'inspect', value: '', actionId: randomId() });
+    } else if (typeof onOperation === 'function') {
       onOperation({ operationId: 'open_entry', value: entry.id, actionId: randomId() });
     }
   }
