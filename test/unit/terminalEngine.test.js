@@ -220,3 +220,49 @@ test('UNZIP expands only authored manifests and is idempotent', () => {
   assert.deepEqual(room, before);
   assert.throws(() => executeTerminalCommand(room, { role: 'A', playerId: 'player-a' }, 'UNZIP client.zip'), /locked|archive|manifest/i);
 });
+
+test('Files projection exposes nested folders and locked metadata without content leaks', () => {
+  const room = createRoomState('ROOM42', 0);
+  room.players.A = { playerId: 'player-a' };
+  room.players.B = { playerId: 'player-b' };
+  room.publicFacts = ['roomCreated'];
+  refreshWorkstation(room);
+  const a = projectWorkstation(room, { role: 'A', playerId: 'player-a' });
+  const root = a.files.entries.find(item => item.id === 'folder.root');
+  const locked = a.files.entries.find(item => item.id === 'doc.a_incident_report');
+  assert.equal(root.kind, 'folder');
+  assert.equal(root.parentId, null);
+  assert.equal(locked.locked, true);
+  assert.equal(locked.parentId, 'folder.private_a');
+  assert.equal(locked.text, undefined);
+  assert.equal(a.files.entries.some(item => item.id === 'files.experiment_roster'), false);
+});
+
+test('opening the current answer gate is actor-local and unlocks only that actor form state', () => {
+  const room = createRoomState('ROOM42', 0);
+  room.players.A = { playerId: 'player-a' };
+  room.players.B = { playerId: 'player-b' };
+  room.publicFacts = ['roomCreated'];
+  refreshWorkstation(room);
+  const before = projectWorkstation(room, { role: 'A', playerId: 'player-a' });
+  assert.equal(before.answerGate.open, false);
+  const gateId = before.answerGate.entryId;
+  openEntry(room, { role: 'A', playerId: 'player-a' }, gateId);
+  const a = projectWorkstation(room, { role: 'A', playerId: 'player-a' });
+  const b = projectWorkstation(room, { role: 'B', playerId: 'player-b' });
+  assert.equal(a.answerGate.open, true);
+  assert.equal(b.answerGate.open, false);
+});
+
+test('archive metadata remains closed until authored UNZIP and child files are revealed safely', () => {
+  const room = readyRoom();
+  const before = projectWorkstation(room, { role: 'A', playerId: 'player-a' });
+  const archive = before.files.entries.find(item => item.archive?.id === 'case_bundle.zip');
+  assert.ok(archive);
+  assert.equal(archive.archive.expanded, false);
+  assert.equal(before.files.entries.some(item => item.id === 'archive.case_bundle.index'), false);
+  executeTerminalCommand(room, { role: 'A', playerId: 'player-a' }, 'UNZIP case_bundle.zip');
+  const after = projectWorkstation(room, { role: 'A', playerId: 'player-a' });
+  assert.ok(after.files.entries.some(item => item.id === 'archive.case_bundle.index'));
+  assert.equal(after.files.entries.find(item => item.archive?.id === 'case_bundle.zip').archive.expanded, true);
+});

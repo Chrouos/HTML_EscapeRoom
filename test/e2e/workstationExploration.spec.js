@@ -142,3 +142,20 @@ test('accepts type-only folder roots and returns to the parent', async ({ page }
   await expect(workspace.getByRole('button', { name: 'BRIEFS', exact: true })).toBeVisible();
   await room.partnerContext.close();
 });
+
+test('keeps locked metadata visible and gates the answer form behind the opened file', async ({ page }) => {
+  const room = await mount(page);
+  const workspace = page.locator('[data-workstation]');
+  await expect(workspace.getByRole('button', { name: 'Files', exact: true })).toBeVisible();
+  const gated = structuredClone(workstationFixture);
+  gated.answerGate = { entryId: 'gate', puzzleId: 'main1', open: false };
+  gated.files.entries.push({ id: 'gate', name: 'answer_main1.lock', kind: 'file', parentId: 'root', locked: false, metadataVisible: true, content: 'sealed' });
+  gated.files.entries.push({ id: 'sealed', name: 'sealed.notes', kind: 'file', parentId: 'root', locked: true, metadataVisible: true });
+  await page.evaluate(fixture => document.querySelector('[data-game-room]').workstation.render(fixture), gated);
+  await expect(workspace.getByRole('button', { name: /sealed\.notes/i })).toBeDisabled();
+  await expect(page.locator('[data-action-form]')).toBeHidden();
+  gated.answerGate.open = true;
+  await page.evaluate(fixture => document.querySelector('[data-game-room]').workstation.render(fixture), gated);
+  await expect(page.locator('[data-action-form]')).toBeVisible();
+  await room.partnerContext.close();
+});

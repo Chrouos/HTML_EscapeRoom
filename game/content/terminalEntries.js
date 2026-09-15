@@ -15,6 +15,12 @@ function entry(id, sourceGroup, audience, text, options = {}) {
     mainlineFallbackOperationIds: options.mainlineFallbackOperationIds || [],
     debriefFactIds: options.debriefFactIds || [],
     kind: options.kind || 'document',
+    parentId: options.parentId,
+    filename: options.filename,
+    archive: options.archive,
+    archiveOnly: options.archiveOnly === true,
+    archiveId: options.archiveId,
+    answerGate: options.answerGate || null,
     isDeception: options.isDeception === true,
     deceptionId: options.deceptionId,
     text
@@ -22,6 +28,20 @@ function entry(id, sourceGroup, audience, text, options = {}) {
 }
 
 const terminalEntries = Object.freeze([
+  entry('folder.root', 'file_tree', both, '', { kind: 'folder', filename: 'FILES', unlockWhen: { publicFact: 'roomCreated' } }),
+  entry('folder.case', 'file_tree', both, '', { kind: 'folder', parentId: 'folder.root', filename: 'CASE FILES', unlockWhen: { publicFact: 'roomCreated' } }),
+  entry('folder.archives', 'file_tree', both, '', { kind: 'folder', parentId: 'folder.root', filename: 'ARCHIVES', unlockWhen: { publicFact: 'roomCreated' } }),
+  entry('folder.private_a', 'file_tree', host, '', { kind: 'folder', parentId: 'folder.root', filename: 'A / PRIVATE', unlockWhen: { publicFact: 'roomCreated' } }),
+  entry('folder.private_b', 'file_tree', guest, '', { kind: 'folder', parentId: 'folder.root', filename: 'B / PRIVATE', unlockWhen: { publicFact: 'roomCreated' } }),
+  entry('answer.main1', 'answer_gate', both, '回答欄位已封存。先讀取本檔案，再提交目前階段的回應。', { parentId: 'folder.case', filename: 'answer_main1.lock', answerGate: { puzzleId: 'main1' }, unlockWhen: { publicFact: 'roomCreated' } }),
+  entry('answer.main2', 'answer_gate', both, '回答欄位已封存。先讀取本檔案，再提交目前階段的回應。', { parentId: 'folder.case', filename: 'answer_main2.lock', answerGate: { puzzleId: 'main2' }, unlockWhen: { publicFact: 'main1Completed' } }),
+  entry('answer.main3', 'answer_gate', both, '回答欄位已封存。先讀取本檔案，再提交目前階段的回應。', { parentId: 'folder.case', filename: 'answer_main3.lock', answerGate: { puzzleId: 'main3' }, unlockWhen: { publicFact: 'main2Completed' } }),
+  entry('answer.main4', 'answer_gate', both, '回答欄位已封存。先讀取本檔案，再提交目前階段的回應。', { parentId: 'folder.case', filename: 'answer_main4.lock', answerGate: { puzzleId: 'main4' }, unlockWhen: { publicFact: 'main3Completed' } }),
+  entry('answer.main5', 'answer_gate', both, '回答欄位已封存。先讀取本檔案，再提交目前階段的回應。', { parentId: 'folder.case', filename: 'answer_main5.lock', answerGate: { puzzleId: 'main5' }, unlockWhen: { publicFact: 'main4Completed' } }),
+  entry('answer.main6', 'answer_gate', both, '回答欄位已封存。先讀取本檔案，再提交目前階段的回應。', { parentId: 'folder.case', filename: 'answer_main6.lock', answerGate: { puzzleId: 'main6' }, unlockWhen: { publicFact: 'main5Completed' } }),
+  entry('archive.case_bundle', 'file_archive', both, '壓縮封存：解壓縮後可檢視案件索引。', { parentId: 'folder.archives', filename: 'case_bundle.zip', kind: 'archive', archive: { id: 'case_bundle.zip' }, unlockWhen: { publicFact: 'roomCreated' } }),
+  entry('archive.incident_bundle', 'file_archive', both, '壓縮封存：原始事故資料仍未展開。', { parentId: 'folder.archives', filename: 'incident_bundle.zip', kind: 'archive', archive: { id: 'incident_bundle.zip' }, unlockWhen: { publicFact: 'roomCreated' } }),
+  entry('archive.mirror_backup', 'file_archive', both, '壓縮封存：鏡像備份摘要。', { parentId: 'folder.archives', filename: 'mirror_backup.zip', kind: 'archive', archive: { id: 'mirror_backup.zip' }, unlockWhen: { publicFact: 'roomCreated' } }),
   entry('files.mainline', 'mainline_files', both, '主線檔案索引：共同校驗所需的資料已掛載。', {
     unlockWhen: { publicFact: 'roomCreated' }
   }),
@@ -92,6 +112,9 @@ const terminalEntries = Object.freeze([
   entry('log.b_partner_unknown_access', 'generated_audit', guest, '稽核項目：B 看到一筆夥伴未知區域存取。', {
     verificationEntries: [{ entryId: 'log.audit_checksum', sourceGroup: 'system_audit' }], debriefFactIds: ['verifiedAuditForgery'], isDeception: true, deceptionId: 'L-1'
   })
+  , entry('archive.case_bundle.index', 'case_bundle', both, '封存索引：case_bundle 的最後寫入順序仍可由原始紀錄交叉驗證。', { parentId: 'archive.case_bundle', filename: 'index.note', archiveOnly: true, archiveId: 'case_bundle.zip', unlockWhen: { publicFact: 'roomCreated' } })
+  , entry('archive.incident.raw_notes', 'incident_bundle', both, '碎片備註：事故音軌與索引時間不是同一個來源。', { parentId: 'archive.incident_bundle', filename: 'raw_notes.txt', archiveOnly: true, archiveId: 'incident_bundle.zip', unlockWhen: { publicFact: 'roomCreated' } })
+  , entry('archive.mirror.checksum', 'mirror_backup', both, '鏡像摘要：checksum 可從備份與安全記錄交叉比對。', { parentId: 'archive.mirror_backup', filename: 'checksum.note', archiveOnly: true, archiveId: 'mirror_backup.zip', unlockWhen: { publicFact: 'roomCreated' } })
 ]);
 
 module.exports = { terminalEntries };

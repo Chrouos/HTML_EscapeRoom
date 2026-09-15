@@ -127,6 +127,24 @@ test('projectForPlayer rejects a role or playerId that does not match an occupie
   );
 });
 
+test('safeState keeps locked file metadata while stripping hidden entry content and archive payloads', () => {
+  const room = fixtureRoom();
+  room.workstation.A = {
+    unlockedEntryIds: ['folder.root'],
+    openedEntryIds: [],
+    activeOperations: [],
+    roleFacts: [],
+    actionAttempts: [],
+    completedOperations: [],
+    unzippedArchiveIds: []
+  };
+  const state = projectForPlayer(room, { role: 'A', playerId: 'player-a' });
+  const serialized = JSON.stringify(state);
+  assert.doesNotMatch(serialized, /canonical|secret answer|archive contents/i);
+  assert.ok(state.workstation.files);
+  assert.ok(state.workstation.answerGate);
+});
+
 test('the transitional forPlayer adapter rejects role-only identity input', () => {
   assert.throws(
     () => forPlayer(fixtureRoom(), 'A'),

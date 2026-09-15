@@ -45,7 +45,8 @@ export function createWorkstation(root, { onOperation } = {}) {
       : Array.isArray(files?.entries) ? files.entries
         : Array.isArray(view.entries) ? view.entries : [];
     return entries.filter(entry => entry && id(entry.id)
-      && entry.locked !== true && entry.available !== false && entry.visible !== false);
+      && entry.available !== false && entry.visible !== false
+      && (entry.locked !== true || entry.metadataVisible === true));
   }
 
   function rootIdFor(view, entries) {
@@ -147,7 +148,13 @@ export function createWorkstation(root, { onOperation } = {}) {
       button.dataset.workstationEntry = entry.id;
       button.dataset.workstationId = entry.id;
       button.setAttribute('aria-label', label(entry.name || entry.title || entry.id));
-      button.addEventListener('click', () => openEntry(entry.id));
+      if (entry.locked === true) {
+        button.disabled = true;
+        button.setAttribute('aria-disabled', 'true');
+        button.textContent = `🔒 ${button.textContent}`;
+      } else {
+        button.addEventListener('click', () => openEntry(entry.id));
+      }
       list.append(button);
     }
     scroll.append(list);
@@ -218,6 +225,14 @@ export function createWorkstation(root, { onOperation } = {}) {
   function render(next = {}) {
     captureViewState();
     currentView = next && typeof next === 'object' ? next : {};
+    const answerForm = host.closest('[data-operations-workspace]')?.querySelector('[data-action-form]')
+      || document.querySelector('[data-action-form]');
+    if (answerForm) {
+      const gate = currentView.answerGate;
+      const open = gate && gate.open === true;
+      answerForm.hidden = !open;
+      answerForm.setAttribute('aria-hidden', String(!open));
+    }
     const apps = appsFor(currentView);
     if (!apps.some(app => app.id === activeApp)) activeApp = apps[0]?.id || 'files';
     const layout = document.createElement('section');

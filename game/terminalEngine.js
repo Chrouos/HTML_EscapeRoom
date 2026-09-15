@@ -25,7 +25,8 @@ const ARCHIVE_CONTENTS = Object.freeze([
 ]);
 
 function authoredEntries() {
-  return [...terminalEntries, ...ARCHIVE_CONTENTS];
+  const ids = new Set(terminalEntries.map(entry => entry.id));
+  return [...terminalEntries, ...ARCHIVE_CONTENTS.filter(entry => !ids.has(entry.id))];
 }
 
 const TERMINAL_HINTS = Object.freeze([
@@ -361,15 +362,42 @@ function appForEntry(entry) {
   return 'files';
 }
 
-function displayEntry(entry, opened) {
-  return {
+function entryParentId(entry) {
+  if (entry.parentId !== undefined) return entry.parentId;
+  if (entry.kind === 'folder') return null;
+  if (entry.archiveOnly) return entry.archiveId === 'case_bundle.zip' ? 'archive.case_bundle'
+    : entry.archiveId === 'incident_bundle.zip' ? 'archive.incident_bundle' : 'archive.mirror_backup';
+  if (entry.id.startsWith('ai.') || entry.id.startsWith('doc.') || entry.id.startsWith('files.')) {
+    const rolePrivate = entry.audience?.kind === 'role';
+    return rolePrivate ? (entry.audience.role === 'host' ? 'folder.private_a' : 'folder.private_b') : 'folder.case';
+  }
+  return 'folder.case';
+}
+
+function currentMainPuzzleId(room) {
+  const explicit = room.publicProgress?.puzzleId;
+  if (typeof explicit === 'string' && /^main[1-6]$/.test(explicit)) return explicit;
+  const done = new Set(room.mainProgress || []);
+  return ['main1', 'main2', 'main3', 'main4', 'main5', 'main6'].find(id => !done.has(id)) || 'main6';
+}
+
+function displayEntry(entry, opened, locked = false, archiveExpanded = false) {
+  const result = {
     id: entry.id,
-    name: entry.filename || entry.id,
-    text: entry.text,
-    kind: entry.kind,
+    parentId: entryParentId(entry),
+    name: entry.filename || entry.name || entry.id,
+    kind: entry.kind || 'document',
+    locked: Boolean(locked),
+    metadataVisible: true,
     opened: Boolean(opened),
-    verificationEntries: (entry.verificationEntries || []).map(item => item.entryId)
+    answerGate: entry.answerGate || null
   };
+  if (entry.archive) result.archive = { id: entry.archive.id, expanded: Boolean(archiveExpanded) };
+  if (entry.archiveId && entry.archiveOnly) result.archive = { id: entry.archiveId, expanded: Boolean(archiveExpanded) };
+  if (locked) return result;
+  result.text = entry.text;
+  result.verificationEntries = (entry.verificationEntries || []).map(item => item.entryId);
+  return result;
 }
 
 function projectWorkstation(room, player) {
@@ -380,10 +408,22 @@ function projectWorkstation(room, player) {
   const visible = new Set(ws.unlockedEntryIds);
   const opened = new Set(ws.openedEntryIds);
   const buckets = { files: [], terminal: [], logs: [] };
+  const archiveIds = new Set(ws.unzippedArchiveIds || []);
   for (const item of authoredEntries()) {
-    if (!visible.has(item.id)) continue;
-    buckets[appForEntry(item)].push(displayEntry(item, opened.has(item.id)));
+    if (item.archiveOnly && !archiveIds.has(item.archiveId)) continue;
+    if (!audienceAllows(item, role)) continue;
+    const unlocked = visible.has(item.id);
+    if (!unlocked && item.archiveOnly) continue;
+    buckets[appForEntry(item)].push(displayEntry(item, opened.has(item.id), !unlocked,
+      archiveIds.has(item.archive?.id || item.archiveId)));
   }
+  const answer = authoredEntries().find(item => item.answerGate?.puzzleId === currentMainPuzzleId(room)
+    && audienceAllows(item, role));
+  const answerGate = answer ? {
+    entryId: answer.id,
+    puzzleId: answer.answerGate.puzzleId,
+    open: opened.has(answer.id)
+  } : { entryId: null, puzzleId: currentMainPuzzleId(room), open: false };
   return {
     // Keep the active puzzle clue in the operations monitor while Files /
     // Terminal / Logs provide the explorable records.  This preserves the
@@ -396,6 +436,7 @@ function projectWorkstation(room, player) {
     logs: { entries: buckets.logs },
     unlockedEntryIds: [...ws.unlockedEntryIds],
     openedEntryIds: [...ws.openedEntryIds],
+    answerGate,
     // `open_entry` is a transport-only callback used by Files clicks; it is
     // intentionally not rendered as a generic Terminal button.
     activeOperations: ws.activeOperations.filter(operationId => operationId !== 'open_entry'),
