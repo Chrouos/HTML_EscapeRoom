@@ -41,13 +41,6 @@ function progress(room, puzzle, stepId) {
       stepId, title: step.title, prompt: '雙方都完成最終程序後，系統會根據你們留下的紀錄產生結局。',
       hints: [...room.hints[puzzle.puzzleId][stepId]] };
   }
-  if (false) {
-    const count = evidenceIds(room).size;
-    prompt = '請各自確認出口協定：COMPLY（依 AI 指示完成程序）';
-    if (count >= 2) prompt += '；RESIST（以證據執行手動脫離）';
-    if (count >= 4) prompt += '；TRUTH（共同隔離 AI，公開未編輯檔案）';
-    prompt += '。雙方必須選擇相同協定；仍可回頭調查紀錄。';
-  }
   return { chapter: room.chapter, mainProgress: [...room.mainProgress], puzzleId: puzzle.puzzleId,
     stepId, title: step.title, prompt, hints: [...room.hints[puzzle.puzzleId][stepId]] };
 }
