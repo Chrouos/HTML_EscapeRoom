@@ -21,3 +21,7 @@
 ## Notes
 
 The implementation deliberately keeps server authority in Task 1/2. Terminal history is a local visual transcript until the next projected snapshot; command results remain server-validated and public HINT/SEND events continue through the existing Intercom projection.
+
+## Review handoff
+
+Feature commit: `ff5bda8`.
