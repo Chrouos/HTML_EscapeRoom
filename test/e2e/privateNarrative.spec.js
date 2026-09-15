@@ -144,16 +144,56 @@ test.describe('private narrative secrecy and causality', () => {
         await primeRapport(a, b, `order-${first}`);
         const beforeA = (await getState(a)).body;
         const beforeB = (await getState(b)).body;
+        const untouchedBefore = first === 'A' ? beforeB : beforeA;
         const firstPage = first === 'A' ? a : b;
         const firstOperation = first === 'A' ? 'archive_index' : 'flag_identity';
+        const untouchedLog = untouchedPage.locator('[data-intercom-log]');
+        const ownerLog = firstPage.locator('[data-intercom-log]');
+        const untouchedBeforeMessages = untouchedBefore.state?.intercom || [];
+        const ownerBeforeMessages = (first === 'A' ? beforeA : beforeB).state?.intercom || [];
+
+        // Establish a positive DOM baseline before the private action. Waiting
+        // for the projected count prevents a still-hydrating live socket from
+        // making a later privacy assertion pass by accident.
+        await expect(untouchedLog).toBeVisible();
+        await expect(ownerLog).toBeVisible();
+        await expect(untouchedLog.locator('.message')).toHaveCount(untouchedBeforeMessages.length);
+        await expect(ownerLog.locator('.message')).toHaveCount(ownerBeforeMessages.length);
+        expect(untouchedBeforeMessages.length).toBeGreaterThan(0);
+        const untouchedMessageText = await untouchedLog.locator('.message').allTextContents();
+
         const firstResult = await postOperation(firstPage, firstOperation, undefined, `order-${first}-private`);
         expect(firstResult.status).toBe(200);
         expect(firstResult.body.publicResult.missionId).toBeTruthy();
 
         const afterA = (await getState(a)).body;
         const afterB = (await getState(b)).body;
+        const ownerAfter = (first === 'A' ? afterA : afterB).state;
+        const ownerBeforeIds = new Set(ownerBeforeMessages.map(message => message.contentId || message.id));
+        const ownerPrivateMessages = (ownerAfter?.intercom || [])
+          .filter(message => !ownerBeforeIds.has(message.contentId || message.id));
+        const privateLines = ownerPrivateMessages.map(message => message.text).filter(Boolean);
+        expect(privateLines.length).toBeGreaterThan(0);
+        expect(privateLines.every(line => typeof line === 'string' && line.length > 0)).toBe(true);
+
+        // The owner receives the private ORPHEUS line in its visible monitor.
+        // The untouched monitor must keep the exact same DOM projection: no
+        // private operation/content, and no placeholder/gap/unread/timing hint.
+        for (const privateLine of privateLines) await expect(ownerLog).toContainText(privateLine);
+        await expect(ownerLog.locator('.message')).toHaveCount(ownerBeforeMessages.length + ownerPrivateMessages.length);
+        await expect(untouchedLog.locator('.message')).toHaveCount(untouchedBeforeMessages.length);
+        await expect(untouchedLog.locator('.message')).toHaveText(untouchedMessageText);
+        const untouchedMarkup = await untouchedLog.evaluate(node => node.outerHTML);
+        expect(untouchedMarkup).not.toContain(firstOperation);
+        for (const privateLine of privateLines) expect(untouchedMarkup).not.toContain(privateLine);
+        await expect(untouchedLog).not.toContainText(/placeholder|missing|gap|unread|delayed|timing/i);
+        await expect(untouchedLog.locator([
+          '[hidden]', '[data-sequence]', '[data-unread]', '[data-unread-count]',
+          '[data-gap]', '[data-placeholder]', '[data-timestamp]', '[data-delay]',
+          '[data-pending]', 'time'
+        ].join(', '))).toHaveCount(0);
+
         const untouched = first === 'A' ? afterB : afterA;
-        const untouchedBefore = first === 'A' ? beforeB : beforeA;
         expect(untouched.cursor).toBe(untouchedBefore.cursor);
         const delta = await getState(first === 'A' ? b : a, untouchedBefore.cursor);
         expect(delta.body.unchanged).toBe(true);
