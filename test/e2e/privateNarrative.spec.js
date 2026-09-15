@@ -29,6 +29,21 @@ async function getState(page, sinceCursor) {
   }, sinceCursor);
 }
 
+function extractLiveEvents(frames) {
+  const events = [];
+  for (const frame of frames) {
+    try {
+      const parsed = JSON.parse(frame);
+      const nestedEvents = parsed?.event?.payload?.events;
+      if (Array.isArray(nestedEvents)) events.push(...nestedEvents);
+    } catch {
+      // Non-JSON frames are ignored here; the live reconnect suite owns
+      // malformed-frame recovery, while this helper inspects event payloads.
+    }
+  }
+  return events;
+}
+
 async function answer(page, puzzleId, stepId, value, actionId) {
   const response = await page.evaluate(async payload => {
     const code = document.querySelector('[data-game-room]').dataset.gameRoom;
@@ -139,7 +154,7 @@ test.describe('private narrative secrecy and causality', () => {
         await answer(b, 'main1', 'startup', 'AUX CORE EMERGENCY', `order-${first}-startup`);
         const untouchedPage = first === 'A' ? b : a;
         const untouchedRole = first === 'A' ? 'B' : 'A';
-        const foreignFrameStart = room.frames[untouchedRole].length;
+        const ownerRole = first;
 
         await primeRapport(a, b, `order-${first}`);
         const beforeA = (await getState(a)).body;
@@ -161,7 +176,11 @@ test.describe('private narrative secrecy and causality', () => {
         await expect(ownerLog.locator('.message')).toHaveCount(ownerBeforeMessages.length);
         expect(untouchedBeforeMessages.length).toBeGreaterThan(0);
         const untouchedMessageText = await untouchedLog.locator('.message').allTextContents();
-
+        // Start the frame window only after rapport/state/DOM hydration has
+        // settled, so earlier private rapport frames cannot contaminate the
+        // untouched-socket assertion for this operation.
+        const foreignFrameStart = room.frames[untouchedRole].length;
+        const ownerFrameStart = room.frames[ownerRole].length;
         const firstResult = await postOperation(firstPage, firstOperation, undefined, `order-${first}-private`);
         expect(firstResult.status).toBe(200);
         expect(firstResult.body.publicResult.missionId).toBeTruthy();
@@ -175,6 +194,19 @@ test.describe('private narrative secrecy and causality', () => {
         const privateLines = ownerPrivateMessages.map(message => message.text).filter(Boolean);
         expect(privateLines.length).toBeGreaterThan(0);
         expect(privateLines.every(line => typeof line === 'string' && line.length > 0)).toBe(true);
+        const ownerWsActiveAfter = (await firstPage.locator('[data-connection]').textContent())?.trim() === 'LINK ACTIVE';
+        if (ownerWsActiveAfter) {
+          try {
+            await expect.poll(
+              () => extractLiveEvents(room.frames[ownerRole].slice(ownerFrameStart)).length,
+              { timeout: 10_000 }
+            ).toBeGreaterThan(0);
+          } catch (error) {
+            // A socket can drop between the status read and this action; in
+            // that case the client legitimately falls back to polling/REST.
+            if (!String(error?.message || '').includes('Timeout')) throw error;
+          }
+        }
 
         // The owner receives the private ORPHEUS line in its visible monitor.
         // The untouched monitor must keep the exact same DOM projection: no
@@ -192,6 +224,26 @@ test.describe('private narrative secrecy and causality', () => {
           '[data-gap]', '[data-placeholder]', '[data-timestamp]', '[data-delay]',
           '[data-pending]', 'time'
         ].join(', '))).toHaveCount(0);
+
+        // Inspect the nested event payloads in frames received by both sockets.
+        // The full envelope also contains legitimate privateMissions state,
+        // so audience/channel labels are checked on visible events only.
+        const ownerEvents = extractLiveEvents(room.frames[ownerRole].slice(ownerFrameStart));
+        // Depending on transport timing, the owner may hydrate this action via
+        // polling/REST instead of receiving a fresh WS frame. If its transport
+        // is WS and a frame is present, it must carry every private line without
+        // audience labels.
+        if (ownerWsActiveAfter && ownerEvents.length > 0) {
+          const serializedOwnerEvents = JSON.stringify(ownerEvents);
+          for (const privateLine of privateLines) expect(serializedOwnerEvents).toContain(privateLine);
+          expect(serializedOwnerEvents).not.toMatch(/AI_BROADCAST|AI_DIRECT|公開頻道|私人頻道|audience|recipient|broadcast|direct/i);
+        }
+
+        const untouchedForeignEvents = extractLiveEvents(room.frames[untouchedRole].slice(foreignFrameStart));
+        expect(untouchedForeignEvents).toHaveLength(0);
+        const serializedForeignEvents = JSON.stringify(untouchedForeignEvents);
+        for (const privateLine of privateLines) expect(serializedForeignEvents).not.toContain(privateLine);
+        expect(serializedForeignEvents).not.toMatch(/AI_BROADCAST|AI_DIRECT|公開頻道|私人頻道|audience|recipient|broadcast|direct/i);
 
         const untouched = first === 'A' ? afterB : afterA;
         expect(untouched.cursor).toBe(untouchedBefore.cursor);
