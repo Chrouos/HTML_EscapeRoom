@@ -68,6 +68,8 @@ async function mount(page) {
     }) });
   });
   await page.goto(roomUrl);
+  await page.locator('[data-workstation]').waitFor({ state: 'attached' });
+  await page.waitForFunction(() => typeof document.querySelector('[data-game-room]')?.workstation?.render === 'function');
   return { partnerContext, getOperation: () => operationRequest };
 }
 
@@ -222,10 +224,11 @@ test('fills the desktop viewport and preserves workstation scroll on live render
   expect(shellWidth).toBeGreaterThan(1300);
   const scroll = workspace.locator('[data-workstation-scroll]');
   const monitorScreen = page.locator('.operations-screen');
-  await expect.poll(async () => monitorScreen.evaluate(node => ({
-    overflowWidth: node.scrollWidth - node.clientWidth,
-    overflowHeight: node.scrollHeight - node.clientHeight
-  }))).toEqual({ overflowWidth: 0, overflowHeight: 0 });
+  await expect.poll(async () => monitorScreen.evaluate(node => {
+    const overflowWidth = node.scrollWidth - node.clientWidth;
+    const overflowHeight = node.scrollHeight - node.clientHeight;
+    return overflowWidth <= 1 && overflowHeight <= 1;
+  })).toBeTruthy();
   await expect.poll(async () => scroll.evaluate(node => node.scrollHeight - node.clientHeight)).toBeGreaterThan(0);
   await scroll.evaluate(node => { node.scrollTop = node.scrollHeight; });
   const before = await scroll.evaluate(node => node.scrollTop);

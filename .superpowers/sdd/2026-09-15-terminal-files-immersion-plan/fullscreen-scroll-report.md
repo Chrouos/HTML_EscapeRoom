@@ -21,3 +21,9 @@
 - Extended the focused E2E coverage to assert zero outer monitor overflow while the inner workstation list remains scrollable.
 
 `npx playwright test test/e2e/workstationExploration.spec.js -g "fills the desktop" --workers=1 --trace=off --reporter=line` was started but stopped after the fixture exceeded the supervisor's short-run window. Node syntax checks and `git diff --check` pass.
+
+## Scroll-chain fix
+
+- Constrained the desktop monitor selector and operations workspace through a finite flex chain (`height: 0` + flex growth, `min-height: 0`, and hidden outer overflow).
+- Made the workstation panel a shrinkable flex column with a definite workstation UI height, allowing `[data-workstation-scroll]` to retain a real scroll range.
+- Kept mobile overrides in the one-pane tab layout; the focused desktop test passed after the fix.

@@ -62,7 +62,8 @@
 
 .game-room-shell .monitor-selector {
   flex: 1 1 auto;
-  height: auto;
+  height: 0;
+  overflow: hidden;
 }
 
 .workstation-shell {
@@ -158,6 +159,8 @@
   min-width: 0;
   min-height: 0;
   flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
   /* The bezel is a viewport; only the active monitor content should scroll. */
   overflow: hidden;
   border: 1px solid var(--phosphor-dim);
@@ -208,21 +211,42 @@
 
 .monitor-screen .chat-panel {
   position: static;
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
   padding: 22px;
 }
 
 .monitor-screen .chat-log {
-  height: clamp(350px, 48vh, 560px);
+  min-height: 0;
+  flex: 1 1 auto;
+  height: auto;
 }
 
 .operations-workspace {
   display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   gap: 1px;
   min-width: 0;
   min-height: 0;
+  flex: 1 1 auto;
   position: relative;
   overflow: auto;
   background: #45615866;
+}
+
+.operations-workspace > [data-workstation] {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.operations-workspace > [data-workstation] .workstation-ui {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
 }
 
 .operations-workspace > .terminal-panel {
@@ -320,6 +344,12 @@
     height: auto;
   }
 
+  .game-room-shell .monitor-selector {
+    height: auto;
+    flex: none;
+    overflow: visible;
+  }
+
   .monitor-selector:has(#monitor-intercom:checked) .operations-monitor,
   .monitor-selector:has(#monitor-operations:checked) .intercom-monitor {
     display: none;
@@ -357,6 +387,10 @@
   .monitor-screen {
     display: block;
     min-height: 0;
+  }
+
+  .operations-workspace {
+    grid-template-rows: none;
   }
 
   .monitor-screen .chat-panel,
