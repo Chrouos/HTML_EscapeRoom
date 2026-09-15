@@ -62,6 +62,40 @@ test('desktop renders two accessible monitors without horizontal overflow', asyn
   }
 });
 
+test('desktop monitor shells share a bounded viewport height and scroll their own contents', async ({ browser }) => {
+  const room = await openPairedRoom(browser, { width: 1440, height: 900 }, 'reduce');
+  try {
+    const { player } = room;
+    const frames = player.locator('.workstation-shell > .monitor-frame');
+    await expect(frames).toHaveCount(2);
+    const metrics = await frames.evaluateAll(nodes => nodes.map(node => {
+      const rect = node.getBoundingClientRect();
+      const screen = node.querySelector('.monitor-screen');
+      const content = node.querySelector('.operations-workspace');
+      return {
+        top: rect.top,
+        bottom: rect.bottom,
+        height: rect.height,
+        viewport: window.innerHeight,
+        screenClientHeight: screen?.clientHeight ?? 0,
+        screenScrollHeight: screen?.scrollHeight ?? 0,
+        contentClientHeight: content?.clientHeight ?? 0,
+        contentScrollHeight: content?.scrollHeight ?? 0
+      };
+    }));
+
+    expect(metrics[0].height).toBeGreaterThan(0);
+    expect(metrics[1].height).toBeGreaterThan(0);
+    expect(Math.abs(metrics[0].height - metrics[1].height)).toBeLessThanOrEqual(2);
+    expect(metrics.every(({ top, bottom, viewport }) => top >= 0 && bottom <= viewport + 1)).toBe(true);
+    expect(metrics[1].screenScrollHeight).toBeGreaterThan(metrics[1].screenClientHeight);
+    expect(metrics[1].contentScrollHeight).toBeGreaterThan(metrics[1].contentClientHeight);
+  } finally {
+    await room.playerContext.close();
+    await room.partnerContext.close();
+  }
+});
+
 test('390px viewport exposes keyboard-operated monitor tabs and one active pane', async ({ browser }, testInfo) => {
   const room = await openPairedRoom(browser, { width: 390, height: 844 });
   try {

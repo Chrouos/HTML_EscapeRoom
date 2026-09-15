@@ -39,11 +39,17 @@
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
   gap: clamp(16px, 2vw, 28px);
-  align-items: start;
+  align-items: stretch;
+  max-height: calc(100vh - 150px);
+  min-height: 0;
 }
 
 .monitor-frame {
   min-width: 0;
+  min-height: 0;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
   color: var(--phosphor);
   filter: drop-shadow(0 16px 28px #0008);
   animation: crt-boot-pulse 1.2s ease-out both;
@@ -51,6 +57,10 @@
 
 .monitor-casing {
   min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
   padding: 14px;
   border: 1px solid var(--casing-edge);
   border-radius: 9px;
@@ -100,6 +110,10 @@
 
 .monitor-bezel {
   min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
   padding: 10px;
   border: 1px solid #354247;
   border-radius: 6px;
@@ -110,8 +124,9 @@
 .monitor-screen {
   position: relative;
   min-width: 0;
-  min-height: 600px;
-  overflow: hidden;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
   border: 1px solid var(--phosphor-dim);
   border-radius: 10px / 5px;
   background-color: var(--screen);
@@ -171,6 +186,8 @@
   display: grid;
   gap: 1px;
   min-width: 0;
+  min-height: 0;
+  overflow: auto;
   background: #45615866;
 }
 
@@ -260,6 +277,7 @@
 
   .workstation-shell {
     display: block;
+    max-height: none;
   }
 
   .monitor-selector:has(#monitor-intercom:checked) .operations-monitor,
@@ -268,7 +286,14 @@
   }
 
   .monitor-casing {
+    display: block;
+    max-height: none;
     padding: 8px;
+  }
+
+  .monitor-frame {
+    display: block;
+    max-height: none;
   }
 
   .monitor-header {
@@ -285,10 +310,12 @@
   }
 
   .monitor-bezel {
+    display: block;
     padding: 6px;
   }
 
   .monitor-screen {
+    display: block;
     min-height: 0;
   }
 
