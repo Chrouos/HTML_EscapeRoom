@@ -6,3 +6,21 @@
 @media(max-width:1000px){.shell-width{width:calc(100% - 48px)}.input-action-row{flex-wrap:wrap}.lobby-card .input-action-row button{width:100%}.lobby-card{padding:24px}.lobby-intro{padding-right:0}.facility-diagram{display:none}.status-bar{grid-template-columns:100px 1fr 1fr;gap:16px}.status-stage{grid-column:2 / 4;grid-row:2}.game-columns{grid-template-columns:1fr 1fr;gap:16px}.chat-panel,.puzzle-panel,.evidence-panel,.side-panel{padding:18px}.chat-form .input-action-row button{width:100%}.header-readout{font-size:9px}}
 @media(max-width:700px){.shell-width{width:calc(100% - 32px)}.site-header{min-height:88px;gap:12px}.wordmark-main{font-size:20px}.wordmark-sub{font-size:8px}.header-readout{max-width:130px;flex-wrap:wrap;gap:4px 10px;justify-content:flex-end;text-align:right}.lobby-shell{padding-top:40px}.lobby-intro{margin-bottom:32px;min-height:auto}.lobby-intro h1{font-size:32px}.intro-copy{font-size:14px}.lobby-grid{grid-template-columns:1fr;gap:16px}.lobby-card>p{min-height:0}.lobby-status-band{flex-direction:column;gap:8px}.site-footer{gap:8px;flex-direction:column;padding-block:22px}.room-shell{padding-top:20px}.status-bar{grid-template-columns:80px 1fr 1fr;padding:16px;gap:12px}.status-key{font-size:8px;letter-spacing:0}.status-value{font-size:12px}.countdown{font-size:19px}.status-identity h1{font-size:20px}.connection-band{align-items:flex-start;flex-wrap:wrap;line-height:1.5}.connection-band .readout-dot{margin-top:4px}.connection-band .muted{width:100%;margin:0 0 0 16px}.game-columns{grid-template-columns:1fr}.chat-panel{position:static}.chat-log{height:320px}.chat-form .input-action-row{flex-wrap:nowrap}.chat-form .input-action-row button{width:auto}.investigation-column{gap:16px}.waiting-panel,.error-panel{margin:20px 0;padding:28px}.waiting-panel h1,.error-panel h1{font-size:27px}.ending-panel{padding:26px}.ending-panel h2{font-size:24px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+/* Intercom readability and diegetic status marks. */
+.chat-log{scrollbar-width:thin;scrollbar-color:#4a6a70 transparent;scroll-behavior:smooth;position:relative}
+.intercom-empty{display:grid;place-items:center;min-height:132px;margin:0 0 14px;padding:22px;border:1px dashed #36545a;background:#0d1c24;color:#8ca5aa;font:11px/1.8 var(--mono);letter-spacing:.03em;text-align:center}
+.chat-log:has(.message) .intercom-empty{display:none}
+.message{position:relative;border-radius:1px;box-shadow:inset 0 0 18px #0002}
+.message::after{content:"RECEIVED";position:absolute;top:9px;right:12px;color:#6f9293;font:8px/1 var(--mono);letter-spacing:.08em;opacity:.7}
+.message-sender{padding-right:82px}
+.message-orpheus{border-left-color:var(--cyan);background:linear-gradient(90deg,#142a32,#12242b)}
+.message-orpheus .message-sender::before{content:"◆ ";color:var(--cyan)}
+.message-player .message-sender::before{content:"◈ ";color:var(--amber)}
+.message-player::after{content:"INTERCOM"}
+.message-error::after,.message-clue::after{content:"FLAGGED";color:var(--amber)}
+.connection-band[data-signal="lost"]{min-height:42px;padding-block:13px;border:1px solid #725842;border-left-width:3px;background:linear-gradient(90deg,#2b251c,transparent 70%);color:#e0b66d;box-shadow:0 0 18px #bd8d3624}
+.connection-band[data-signal="lost"] [data-connection]{font-weight:650;letter-spacing:.1em}
+.connection-band[data-signal="reconnecting"]{border-left:3px solid var(--amber);padding-left:10px;background:linear-gradient(90deg,#27251d,transparent 65%)}
+@media(max-width:700px){.intercom-empty{min-height:108px;padding:16px;font-size:10px}.message::after{top:8px;right:9px;font-size:7px}.message-sender{padding-right:68px}}
+@media(prefers-reduced-motion:reduce){.chat-log{scroll-behavior:auto}}
