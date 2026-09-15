@@ -299,6 +299,12 @@ function submitAction(room, player, action, pendingEvents = []) {
       refreshWorkstation(room);
       if (operationId && room.workstation?.[role]?.activeOperations?.includes(operationId)) {
         executeOperation(room, { role, playerId: room.players[role]?.playerId }, operationId, undefined, { skipEffects: false });
+        // Legacy puzzle answers still drive the manifest operation lifecycle.
+        // Keep the deterministic ORPHEUS cadence on this production path too;
+        // otherwise main1 completion would never grant the rapport needed to
+        // unlock the first role-private mission and later chapters would miss
+        // their shared announcements.
+        triggerDialogue(room, { operationId, role }, events);
       }
       syncMainlineProjection(room);
     }

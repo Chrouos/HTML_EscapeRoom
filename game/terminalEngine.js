@@ -168,6 +168,12 @@ function projectWorkstation(room, player) {
     buckets[appForEntry(item)].push(displayEntry(item, opened.has(item.id)));
   }
   return {
+    // Keep the active puzzle clue in the operations monitor while Files /
+    // Terminal / Logs provide the explorable records.  This preserves the
+    // legacy answer flow and ensures the dual-console migration does not
+    // silently remove each role's starting clue.
+    text: room.privateClues?.[role]?.text || '',
+    audioUrl: room.privateClues?.[role]?.audioUrl || '',
     files: { entries: buckets.files },
     terminal: { entries: buckets.terminal, activeOperations: ws.activeOperations.filter(operationId => operationId !== 'open_entry') },
     logs: { entries: buckets.logs },
