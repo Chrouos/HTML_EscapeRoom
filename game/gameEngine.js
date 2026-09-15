@@ -160,6 +160,7 @@ function submitOperation(room, player, action, pendingEvents = []) {
   const role = typeof player === 'string' ? player : player?.role;
   if (!['A', 'B'].includes(role)) fail('INVALID_PLAYER', 400, 'Invalid player role');
   if (!room?.players?.A || !room?.players?.B) fail('ROOM_NOT_READY', 423, 'Room is not ready');
+  assertPlayer(room, player);
   if (room.ending) return noOp();
 
   ensureRoom(room);
@@ -304,6 +305,7 @@ function submitAction(room, player, action, pendingEvents = []) {
   if (!['A', 'B'].includes(role)) fail('INVALID_PLAYER', 400, '無法確認玩家身分');
   if (!room?.players?.A || !room?.players?.B) fail('ROOM_NOT_READY', 423, '等待另一位玩家加入後才能開始');
   if (room.ending) return noOp();
+  assertPlayer(room, player);
   const isSide = Object.hasOwn(sidePuzzles, action.puzzleId);
   const puzzle = isSide ? sidePuzzles[action.puzzleId] : mainPuzzles[action.puzzleId];
   if (!puzzle || room.chapter < puzzle.chapter) fail('PUZZLE_LOCKED', 423, '這個謎題尚未解鎖');

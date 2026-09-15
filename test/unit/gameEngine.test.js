@@ -77,11 +77,11 @@ test('submitAction rejects a locked puzzle with a 423 domain error', () => {
   initializeGame(room);
 
   assert.throws(
-    () => submitAction(room, { role: 'A' }, action('startup', 'AUX CORE EMERGENCY', 'locked-startup')),
+    () => submitAction(room, { role: 'A', playerId: 'player-a' }, action('startup', 'AUX CORE EMERGENCY', 'locked-startup')),
     error => error.status === 423 && error.code === 'PUZZLE_LOCKED'
   );
   assert.throws(
-    () => submitAction(room, { role: 'A' }, { ...action('identity', 'ORPHEUS-17'), puzzleId: 'main2' }),
+    () => submitAction(room, { role: 'A', playerId: 'player-a' }, { ...action('identity', 'ORPHEUS-17'), puzzleId: 'main2' }),
     error => error.status === 423 && error.code === 'PUZZLE_LOCKED'
   );
   assert.deepEqual(room.attempts, { main1: { identity: 0, startup: 0 } });
@@ -101,6 +101,18 @@ test('submitAction rejects a direct answer before the actor opens the answer fil
   assert.deepEqual(room.attempts, before.attempts);
 });
 
+test('submitAction binds the answer gate to the authenticated room identity', () => {
+  const room = readyRoom();
+  initializeGame(room);
+  const before = structuredClone(room);
+  assert.throws(
+    () => submitAction(room, { role: 'A', playerId: 'player-b' }, action('identity', 'ORPHEUS-17', 'forged-1')),
+    error => error.status === 409 && error.code === 'INVALID_PLAYER'
+  );
+  assert.deepEqual(room.completedSteps, before.completedSteps);
+  assert.deepEqual(room.attempts, before.attempts);
+});
+
 test('submitAction rejects malformed action fields with a 400 domain error', () => {
   const room = readyRoom();
   initializeGame(room);
@@ -114,7 +126,7 @@ test('submitAction rejects malformed action fields with a 400 domain error', () 
 
   for (const invalidAction of invalidActions) {
     assert.throws(
-      () => submitAction(room, { role: 'A' }, invalidAction),
+      () => submitAction(room, { role: 'A', playerId: 'player-a' }, invalidAction),
       error => error.status === 400 && error.code === 'INVALID_ACTION'
     );
   }
@@ -125,7 +137,7 @@ test('identity accepts harmless whitespace and case differences, then unlocks st
   const events = [];
   initializeGame(room, events);
 
-  const result = submitAction(room, { role: 'A' }, action('identity', '  orpheus-17  ', 'identity-1'), events);
+  const result = submitAction(room, { role: 'A', playerId: 'player-a' }, action('identity', '  orpheus-17  ', 'identity-1'), events);
 
   assert.equal(result.stateChanged, true);
   assert.equal(result.publicResult.correct, true);
@@ -142,8 +154,8 @@ test('wrong answers increment only the current step and reveal graduated hints',
   const room = readyRoom();
   initializeGame(room);
 
-  const first = submitAction(room, { role: 'A' }, action('identity', 'wrong', 'wrong-1'));
-  const second = submitAction(room, { role: 'B' }, action('identity', 'still-wrong', 'wrong-2'));
+  const first = submitAction(room, { role: 'A', playerId: 'player-a' }, action('identity', 'wrong', 'wrong-1'));
+  const second = submitAction(room, { role: 'B', playerId: 'player-b' }, action('identity', 'still-wrong', 'wrong-2'));
 
   assert.equal(first.stateChanged, true);
   assert.equal(first.publicResult.correct, false);
@@ -160,22 +172,22 @@ test('wrong answers increment only the current step and reveal graduated hints',
 test('completed steps and completed main1 submissions are no-ops', () => {
   const room = readyRoom();
   initializeGame(room);
-  submitAction(room, { role: 'A' }, action('identity', 'ORPHEUS-17', 'identity-1'));
+  submitAction(room, { role: 'A', playerId: 'player-a' }, action('identity', 'ORPHEUS-17', 'identity-1'));
   const beforeStartup = structuredClone(room);
 
-  const repeatedIdentity = submitAction(room, { role: 'B' }, action('identity', 'ORPHEUS-17', 'identity-2'));
+  const repeatedIdentity = submitAction(room, { role: 'B', playerId: 'player-b' }, action('identity', 'ORPHEUS-17', 'identity-2'));
   assert.equal(repeatedIdentity.stateChanged, false);
   assert.deepEqual(room.attempts, beforeStartup.attempts);
   assert.deepEqual(room.messages, beforeStartup.messages);
 
-  const completed = submitAction(room, { role: 'B' }, action('startup', ' aux   core emergency ', 'startup-1'));
+  const completed = submitAction(room, { role: 'B', playerId: 'player-b' }, action('startup', ' aux   core emergency ', 'startup-1'));
   assert.equal(completed.stateChanged, true);
   assert.equal(completed.publicResult.correct, true);
   assert.deepEqual(room.mainProgress, ['main1']);
   assert.equal(room.chapter, 2);
   const afterCompletion = structuredClone(room);
 
-  const repeatedCompletion = submitAction(room, { role: 'A' }, action('startup', 'AUX CORE EMERGENCY', 'startup-2'));
+  const repeatedCompletion = submitAction(room, { role: 'A', playerId: 'player-a' }, action('startup', 'AUX CORE EMERGENCY', 'startup-2'));
   assert.equal(repeatedCompletion.stateChanged, false);
   assert.deepEqual(room.mainProgress, afterCompletion.mainProgress);
   assert.deepEqual(room.messages, afterCompletion.messages);

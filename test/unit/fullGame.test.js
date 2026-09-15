@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createRoomState } = require('../../game/createRoomState');
 const { initializeGame, submitAction, submitOperation } = require('../../game/gameEngine');
+const { openEntry } = require('../../game/terminalEngine');
 const { forPlayer } = require('../../game/safeState');
 const { operations } = require('../../game/content/operations');
 const { privateMissions } = require('../../game/content/privateMissions');
@@ -23,7 +24,11 @@ const sides = [
 ];
 let serial = 0;
 function act(room, puzzleId, stepId, value, role = 'A') {
-  return submitAction(room, { role }, { actionId: `test-${++serial}`, puzzleId, stepId, value });
+  const playerId = role === 'A' ? 'player-a' : 'player-b';
+  if (puzzleId.startsWith('main') && !room.workstation?.[role]?.openedEntryIds?.includes(`answer.${puzzleId}`)) {
+    openEntry(room, { role, playerId }, `answer.${puzzleId}`);
+  }
+  return submitAction(room, { role, playerId }, { actionId: `test-${++serial}`, puzzleId, stepId, value });
 }
 function ensureFinaleReady(room) {
   if (room.publicFacts?.includes('mainCompleted')) return;

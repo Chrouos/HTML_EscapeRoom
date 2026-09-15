@@ -20,6 +20,10 @@ test('zero countdown emits one event and still permits puzzle completion', async
   try {
     const url = `${server.baseUrl}/api/rooms/${code}`;
     const before = await (await jar.fetch(`${url}/state`)).json();
+    await jar.fetch(`${url}/actions`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ actionId: 'open-answer-late', operationId: 'open_entry', value: 'answer.main1' })
+    });
     now = 45 * 60 * 1000;
     const alarm = await (await jar.fetch(`${url}/state?sinceCursor=${before.cursor}`)).json();
     assert.equal(alarm.countdown.status, 'emergency');
