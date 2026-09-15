@@ -203,3 +203,28 @@ test('keeps locked metadata visible and gates the answer form behind the opened 
   await expect(page.locator('[data-action-form]')).toBeVisible();
   await room.partnerContext.close();
 });
+
+test('fills the desktop viewport and preserves workstation scroll on live renders', async ({ page }) => {
+  const room = await mount(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const workspace = page.locator('[data-workstation]');
+  const longFixture = structuredClone(workstationFixture);
+  longFixture.files.entries.push(...Array.from({ length: 30 }, (_, index) => ({
+    id: `log-${index}`,
+    name: `record-${index}.log`,
+    kind: 'file',
+    parentId: 'root',
+    content: `record ${index}`
+  })));
+  await page.evaluate(fixture => document.querySelector('[data-game-room]').workstation.render(fixture), longFixture);
+  const shell = page.locator('.game-room-shell');
+  const shellWidth = await shell.evaluate(node => node.getBoundingClientRect().width);
+  expect(shellWidth).toBeGreaterThan(1300);
+  const scroll = workspace.locator('[data-workstation-scroll]');
+  await scroll.evaluate(node => { node.scrollTop = node.scrollHeight; });
+  const before = await scroll.evaluate(node => node.scrollTop);
+  await page.evaluate(fixture => document.querySelector('[data-game-room]').workstation.render(fixture), longFixture);
+  const after = await scroll.evaluate(node => node.scrollTop);
+  expect(after).toBeGreaterThanOrEqual(Math.max(0, before - 2));
+  await room.partnerContext.close();
+});

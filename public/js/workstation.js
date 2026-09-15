@@ -19,7 +19,7 @@ export function createWorkstation(root, { onOperation } = {}) {
   let activeApp = 'files';
   let folderPath = [];
   let lastFocusId = '';
-  let pendingScroll = 0;
+  const scrollPositions = new Map();
   const terminalHistory = [];
 
   const id = value => typeof value === 'string' ? value : '';
@@ -59,8 +59,9 @@ export function createWorkstation(root, { onOperation } = {}) {
   }
 
   function captureViewState() {
-    const scroll = host.querySelector('[data-workstation-scroll]');
-    if (scroll) pendingScroll = scroll.scrollTop;
+    const scrollKey = `${activeApp}:${folderPath.join('/')}:${currentView.__openedEntry || ''}`;
+    const scroll = host.querySelector('[data-workstation-scroll], [data-terminal-history], [data-workstation-log]');
+    if (scroll) scrollPositions.set(scrollKey, scroll.scrollTop);
     const focused = document.activeElement;
     if (focused && host.contains(focused)) {
       const focusId = focused.dataset.workstationId || focused.dataset.workstationApp;
@@ -306,8 +307,9 @@ export function createWorkstation(root, { onOperation } = {}) {
     else renderFiles(content, currentView);
     layout.append(content);
     host.replaceChildren(layout);
-    const scroll = host.querySelector('[data-workstation-scroll]');
-    if (scroll) scroll.scrollTop = pendingScroll;
+    const scrollKey = `${activeApp}:${folderPath.join('/')}:${currentView.__openedEntry || ''}`;
+    const scroll = host.querySelector('[data-workstation-scroll], [data-terminal-history], [data-workstation-log]');
+    if (scroll) scroll.scrollTop = scrollPositions.get(scrollKey) || 0;
     restoreFocus();
   }
 

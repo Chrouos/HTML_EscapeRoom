@@ -31,6 +31,23 @@
   width: 100%;
 }
 
+/* The live console is the room: on desktop let it use the viewport instead
+   of being constrained by the marketing shell's 1280px cap. */
+.game-room-shell {
+  width: calc(100% - 48px);
+  max-width: none;
+  min-height: calc(100vh - 190px);
+  display: flex;
+  flex-direction: column;
+}
+
+.game-room-shell > .game-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .monitor-tabs {
   display: none;
 }
@@ -41,6 +58,11 @@
 .monitor-selector {
   min-height: 0;
   height: calc(100vh - 340px);
+}
+
+.game-room-shell .monitor-selector {
+  flex: 1 1 auto;
+  height: auto;
 }
 
 .workstation-shell {
@@ -460,6 +482,7 @@
   overflow: auto;
   overscroll-behavior: contain;
   padding: 2px 8px 18px 2px;
+  scrollbar-gutter: stable;
 }
 
 .workstation-scroll h3,
@@ -555,6 +578,7 @@
   color: #b9dfd5;
   font: 11px/1.7 var(--mono);
   scrollbar-color: #46716c transparent;
+  scrollbar-gutter: stable;
 }
 
 .terminal-history:empty::before {
@@ -623,6 +647,14 @@
   max-height: 100%;
   overflow: auto;
   padding: 2px 8px 18px 2px;
+  scrollbar-gutter: stable;
+}
+
+@media (min-width: 760px) {
+  .game-room-shell .monitor-selector,
+  .game-room-shell .workstation-shell {
+    min-height: 0;
+  }
 }
 
 .workstation-logs article {
@@ -668,6 +700,11 @@
 }
 
 @media (max-width: 759px) {
+  .game-room-shell {
+    width: calc(100% - 32px);
+    min-height: 0;
+  }
+
   .workstation-apps {
     gap: 5px;
     padding-bottom: 10px;

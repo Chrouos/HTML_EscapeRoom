@@ -6,7 +6,7 @@
     <a class="wordmark" href="/"><span class="wordmark-main">ORPHEUS</span><span class="wordmark-sub">SUBJECT LINK / 02</span></a>
     <span class="header-readout">研究連線 / <%= roomCode %></span>
   </header>
-  <main class="shell-width room-shell">
+  <main class="shell-width room-shell <%= state && state.role ? 'game-room-shell' : '' %>">
     <% if (error) { %>
       <section class="terminal-panel error-panel" role="alert">
         <p class="eyebrow">CONNECTION UNAVAILABLE</p>
