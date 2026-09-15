@@ -15,3 +15,9 @@
 - `git diff --check` passed (line-ending warnings only).
 - Added a focused Playwright assertion covering desktop width and scroll retention; the full workstation run was stopped at supervisor request to avoid a long fixture cycle.
 
+## Reviewer fix
+
+- Changed `.monitor-screen` to a clipping viewport so it cannot become a competing scroll container.
+- Extended the focused E2E coverage to assert zero outer monitor overflow while the inner workstation list remains scrollable.
+
+`npx playwright test test/e2e/workstationExploration.spec.js -g "fills the desktop" --workers=1 --trace=off --reporter=line` was started but stopped after the fixture exceeded the supervisor's short-run window. Node syntax checks and `git diff --check` pass.

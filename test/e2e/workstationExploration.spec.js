@@ -221,6 +221,12 @@ test('fills the desktop viewport and preserves workstation scroll on live render
   const shellWidth = await shell.evaluate(node => node.getBoundingClientRect().width);
   expect(shellWidth).toBeGreaterThan(1300);
   const scroll = workspace.locator('[data-workstation-scroll]');
+  const monitorScreen = page.locator('.operations-screen');
+  await expect.poll(async () => monitorScreen.evaluate(node => ({
+    overflowWidth: node.scrollWidth - node.clientWidth,
+    overflowHeight: node.scrollHeight - node.clientHeight
+  }))).toEqual({ overflowWidth: 0, overflowHeight: 0 });
+  await expect.poll(async () => scroll.evaluate(node => node.scrollHeight - node.clientHeight)).toBeGreaterThan(0);
   await scroll.evaluate(node => { node.scrollTop = node.scrollHeight; });
   const before = await scroll.evaluate(node => node.scrollTop);
   await page.evaluate(fixture => document.querySelector('[data-game-room]').workstation.render(fixture), longFixture);
