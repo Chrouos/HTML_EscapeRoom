@@ -54,6 +54,11 @@
       const mobile = media.matches;
       for (const tab of tabs) {
         const selected = tab.id === activeId;
+        // Keep a single tab in the sequential focus order on mobile. The
+        // other tab remains available to the arrow-key radio-group behavior,
+        // but Tab proceeds directly into the selected monitor's controls
+        // instead of stopping on the inactive tab first.
+        tab.tabIndex = selected ? 0 : -1;
         tab.setAttribute('aria-selected', String(selected));
         tab.setAttribute('aria-checked', String(selected));
         const monitor = monitors[tab.id];
