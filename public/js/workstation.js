@@ -226,6 +226,7 @@ export function createWorkstation(root, { onOperation } = {}) {
     input.type = 'text';
     input.id = labelNode.htmlFor;
     input.dataset.terminalInput = '';
+    input.dataset.workstationId = 'terminal-input';
     input.autocomplete = 'off';
     input.spellcheck = false;
     input.placeholder = 'HELP, HINT, SEARCH <node> ...';

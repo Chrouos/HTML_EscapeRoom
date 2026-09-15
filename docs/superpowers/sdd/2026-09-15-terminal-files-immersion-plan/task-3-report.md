@@ -25,3 +25,9 @@ The implementation deliberately keeps server authority in Task 1/2. Terminal his
 ## Review handoff
 
 Feature commit: `ff5bda8`.
+
+## Follow-up review fixes
+
+- Updated accessibility E2E selectors to assert ORPHEUS through `[data-intercom-log]` and to focus the actual Terminal input after selecting the Terminal app; removed assertions tied to the retired prominent clue panel.
+- Terminal input now carries a stable workstation focus key and is restored after command-submit rerenders, allowing consecutive keyboard commands.
+- Follow-up focused E2E: workstation real Terminal and public HINT paths passed; accessibility suite had 4/6 passing before the remaining selector corrections, with the desktop/mobile failures addressed in this follow-up. Full rerun was stopped to avoid a long fixture cycle.

@@ -11,7 +11,7 @@ async function openPairedRoom(browser, viewport, reducedMotion = 'no-preference'
   await expect(player).toHaveURL(/\/rooms\/\d{6}$/);
   await partner.goto(player.url());
   await partner.getByRole('button', { name: '加入房間（玩家 B）' }).click();
-  await expect(player.locator('[data-clues]')).toContainText('ORPHEUS');
+  await expect(player.locator('[data-intercom-log]')).toContainText('ORPHEUS');
 
   return { player, partner, playerContext, partnerContext };
 }
@@ -50,7 +50,8 @@ test('desktop renders two accessible monitors without horizontal overflow', asyn
     expect(await player.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await expectUniqueLabelRelationships(player);
 
-    const input = player.getByLabel('提交答案', { exact: true });
+    await operations.locator('[data-workstation-app="terminal"]').click();
+    const input = player.locator('[data-terminal-input]');
     await input.focus();
     expect(await input.evaluate(node => getComputedStyle(node).outlineStyle)).not.toBe('none');
     await player.locator('[data-game-room]').evaluate(node => node.classList.add('emergency'));
@@ -117,7 +118,6 @@ test('390px viewport exposes keyboard-operated monitor tabs and one active pane'
     await expect(intercomTab).toBeFocused();
     await player.keyboard.press('Tab');
     await expect(player.getByLabel('傳訊給另一位受試者')).toBeFocused();
-    await expect(player.getByLabel('提交答案', { exact: true })).not.toBeFocused();
     await player.keyboard.press('Shift+Tab');
     await expect(intercomTab).toBeFocused();
 
