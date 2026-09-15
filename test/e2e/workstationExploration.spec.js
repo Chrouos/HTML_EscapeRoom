@@ -133,6 +133,29 @@ test('behaves like a command prompt with role prompt and keyboard history', asyn
   await room.partnerContext.close();
 });
 
+test('echoes rejected commands as terminal error lines', async ({ page }) => {
+  const room = await mount(page);
+  await page.route('**/api/rooms/*/actions', async route => {
+    const request = route.request().postDataJSON();
+    if (request?.operationId === 'terminal_command') {
+      await route.fulfill({ status: 423, contentType: 'application/json', body: JSON.stringify({
+        success: false, message: 'Command rejected by secure shell'
+      }) });
+      return;
+    }
+    await route.fallback();
+  });
+  const workspace = page.locator('[data-workstation]');
+  await workspace.getByRole('button', { name: 'Terminal', exact: true }).click();
+  const input = workspace.locator('[data-terminal-input]');
+  await input.fill('SCAN secret.log');
+  await input.press('Enter');
+  await expect(workspace.locator('[data-terminal-history]')).toContainText('SCAN secret.log');
+  await expect(workspace.locator('.terminal-output-error')).toContainText('Command rejected by secure shell');
+  await expect(input).toBeFocused();
+  await room.partnerContext.close();
+});
+
 test('renders public HINT result in the intercom without audience metadata', async ({ page }) => {
   const room = await mount(page);
   const workspace = page.locator('[data-workstation]');

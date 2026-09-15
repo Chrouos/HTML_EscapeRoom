@@ -185,6 +185,13 @@
       else if (result.state) render(result.state, result.countdown);
       workstation?.appendTerminalResult?.(result.publicResult || result);
     } catch (error) {
+      // Keep rejected commands in the local console transcript so the shell
+      // behaves like a real prompt: the player can see exactly what failed
+      // without relying on an unrelated global feedback region.
+      workstation?.appendTerminalResult?.({
+        command: operation.value || '',
+        error: error instanceof Error ? error.message : String(error || 'Operation failed')
+      });
       text('[data-feedback]', error.message);
     }
   }
