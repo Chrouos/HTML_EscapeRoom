@@ -105,6 +105,17 @@ function initializeGame(room, pendingEvents = []) {
   room.attempts ??= {};
   room.hints ??= {};
   ensureRoom(room);
+  // Room creation and joins enqueue the opening ORPHEUS cadence before the
+  // second actor is present. Flush it only once both authenticated actors can
+  // receive the same public transaction; this keeps actor cursors aligned and
+  // avoids leaking a partial opening to a single-player waiting room.
+  if (Array.isArray(room.lifecycleOperations) && room.lifecycleOperations.length) {
+    const lifecycleOperations = [...room.lifecycleOperations];
+    room.lifecycleOperations = [];
+    for (const operationId of lifecycleOperations) {
+      triggerDialogue(room, { operationId }, pendingEvents);
+    }
+  }
   syncMainlineProjection(room);
   const puzzle = mainPuzzles['main' + room.chapter];
   if (puzzle && !room.ending) {

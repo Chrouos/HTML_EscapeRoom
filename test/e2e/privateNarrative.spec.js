@@ -48,6 +48,15 @@ async function createPair(browser) {
   const bContext = await browser.newContext();
   const a = await aContext.newPage();
   const b = await bContext.newPage();
+  // Install the frame observers before either page navigates. The live client
+  // opens its WebSocket during page boot; attaching after navigation can miss
+  // the first frame and make a foreign-event assertion look falsely clean.
+  const frames = { A: [], B: [] };
+  for (const [role, page] of [['A', a], ['B', b]]) {
+    page.on('websocket', socket => socket.on('framereceived', frame => {
+      frames[role].push(typeof frame === 'string' ? frame : frame.toString());
+    }));
+  }
   await a.goto('/');
   await a.locator('form[action="/rooms"] button').click();
   await expect(a).toHaveURL(/\/rooms\/\d{6}$/);
@@ -55,7 +64,11 @@ async function createPair(browser) {
   await b.goto(roomUrl);
   await b.locator('form[action="/rooms/join"] button').click();
   await expect.poll(async () => (await getState(a)).body.state?.occupancy?.ready).toBe(true);
-  return { a, b, aContext, bContext };
+  // The creator initially remains on the waiting view. Navigate it to the
+  // game after B joins so both real browser clients establish their own live
+  // sockets before frame assertions begin.
+  await a.goto(roomUrl);
+  return { a, b, aContext, bContext, frames };
 }
 
 async function solveMainline(a, b) {
@@ -90,6 +103,32 @@ async function primeRapport(a, b, prefix) {
 }
 
 test.describe('private narrative secrecy and causality', () => {
+  test('real room creation and join persist the three shared ORPHEUS opening announcements', async ({ browser }) => {
+    const room = await createPair(browser);
+    try {
+      const aState = (await getState(room.a)).body;
+      const bState = (await getState(room.b)).body;
+      for (const state of [aState, bState]) {
+        expect(state.success).toBe(true);
+        expect(state.state.intercom.map(message => message.contentId)).toEqual(expect.arrayContaining([
+          'orpheus.boot', 'orpheus.cooperation', 'orpheus.first_task'
+        ]));
+        expect(state.state.intercom.filter(message => message.contentId.startsWith('orpheus.')).length)
+          .toBeGreaterThanOrEqual(3);
+      }
+
+      // The public opening is projected to each actor stream once per
+      // transition; there are no direct/private frames in this phase.
+      expect(aState.cursor).toBeGreaterThan(0);
+      expect(bState.cursor).toBeGreaterThan(0);
+      const openingFrames = [...room.frames.A, ...room.frames.B].join('\n');
+      expect(openingFrames).not.toMatch(/AI_BROADCAST|AI_DIRECT/i);
+    } finally {
+      await room.aContext.close();
+      await room.bContext.close();
+    }
+  });
+
   test('A-first and B-first mission triggers have no foreign cursor, placeholder, or timing signal', async ({ browser }) => {
     test.setTimeout(90_000);
     for (const first of ['A', 'B']) {
@@ -98,12 +137,9 @@ test.describe('private narrative secrecy and causality', () => {
         const { a, b } = room;
         await answer(a, 'main1', 'identity', 'ORPHEUS-17', `order-${first}-identity`);
         await answer(b, 'main1', 'startup', 'AUX CORE EMERGENCY', `order-${first}-startup`);
-        const foreignFrames = [];
-        const observeSocket = socket => socket.on('framereceived', frame => {
-          foreignFrames.push(typeof frame === 'string' ? frame : frame.toString());
-        });
         const untouchedPage = first === 'A' ? b : a;
-        untouchedPage.on('websocket', observeSocket);
+        const untouchedRole = first === 'A' ? 'B' : 'A';
+        const foreignFrameStart = room.frames[untouchedRole].length;
 
         await primeRapport(a, b, `order-${first}`);
         const beforeA = (await getState(a)).body;
@@ -124,7 +160,7 @@ test.describe('private narrative secrecy and causality', () => {
         const foreignOperation = first === 'A' ? 'archive_index' : 'flag_identity';
         expect(JSON.stringify(untouched.state || '')).not.toContain(foreignOperation);
         expect(JSON.stringify(untouched.state?.intercom || [])).not.toMatch(/ORPHEUS.*(整理索引|核對名冊)/i);
-        expect(foreignFrames.join('\n')).not.toContain(foreignOperation);
+        expect(room.frames[untouchedRole].slice(foreignFrameStart).join('\n')).not.toContain(foreignOperation);
 
         const owner = (first === 'A' ? afterA : afterB).state;
         expect(owner.privateMissions.some(mission => mission.state === 'resolved')).toBe(true);

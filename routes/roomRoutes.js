@@ -69,6 +69,20 @@ function setRoomToken(response, roomCode, token) {
   ));
 }
 
+function queueLifecycleAnnouncements(store, roomCode, operations) {
+  store.updateRoom(roomCode, room => {
+    room.publicFacts ??= [];
+    for (const fact of operations.includes('create_room') || operations.includes('host_join')
+      ? ['roomCreated', 'hostJoined'] : ['guestJoined']) {
+      if (!room.publicFacts.includes(fact)) room.publicFacts.push(fact);
+    }
+    room.lifecycleOperations ??= [];
+    for (const operationId of operations) {
+      if (!room.lifecycleOperations.includes(operationId)) room.lifecycleOperations.push(operationId);
+    }
+  });
+}
+
 function createRoomRoutes(store) {
   if (!store) {
     throw new TypeError('Room store is required');
@@ -79,6 +93,10 @@ function createRoomRoutes(store) {
   router.post('/rooms', (request, response) => {
     try {
       const created = store.createRoom();
+      // The host is assigned during creation. Queue the first two public
+      // announcements on the authoritative route; the first ready-state
+      // transaction flushes them atomically to both actor streams.
+      queueLifecycleAnnouncements(store, created.room.roomCode, ['create_room', 'host_join']);
       setRoomToken(response, created.room.roomCode, created.player.token);
       response.redirect(303, `/rooms/${created.room.roomCode}`);
     } catch (error) {
@@ -105,6 +123,9 @@ function createRoomRoutes(store) {
       }
 
       const joined = store.joinRoom(roomCode);
+      // Guest join completes the opening cadence. It is queued so the next
+      // ready-state transaction can deliver all three public lines together.
+      queueLifecycleAnnouncements(store, roomCode, ['guest_join']);
       setRoomToken(response, roomCode, joined.player.token);
       response.redirect(303, `/rooms/${roomCode}`);
     } catch (error) {
