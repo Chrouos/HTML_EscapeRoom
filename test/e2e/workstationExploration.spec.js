@@ -110,6 +110,7 @@ test('accepts a real Terminal command and renders echo plus safe output', async 
   await expect.poll(room.getOperation).toMatchObject({ operationId: 'terminal_command', value: 'HELP' });
   await expect(workspace.locator('[data-terminal-history]')).toContainText('HELP');
   await expect(workspace.locator('[data-terminal-output]')).toContainText('SEARCH <node>');
+  await expect(input).toBeFocused();
   await room.partnerContext.close();
 });
 
