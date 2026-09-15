@@ -8,7 +8,7 @@ let server;
 test.before(async () => { server = await testServer(app); });
 test.after(async () => { await server.close(); });
 
-async function roomPair() {
+async function roomPair({ openGate = true } = {}) {
   const a = new CookieJar();
   const response = await a.fetch(`${server.baseUrl}/rooms`, { method: 'POST' });
   const code = response.headers.get('location').split('/').pop();
@@ -17,6 +17,10 @@ async function roomPair() {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ roomCode: code })
   });
+  if (openGate) {
+    await action(a, code, { actionId: 'open-answer-a', operationId: 'open_entry', value: 'answer.main1' });
+    await action(b, code, { actionId: 'open-answer-b', operationId: 'open_entry', value: 'answer.main1' });
+  }
   return { a, b, code };
 }
 
@@ -66,6 +70,18 @@ test('locked chapter does not consume action ID or change room progress', async 
   assert.equal(result.status, 423);
   assert.equal(app.locals.roomStore.hasProcessedAction(code, 'future'), false);
   assert.equal(app.locals.roomStore.getRoom(code).revision, before.revision);
+});
+
+test('production action route rejects an answer until its answer file is opened', async () => {
+  const { a, code } = await roomPair({ openGate: false });
+  const before = app.locals.roomStore.getRoom(code);
+  const result = await action(a, code, {
+    actionId: 'answer-bypass', puzzleId: 'main1', stepId: 'identity', value: 'ORPHEUS-17'
+  });
+  assert.equal(result.status, 423);
+  assert.equal(result.body.code, 'ANSWER_GATE_LOCKED');
+  assert.equal(app.locals.roomStore.hasProcessedAction(code, 'answer-bypass'), false);
+  assert.deepEqual(app.locals.roomStore.getRoom(code).attempts, before.attempts);
 });
 
 test('another room token cannot submit, and reading clues does not advance its cursor', async () => {

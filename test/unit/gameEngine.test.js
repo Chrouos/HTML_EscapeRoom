@@ -9,6 +9,10 @@ function readyRoom(overrides = {}) {
   room.players.A = { token: 'a-token', playerId: 'player-a' };
   room.players.B = { token: 'b-token', playerId: 'player-b' };
   Object.assign(room, overrides);
+  room.workstation = {
+    A: { openedEntryIds: ['answer.main1'] },
+    B: { openedEntryIds: ['answer.main1'] }
+  };
   return room;
 }
 
@@ -81,6 +85,20 @@ test('submitAction rejects a locked puzzle with a 423 domain error', () => {
     error => error.status === 423 && error.code === 'PUZZLE_LOCKED'
   );
   assert.deepEqual(room.attempts, { main1: { identity: 0, startup: 0 } });
+});
+
+test('submitAction rejects a direct answer before the actor opens the answer file', () => {
+  const room = createRoomState('123456', Date.now());
+  room.players.A = { token: 'a-token', playerId: 'player-a' };
+  room.players.B = { token: 'b-token', playerId: 'player-b' };
+  initializeGame(room);
+  const before = structuredClone(room);
+  assert.throws(
+    () => submitAction(room, { role: 'A', playerId: 'player-a' }, action('identity', 'ORPHEUS-17', 'bypass-1')),
+    error => error.status === 423 && error.code === 'ANSWER_GATE_LOCKED'
+  );
+  assert.deepEqual(room.completedSteps, before.completedSteps);
+  assert.deepEqual(room.attempts, before.attempts);
 });
 
 test('submitAction rejects malformed action fields with a 400 domain error', () => {

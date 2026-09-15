@@ -312,6 +312,12 @@ function submitAction(room, player, action, pendingEvents = []) {
   if ((room.mainProgress.includes(action.puzzleId) && !finaleProtocolStillOpen)
     || (isSide && evidenceIds(room).has(puzzle.evidence.id))) return noOp();
   if (!isSide && room.chapter !== puzzle.chapter) fail('PUZZLE_LOCKED', 423, '這個謎題尚未解鎖');
+  if (!isSide) {
+    const opened = room.workstation?.[role]?.openedEntryIds;
+    if (!Array.isArray(opened) || !opened.includes(`answer.${action.puzzleId}`)) {
+      fail('ANSWER_GATE_LOCKED', 423, '請先從 Files 開啟目前階段的答案文件');
+    }
+  }
   initializeGame(room, pendingEvents);
   prepare(room, puzzle);
   if (isSide && action.stepId === 'inspect') {
