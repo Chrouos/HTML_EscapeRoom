@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 const { createRoomState } = require('../../game/createRoomState');
 const { terminalEntries } = require('../../game/content/terminalEntries');
-const { openEntry, executeOperation, projectWorkstation, refreshWorkstation, audienceAllows } = require('../../game/terminalEngine');
+const { openEntry, executeOperation, projectWorkstation, refreshWorkstation, audienceAllows, executeTerminalCommand } = require('../../game/terminalEngine');
 
 function readyRoom() {
   const room = createRoomState('ROOM42', 0);
@@ -159,4 +159,64 @@ test('direct engine callers must provide a verified player identity', () => {
 test('malformed role audiences fail closed instead of defaulting to B', () => {
   assert.equal(audienceAllows({ audience: { kind: 'role', role: 'bogus' } }, 'A'), false);
   assert.equal(audienceAllows({ audience: { kind: 'role', role: 'bogus' } }, 'B'), false);
+});
+
+test('terminal commands return safe output and only expose visible records', () => {
+  const room = readyRoom();
+  const help = executeTerminalCommand(room, { role: 'A', playerId: 'player-a' }, 'HELP');
+  assert.equal(help.stateChanged, false);
+  assert.match(help.output, /SEARCH|SCAN|UNZIP|SEND/);
+
+  const search = executeTerminalCommand(room, { role: 'A', playerId: 'player-a' }, 'SEARCH log');
+  assert.match(search.output, /log\./);
+  assert.doesNotMatch(search.output, /experiment_roster|b_incident_report/);
+
+  const scan = executeTerminalCommand(room, { role: 'A', playerId: 'player-a' }, 'SCAN log.original_index_time');
+  assert.match(scan.output, /02:11/);
+});
+
+test('HINT and SEND produce public ORPHEUS events without audience labels', () => {
+  const room = readyRoom();
+  const hint = executeTerminalCommand(room, { role: 'A', playerId: 'player-a' }, 'HINT');
+  assert.equal(hint.publicEvents.length, 1);
+  assert.deepEqual(hint.publicEvents[0].audience, { kind: 'both' });
+  assert.match(hint.publicEvents[0].text, /ORPHEUS/);
+  assert.doesNotMatch(hint.publicEvents[0].text, /AI_BROADCAST|AI_DIRECT|audience|channel/i);
+  const send = executeTerminalCommand(room, { role: 'B', playerId: 'player-b' }, 'SEND checksum 02:17');
+  assert.equal(send.publicEvents.length, 1);
+  assert.deepEqual(send.publicEvents[0].audience, { kind: 'both' });
+  assert.match(send.publicEvents[0].text, /ORPHEUS/);
+  assert.match(send.publicEvents[0].text, /checksum 02:17/);
+});
+
+test('terminal rejects unsafe, malformed, locked, and cross-room commands without mutation', () => {
+  const room = readyRoom();
+  const before = structuredClone(room);
+  for (const command of ['', 'UNKNOWN', 'SEARCH', 'SCAN ../secret', 'UNZIP C:\\\\tmp\\\\evil.zip', 'UNZIP __proto__', 'UNZIP constructor', 'SEND ' + 'x'.repeat(1001)]) {
+    assert.throws(() => executeTerminalCommand(room, { role: 'A', playerId: 'player-a' }, command), /invalid|locked|unsafe|command/i);
+  }
+  assert.throws(() => executeTerminalCommand(room, { role: 'A', playerId: 'wrong-player' }, 'HELP'), /identity/i);
+  assert.deepEqual(room, before);
+});
+
+test('locked commands on a fresh authenticated room do not backfill state', () => {
+  const room = createRoomState('ROOM42', 0);
+  room.players.A = { playerId: 'player-a' };
+  room.players.B = { playerId: 'player-b' };
+  const before = structuredClone(room);
+  assert.throws(() => executeTerminalCommand(room, { role: 'A', playerId: 'player-a' }, 'SCAN files.secret'), /locked|visible/i);
+  assert.throws(() => executeTerminalCommand(room, { role: 'A', playerId: 'player-a' }, 'UNZIP case_bundle.zip'), /locked|visible/i);
+  assert.deepEqual(room, before);
+});
+
+test('UNZIP expands only authored manifests and is idempotent', () => {
+  const room = readyRoom();
+  const first = executeTerminalCommand(room, { role: 'A', playerId: 'player-a' }, 'UNZIP case_bundle.zip');
+  assert.equal(first.stateChanged, true);
+  assert.ok(first.unlockedEntryIds.length > 0);
+  const before = structuredClone(room);
+  const second = executeTerminalCommand(room, { role: 'A', playerId: 'player-a' }, 'UNZIP case_bundle.zip');
+  assert.equal(second.stateChanged, false);
+  assert.deepEqual(room, before);
+  assert.throws(() => executeTerminalCommand(room, { role: 'A', playerId: 'player-a' }, 'UNZIP client.zip'), /locked|archive|manifest/i);
 });

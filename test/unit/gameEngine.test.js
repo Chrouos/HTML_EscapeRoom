@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { createRoomState } = require('../../game/createRoomState');
-const { initializeGame, submitAction } = require('../../game/gameEngine');
+const { initializeGame, submitAction, submitTerminalCommand } = require('../../game/gameEngine');
 
 function readyRoom(overrides = {}) {
   const room = createRoomState('123456', Date.now());
@@ -177,4 +177,23 @@ test('submitAction requires a valid player role and both players joined', () => 
     () => submitAction(room, { role: 'C' }, action('identity', 'ORPHEUS-17')),
     error => error.status === 400 && error.code === 'INVALID_PLAYER'
   );
+});
+
+test('submitTerminalCommand uses action IDs for idempotent public hints', () => {
+  const room = readyRoom();
+  const events = [];
+  initializeGame(room, events);
+  const first = submitTerminalCommand(room, { role: 'A', playerId: 'player-a' }, {
+    actionId: 'hint-1', operationId: 'terminal_command', value: 'HINT'
+  }, events);
+  assert.equal(first.stateChanged, true);
+  assert.equal(first.publicResult.command, 'HINT');
+  assert.ok(first.events.some(event => event.id.startsWith('terminal-A-hint-1')));
+  const before = structuredClone(room);
+  const duplicate = submitTerminalCommand(room, { role: 'A', playerId: 'player-a' }, {
+    actionId: 'hint-1', operationId: 'terminal_command', value: 'HINT'
+  }, events);
+  assert.equal(duplicate.stateChanged, false);
+  assert.equal(duplicate.publicResult.duplicate, true);
+  assert.deepEqual(room, before);
 });

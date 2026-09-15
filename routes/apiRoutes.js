@@ -4,7 +4,7 @@ const { stateResponse } = require('../game/safeState');
 const { roomErrors } = require('../game/roomErrors');
 const { parseCookieHeader, roomTokenCookieName } = require('../utils/cookies');
 const { isRoomCode, statusForError, userMessageForError } = require('./roomRoutes');
-const { initializeGame, submitAction, submitOperation } = require('../game/gameEngine');
+const { initializeGame, submitAction, submitOperation, submitTerminalCommand } = require('../game/gameEngine');
 const { appendStoryEvents } = require('../game/storyEngine');
 const { operations } = require('../game/content/operations');
 
@@ -133,6 +133,24 @@ function createApiRoutes(store) {
       const events = [];
       if (typeof request.body.operationId === 'string') {
         const { actionId, operationId, value } = request.body;
+        if (operationId === 'terminal_command') {
+          let result;
+          const room = store.transact(roomCode, draft => {
+            initializeGame(draft, events);
+            result = submitTerminalCommand(draft, player, { actionId, operationId, value }, events);
+          }, {
+            playerId: player.playerId,
+            actionId,
+            events,
+            shouldRecordAction: () => Boolean(result?.stateChanged)
+          });
+          return response.json({ success: true, stateChanged: Boolean(result?.stateChanged),
+            output: result?.output,
+            publicEvents: result?.publicEvents || [],
+            unlockedEntryIds: result?.unlockedEntryIds || [],
+            publicResult: result?.publicResult || { command: 'terminal_command' },
+            ...stateResponse(room, player) });
+        }
         // Keep the pre-manifest semantic operation shim for older clients.
         // Manifest operations are executed by the game engine below.
         if (!operations.some(item => item.operationId === operationId)) {

@@ -161,3 +161,22 @@ test('semantic mainline operations expose the same public progress as legacy ans
   const state = await (await a.fetch(`${server.baseUrl}/api/rooms/${code}/state`)).json();
   assert.deepEqual(state.state.publicProgress.mainProgress, ['main1']);
 });
+
+test('terminal command route accepts authenticated HINT and rejects unsafe UNZIP', async () => {
+  const { a, b, code } = await roomPair();
+  const hint = await action(a, code, {
+    actionId: 'terminal-hint-1', operationId: 'terminal_command', value: 'HINT'
+  });
+  assert.equal(hint.status, 200);
+  assert.equal(hint.body.publicResult.command, 'HINT');
+  assert.match(JSON.stringify(hint.body.state.intercom), /ORPHEUS/);
+  assert.doesNotMatch(JSON.stringify(hint.body), /audience|channel/i);
+  const duplicate = await action(a, code, {
+    actionId: 'terminal-hint-1', operationId: 'terminal_command', value: 'HINT'
+  });
+  assert.equal(duplicate.body.publicResult.duplicate, true);
+  const unsafe = await action(b, code, {
+    actionId: 'terminal-unsafe', operationId: 'terminal_command', value: 'UNZIP ../secret.zip'
+  });
+  assert.equal(unsafe.status, 400);
+});

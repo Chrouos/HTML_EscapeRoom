@@ -5,6 +5,37 @@ const { createWorkstationState } = require('./createRoomState');
 const { refreshPrivateMissions, missionForOperation } = require('./privateEventEngine');
 
 const ROLES = ['A', 'B'];
+const MAX_TERMINAL_TEXT = 1000;
+const MAX_TERMINAL_ARGUMENT = 120;
+
+// Archive contents are authored on the server.  The client may request an
+// archive by name, but it can never provide bytes or choose arbitrary paths.
+// Task 2 can extend this table with richer folder metadata without changing
+// the command contract.
+const ARCHIVE_MANIFESTS = Object.freeze({
+  'case_bundle.zip': Object.freeze(['files.mainline', 'log.original_index_time', 'log.personnel_transfer', 'archive.case_bundle.index']),
+  'incident_bundle.zip': Object.freeze(['audio.original_incident_timestamp', 'doc.a_incident_report', 'doc.b_incident_report', 'archive.incident.raw_notes']),
+  'mirror_backup.zip': Object.freeze(['log.mirror_backup', 'log.token_reissue', 'archive.mirror.checksum'])
+});
+
+const ARCHIVE_CONTENTS = Object.freeze([
+  Object.freeze({ id: 'archive.case_bundle.index', sourceGroup: 'case_bundle', audience: { kind: 'both' }, unlockWhen: { all: [] }, archiveOnly: true, archiveId: 'case_bundle.zip', kind: 'document', text: '封存索引：case_bundle 的最後寫入順序仍可由原始紀錄交叉驗證。' }),
+  Object.freeze({ id: 'archive.incident.raw_notes', sourceGroup: 'incident_bundle', audience: { kind: 'both' }, unlockWhen: { all: [] }, archiveOnly: true, archiveId: 'incident_bundle.zip', kind: 'document', text: '碎片備註：事故音軌與索引時間不是同一個來源。' }),
+  Object.freeze({ id: 'archive.mirror.checksum', sourceGroup: 'mirror_backup', audience: { kind: 'both' }, unlockWhen: { all: [] }, archiveOnly: true, archiveId: 'mirror_backup.zip', kind: 'document', text: '鏡像摘要：checksum 可從備份與安全記錄交叉比對。' })
+]);
+
+function authoredEntries() {
+  return [...terminalEntries, ...ARCHIVE_CONTENTS];
+}
+
+const TERMINAL_HINTS = Object.freeze([
+  'ORPHEUS：先確認目前能看見的檔案索引，再決定要不要打開它。',
+  'ORPHEUS：時間戳記不會自己改變；把不同來源的紀錄放在一起比對。',
+  'ORPHEUS：有些檔案只在正確的工作站出現，別把看不見的內容當成不存在。',
+  'ORPHEUS：如果一份紀錄要求你相信另一份紀錄，先找第三個來源。',
+  'ORPHEUS：目前的路徑仍然可以回頭檢查，先保留你們各自看到的版本。',
+  'ORPHEUS：最後的決定會留下操作痕跡；現在看到的提示不等於命令。'
+]);
 const PRIVATE_OPERATION_ROLES = Object.freeze({
   archive_index: 'A', decline_index_repair: 'A', skip_a1: 'A',
   delete_local_mirror: 'A', share_mirror_first: 'A', decline_mirror_cleanup: 'A', skip_a2: 'A',
@@ -22,6 +53,10 @@ function roleOf(player) {
 
 function assertPlayer(room, player) {
   const role = roleOf(player);
+  if (player && typeof player === 'object'
+    && player.roomCode !== undefined && String(player.roomCode) !== String(room?.roomCode)) {
+    throw Object.assign(new Error('Player identity does not match room'), { code: 'INVALID_PLAYER', status: 409 });
+  }
   const occupant = room.players?.[role];
   if (!occupant || typeof occupant.playerId !== 'string' || !occupant.playerId) {
     throw Object.assign(new Error('Player identity does not match room'), { code: 'INVALID_PLAYER', status: 409 });
@@ -31,6 +66,173 @@ function assertPlayer(room, player) {
     throw Object.assign(new Error('Player identity does not match room'), { code: 'INVALID_PLAYER', status: 409 });
   }
   return role;
+}
+
+function commandError(code, status, message) {
+  return Object.assign(new Error(message), { code, status });
+}
+
+function safeArgument(value, label) {
+  if (typeof value !== 'string' || !value || value.length > MAX_TERMINAL_ARGUMENT
+    || /[\u0000-\u001f\u007f]/.test(value)
+    || value.includes('/') || value.includes('\\') || value.includes('..')
+    || /%2f|%5c|%2e/i.test(value)) {
+    throw commandError('INVALID_COMMAND', 400, `Invalid ${label}`);
+  }
+  return value;
+}
+
+function parseTerminalCommand(value) {
+  if (typeof value !== 'string' || value.length > MAX_TERMINAL_TEXT) {
+    throw commandError('INVALID_COMMAND', 400, 'Invalid terminal command');
+  }
+  const input = value.trim();
+  if (!input) throw commandError('INVALID_COMMAND', 400, 'Invalid terminal command');
+  const match = /^(HELP|HINT|SEARCH|SCAN|UNZIP|SEND)(?:\s+([\s\S]*))?$/i.exec(input);
+  if (!match) throw commandError('INVALID_COMMAND', 400, 'Unknown terminal command');
+  const command = match[1].toUpperCase();
+  const argument = match[2] === undefined ? '' : match[2].trim();
+  if (command === 'HELP' || command === 'HINT') {
+    if (argument) throw commandError('INVALID_COMMAND', 400, `${command} does not take an argument`);
+    return { command, argument: '' };
+  }
+  if (command === 'SEND') {
+    if (!argument || argument.length > MAX_TERMINAL_TEXT || /[\u0000-\u001f\u007f]/.test(argument)) {
+      throw commandError('INVALID_COMMAND', 400, 'Invalid SEND text');
+    }
+    return { command, argument };
+  }
+  if (!argument || /\s/.test(argument)) throw commandError('INVALID_COMMAND', 400, `Invalid terminal command: ${command} requires one argument`);
+  return { command, argument: safeArgument(argument, `${command} target`) };
+}
+
+function visibleEntries(room, role) {
+  const visible = new Set(room.workstation[role].unlockedEntryIds || []);
+  return authoredEntries().filter(entry => visible.has(entry.id));
+}
+
+function entryLabel(entry) {
+  return entry.filename || entry.name || entry.id;
+}
+
+function executeTerminalCommand(room, player, value) {
+  const parsed = parseTerminalCommand(value);
+  const role = assertPlayer(room, player);
+  // Reject locked targets before ensureRoom/refreshWorkstation can backfill
+  // any state, preserving no-mutation semantics for direct callers.
+  const currentVisible = new Set(room.workstation?.[role]?.unlockedEntryIds || []);
+  if (parsed.command === 'SCAN') {
+    const target = authoredEntries().find(entry => entry.id.toLowerCase() === parsed.argument.toLowerCase()
+      || entryLabel(entry).toLowerCase() === parsed.argument.toLowerCase());
+    if (!target || !currentVisible.has(target.id)) throw commandError('ENTRY_LOCKED', 423, 'File is locked or not visible');
+  }
+  if (parsed.command === 'UNZIP') {
+    const archiveId = parsed.argument.toLowerCase();
+    if (!Object.hasOwn(ARCHIVE_MANIFESTS, archiveId)
+      || !ARCHIVE_MANIFESTS[archiveId].some(id => currentVisible.has(id))) {
+      throw commandError('ARCHIVE_LOCKED', 423, 'Archive is locked or not visible');
+    }
+  }
+  ensureRoom(room);
+  refreshWorkstation(room);
+  if (room.ending) {
+    return { stateChanged: false, command: parsed.command, output: 'CONNECTION CLOSED', publicEvents: [], unlockedEntryIds: [] };
+  }
+
+  const visible = visibleEntries(room, role);
+  if (parsed.command === 'HELP') {
+    return {
+      stateChanged: false,
+      command: parsed.command,
+      output: 'HELP\nSEARCH <node>\nSCAN <filename>\nUNZIP <filename>\nHINT\nSEND <text>',
+      publicEvents: [], unlockedEntryIds: []
+    };
+  }
+  if (parsed.command === 'HINT') {
+    const index = Math.min(Math.max(Number(room.chapter || 1) - 1, 0), TERMINAL_HINTS.length - 1);
+    const text = TERMINAL_HINTS[index];
+    return {
+      stateChanged: true,
+      command: parsed.command,
+      output: text,
+      publicEvents: [{ type: 'story', text, audience: { kind: 'both' } }],
+      unlockedEntryIds: []
+    };
+  }
+  if (parsed.command === 'SEND') {
+    const text = parsed.argument.replace(/[<>]/g, '').trim();
+    if (!text) throw commandError('INVALID_COMMAND', 400, 'Invalid SEND text');
+    const eventText = `ORPHEUS：收到線索「${text}」。我會把它放進共同紀錄。`;
+    return {
+      stateChanged: true,
+      command: parsed.command,
+      output: eventText,
+      publicEvents: [{ type: 'story', text: eventText, audience: { kind: 'both' } }],
+      unlockedEntryIds: []
+    };
+  }
+  if (parsed.command === 'SEARCH') {
+    const needle = parsed.argument.toLowerCase();
+    const matches = visible.filter(entry => [entry.id, entryLabel(entry), entry.sourceGroup, entry.text]
+      .some(value => String(value || '').toLowerCase().includes(needle)));
+    return {
+      stateChanged: false,
+      command: parsed.command,
+      output: matches.length
+        ? matches.map(entry => `${entry.id}  ${entryLabel(entry)}`).join('\n')
+        : 'SEARCH: no visible records',
+      publicEvents: [],
+      unlockedEntryIds: []
+    };
+  }
+  if (parsed.command === 'SCAN') {
+    const target = visible.find(entry => entry.id.toLowerCase() === parsed.argument.toLowerCase()
+      || entryLabel(entry).toLowerCase() === parsed.argument.toLowerCase());
+    if (!target) throw commandError('ENTRY_LOCKED', 423, 'File is locked or not visible');
+    return {
+      stateChanged: false,
+      command: parsed.command,
+      output: `${target.id}\n${target.text}`,
+      publicEvents: [],
+      unlockedEntryIds: []
+    };
+  }
+
+  const archiveId = parsed.argument.toLowerCase();
+  if (!Object.hasOwn(ARCHIVE_MANIFESTS, archiveId)) {
+    throw commandError('ARCHIVE_LOCKED', 423, 'Archive is not authored or not available');
+  }
+  const manifest = ARCHIVE_MANIFESTS[archiveId];
+  const manifestEntries = manifest
+    .map(id => authoredEntries().find(entry => entry.id === id))
+    .filter(Boolean);
+  if (!manifestEntries.length || !manifestEntries.some(entry => visible.includes(entry))) {
+    throw commandError('ARCHIVE_LOCKED', 423, 'Archive is locked or not visible');
+  }
+  const ws = room.workstation[role];
+  ws.unzippedArchiveIds ??= [];
+  if (ws.unzippedArchiveIds.includes(archiveId)) {
+    return {
+      stateChanged: false,
+      command: parsed.command,
+      output: 'Archive already expanded',
+      publicEvents: [],
+      unlockedEntryIds: manifestEntries.filter(entry => ws.unlockedEntryIds.includes(entry.id)).map(entry => entry.id)
+    };
+  }
+  const beforeUnlocked = new Set(ws.unlockedEntryIds);
+  ws.unzippedArchiveIds.push(archiveId);
+  refreshWorkstation(room);
+  const unlockedEntryIds = manifestEntries
+    .filter(entry => room.workstation[role].unlockedEntryIds.includes(entry.id) && !beforeUnlocked.has(entry.id))
+    .map(entry => entry.id);
+  return {
+    stateChanged: true,
+    command: parsed.command,
+    output: `Archive expanded: ${parsed.argument}\n${unlockedEntryIds.join('\n')}`,
+    publicEvents: [],
+    unlockedEntryIds
+  };
 }
 
 function ensureRoom(room) {
@@ -97,11 +299,23 @@ function hasPrivateFacts(entry, ws) {
 }
 
 function entryVisible(room, role, entry) {
+  if (entry.archiveOnly && !room.workstation[role].unzippedArchiveIds?.includes(entry.archiveId)) return false;
   if ((entry.id === 'doc.a_incident_report' || entry.id === 'doc.b_incident_report')
     && !room.publicFacts.includes('main1Completed')) return false;
   return audienceAllows(entry, role)
     && evaluatePredicate(entry.unlockWhen || { all: [] }, predicateState(room, role))
     && hasPrivateFacts(entry, room.workstation[role]);
+}
+
+function expandedEntryVisible(room, role, entry, archiveIds) {
+  if (!archiveIds.some(archiveId => Object.hasOwn(ARCHIVE_MANIFESTS, archiveId)
+    && ARCHIVE_MANIFESTS[archiveId].includes(entry.id))) return false;
+  // Extraction can reveal authored records before their ordinary index
+  // predicate, but never crosses audience/private boundaries or the incident
+  // report's chapter gate.
+  if ((entry.id === 'doc.a_incident_report' || entry.id === 'doc.b_incident_report')
+    && !room.publicFacts.includes('main1Completed')) return false;
+  return audienceAllows(entry, role) && hasPrivateFacts(entry, room.workstation[role]);
 }
 
 function operationVisible(room, role, operation) {
@@ -128,7 +342,10 @@ function refreshWorkstation(room) {
   ensureRoom(room);
   for (const role of ROLES) {
     const ws = room.workstation[role];
-    ws.unlockedEntryIds = terminalEntries.filter(entry => entryVisible(room, role, entry)).map(entry => entry.id);
+    ws.unzippedArchiveIds ??= [];
+    const unlocked = authoredEntries().filter(entry => entryVisible(room, role, entry)
+      || expandedEntryVisible(room, role, entry, ws.unzippedArchiveIds)).map(entry => entry.id);
+    ws.unlockedEntryIds = [...new Set(unlocked)];
     const completed = new Set(ws.completedOperations);
     ws.activeOperations = operations
       .filter(operation => operationVisible(room, role, operation)
@@ -163,7 +380,7 @@ function projectWorkstation(room, player) {
   const visible = new Set(ws.unlockedEntryIds);
   const opened = new Set(ws.openedEntryIds);
   const buckets = { files: [], terminal: [], logs: [] };
-  for (const item of terminalEntries) {
+  for (const item of authoredEntries()) {
     if (!visible.has(item.id)) continue;
     buckets[appForEntry(item)].push(displayEntry(item, opened.has(item.id)));
   }
@@ -190,7 +407,7 @@ function openEntry(room, player, entryId) {
   const role = assertPlayer(room, player);
   ensureRoom(room);
   refreshWorkstation(room);
-  const entry = terminalEntries.find(item => item.id === entryId);
+  const entry = authoredEntries().find(item => item.id === entryId);
   if (!entry || !room.workstation[role].unlockedEntryIds.includes(entryId)) {
     throw Object.assign(new Error('Entry is locked or not visible'), { code: 'ENTRY_LOCKED', status: 423 });
   }
@@ -236,7 +453,7 @@ function executeOperation(room, player, operationId, value, options = {}) {
   const ws = room.workstation[role];
   if (operationId === 'open_entry') {
     const entryId = typeof value === 'string' ? value : '';
-    const entry = terminalEntries.find(item => item.id === entryId);
+    const entry = authoredEntries().find(item => item.id === entryId);
     if (!entry || !ws.unlockedEntryIds.includes(entryId)) {
       throw Object.assign(new Error('Entry is locked or not visible'), { code: 'ENTRY_LOCKED', status: 423 });
     }
@@ -275,4 +492,14 @@ function executeOperation(room, player, operationId, value, options = {}) {
   return { stateChanged: true, operationId, value };
 }
 
-module.exports = { ensureRoom, refreshWorkstation, projectWorkstation, openEntry, executeOperation, audienceAllows };
+module.exports = {
+  ensureRoom,
+  refreshWorkstation,
+  projectWorkstation,
+  openEntry,
+  executeOperation,
+  executeTerminalCommand,
+  parseTerminalCommand,
+  assertPlayer,
+  audienceAllows
+};

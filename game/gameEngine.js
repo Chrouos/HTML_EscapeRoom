@@ -5,7 +5,7 @@ const { story } = require('./content/story');
 const { endings } = require('./content/endings');
 const { appendStoryEvents } = require('./storyEngine');
 const { evidenceIds, commitEnding } = require('./endingEngine');
-const { executeOperation, ensureRoom, refreshWorkstation } = require('./terminalEngine');
+const { executeOperation, executeTerminalCommand, assertPlayer, ensureRoom, refreshWorkstation } = require('./terminalEngine');
 const {
   ensurePrivateMissions,
   refreshPrivateMissions,
@@ -237,6 +237,65 @@ function submitOperation(room, player, action, pendingEvents = []) {
   return response;
 }
 
+function submitTerminalCommand(room, player, action, pendingEvents = []) {
+  if (!action || Array.isArray(action)
+    || typeof action.actionId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(action.actionId)
+    || action.operationId !== 'terminal_command'
+    || typeof action.value !== 'string' || action.value.length > 1000) {
+    fail('INVALID_ACTION', 400, 'Invalid terminal command');
+  }
+  const role = typeof player === 'string' ? player : player?.role;
+  if (!['A', 'B'].includes(role)) fail('INVALID_PLAYER', 400, 'Invalid player role');
+  if (!room?.players?.A || !room?.players?.B) fail('ROOM_NOT_READY', 423, 'Room is not ready');
+  if (room.ending) return noOp();
+
+  // Authenticate before touching any room-owned collections.  This keeps
+  // direct engine callers fail-closed without mutating their room snapshot.
+  const identity = typeof player === 'object'
+    ? player
+    : { role, playerId: room.players[role]?.playerId };
+  assertPlayer(room, identity);
+  const playerId = identity.playerId;
+  const key = `${playerId || role}:${action.actionId}`;
+  if (room.terminalActionResults?.[key]) {
+    const duplicate = structuredClone(room.terminalActionResults[key]);
+    duplicate.stateChanged = false;
+    duplicate.publicResult = { ...(duplicate.publicResult || {}), duplicate: true };
+    duplicate.events = [];
+    return duplicate;
+  }
+
+  const result = executeTerminalCommand(room, identity, action.value);
+  room.terminalActionResults ??= {};
+  const generated = (result.publicEvents || []).map((event, index) => ({
+    ...event,
+    id: `terminal-${role}-${action.actionId}-${index}`,
+    type: event.type || 'story'
+  }));
+  const events = appendStoryEvents(room, generated, pendingEvents);
+  // Audience is transport-only metadata.  It remains on the internal event
+  // for projection dispatch, but is never returned to the browser alongside
+  // the terminal output.
+  const publicEvents = events.map(event => {
+    const { audience, ...safeEvent } = event;
+    return safeEvent;
+  });
+  const response = {
+    stateChanged: true,
+    events: pendingEvents,
+    publicEvents,
+    output: result.output,
+    unlockedEntryIds: result.unlockedEntryIds || [],
+    publicResult: {
+      command: result.command,
+      output: result.output,
+      unlockedEntryIds: result.unlockedEntryIds || []
+    }
+  };
+  room.terminalActionResults[key] = structuredClone(response);
+  return response;
+}
+
 function submitAction(room, player, action, pendingEvents = []) {
   if (!action || Array.isArray(action) || !['actionId', 'puzzleId', 'stepId'].every(key =>
     typeof action[key] === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(action[key]))
@@ -318,4 +377,4 @@ function submitAction(room, player, action, pendingEvents = []) {
     nextChapter: room.chapter, hints: [], message: nextStep ? '核對完成，下一步已解鎖' : '紀錄已完成' } };
 }
 
-module.exports = { initializeGame, submitAction, submitOperation };
+module.exports = { initializeGame, submitAction, submitOperation, submitTerminalCommand };
