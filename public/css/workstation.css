@@ -35,12 +35,22 @@
   display: none;
 }
 
+/* Keep the desktop console inside the viewport. The selector and its grid
+   need an explicit shrinkable block size so intrinsic panel content cannot
+   force both monitors taller than the screen. */
+.monitor-selector {
+  min-height: 0;
+  height: calc(100vh - 340px);
+}
+
 .workstation-shell {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: clamp(16px, 2vw, 28px);
   align-items: stretch;
-  max-height: calc(100vh - 150px);
+  height: 100%;
+  max-height: none;
   min-height: 0;
 }
 
@@ -192,6 +202,7 @@
 }
 
 .operations-workspace > .terminal-panel {
+  min-height: 0;
   padding: 22px;
   background: #09191de8;
 }
@@ -277,7 +288,12 @@
 
   .workstation-shell {
     display: block;
+    height: auto;
     max-height: none;
+  }
+
+  .monitor-selector {
+    height: auto;
   }
 
   .monitor-selector:has(#monitor-intercom:checked) .operations-monitor,
