@@ -205,6 +205,11 @@ test.describe('private narrative secrecy and causality', () => {
             // A socket can drop between the status read and this action; in
             // that case the client legitimately falls back to polling/REST.
             if (!String(error?.message || '').includes('Timeout')) throw error;
+            const ownerConnectionState = (await firstPage.locator('[data-connection]').textContent())?.trim();
+            // A timeout is only expected after the action has actually left
+            // the live socket path. If the UI still reports an active link,
+            // the missing frame is a real assertion failure.
+            if (ownerConnectionState === 'LINK ACTIVE' || ownerConnectionState === undefined) throw error;
           }
         }
 
