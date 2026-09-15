@@ -24,4 +24,8 @@
   entries are projected after successful extraction; and API `publicEvents`
   strips internal audience metadata.
 
-Commit: c1adc89 (amended locally with the follow-up fixes below)
+Implementation commit: 1292fd5 (feature changes; this report is amended separately)
+
+Review-fix verification: fresh-room locked `SCAN`/`UNZIP` regression 17/17;
+production action integration 9/9; no audience/channel metadata in the HINT
+response; `__proto__` and `constructor` archive names fail with a safe 423.
