@@ -15,12 +15,17 @@
 ## Verification
 
 - `node --test test/unit/terminalEngine.test.js test/unit/safeState.test.js` — 31/31 passed.
-- `npm test` — 127 unit + 34 integration passed.
+- `npm test` — 129 unit + 34 integration passed.
 - `npm run validate:content` — Narrative content valid.
 - `npx playwright test test/e2e/workstationExploration.spec.js --grep "opened note|terminal entries as|discovered evidence" --workers=1 --trace=off` — 3/3 passed.
 - `git diff --check` — clean.
-- Focused side-investigation/startup/shortcut E2E — 7/7 passed.
+- Focused side-investigation/startup/shortcut E2E — 7/7 passed; full workstation exploration E2E — 19/19 passed.
 
 ## Compatibility tradeoff
 
-The former bottom evidence report is removed from the visible flow. The legacy `[data-sides]` container is no longer mounted, and the side-investigation panel is hidden so discovered records are encountered through Files/NOTES first. Existing side-puzzle APIs and server rules remain unchanged; a later UI pass should expose side-investigation launch actions from the Files note tree if those optional puzzles must stay playable without the legacy panel.
+The former bottom evidence report is removed from the visible flow. The legacy `[data-sides]` container is no longer mounted, and the side-investigation panel is hidden so discovered records are encountered through Files/NOTES first. Existing side-puzzle APIs and server rules remain unchanged; chapter-gated `.case` notes now provide the inspect and current-step submission path without restoring the dashboard-like panel.
+
+## Astra final review
+
+- `PASS` on commit `73a21cb`; fresh A/B blind play passed live note persistence, Files/NOTES investigation launch and submission, hidden legacy panels, locked/future Terminal isolation, lifecycle shortcut filtering, startup note visibility, A/B privacy, and mobile/scroll behavior.
+- P2 follow-ups only: human-readable note labels and a stricter desktop overflow contract.
