@@ -61,3 +61,20 @@
   .status-stage .status-value{margin-top:0;font-size:12px}
   .connection-band{padding-block:6px 10px}
 }
+
+/* Monitor-first chrome: keep the room identity readable, but reclaim the
+   vertical space that used to sit between the identity band and the consoles. */
+@media(min-width:701px){
+  .game-site-header{min-height:52px}
+  .game-site-header .wordmark-main{font-size:20px}
+  .game-site-header .wordmark-sub{font-size:8px;line-height:1.6}
+  .game-room-shell{padding-block:8px 8px;min-height:calc(100vh - 130px)}
+  .game-room-shell .status-bar{min-height:64px;padding:8px 16px;gap:18px}
+  .status-plaque{padding-block:0}
+  .status-room{font-size:22px}
+  .status-timer{min-width:148px;padding-block:0;padding-left:16px}
+  .status-timer .countdown{font-size:27px}
+  .connection-band{padding-block:4px 7px;min-height:24px}
+  .connection-band[data-signal="lost"]{min-height:0;padding-block:3px}
+  .connection-band[data-signal="reconnecting"]{padding-block:3px}
+}

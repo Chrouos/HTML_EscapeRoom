@@ -438,6 +438,14 @@
   }
 }
 
+/* Keep the monitor grid tall after the room header is compacted. This rule
+   lives after the workstation sizing rules so the flex viewport can grow. */
+@media (min-width: 760px) {
+  .game-room-shell {
+    min-height: calc(100vh - 130px);
+  }
+}
+
 /* Diegetic transport readouts: technical recovery details stay out of the UI. */
 .connection-band[data-signal="lost"] {
   color: var(--status-attention);

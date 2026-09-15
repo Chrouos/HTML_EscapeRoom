@@ -77,6 +77,37 @@ test('desktop renders two accessible monitors without horizontal overflow', asyn
   }
 });
 
+test('desktop keeps room chrome compact so monitors dominate the viewport', async ({ browser }) => {
+  const room = await openPairedRoom(browser, { width: 1440, height: 900 }, 'reduce');
+  try {
+    const { player } = room;
+    const metrics = await player.evaluate(() => {
+      const rect = selector => document.querySelector(selector)?.getBoundingClientRect();
+      const header = rect('.game-site-header');
+      const status = rect('.game-room-shell .status-bar');
+      const connection = rect('.game-room-shell .connection-band');
+      const monitors = rect('.game-room-shell .monitor-selector');
+      return {
+        headerHeight: header?.height ?? 0,
+        statusHeight: status?.height ?? 0,
+        connectionHeight: connection?.height ?? 0,
+        monitorTop: monitors?.top ?? 0,
+        monitorHeight: monitors?.height ?? 0,
+        viewportHeight: innerHeight
+      };
+    });
+
+    expect(metrics.headerHeight).toBeLessThanOrEqual(60);
+    expect(metrics.statusHeight).toBeLessThanOrEqual(72);
+    expect(metrics.connectionHeight).toBeLessThanOrEqual(32);
+    expect(metrics.monitorTop).toBeLessThanOrEqual(188);
+    expect(metrics.monitorHeight).toBeGreaterThanOrEqual(metrics.viewportHeight - 245);
+  } finally {
+    await room.playerContext.close();
+    await room.partnerContext.close();
+  }
+});
+
 test('desktop monitor shells share a bounded viewport height and scroll their own contents', async ({ browser }) => {
   const room = await openPairedRoom(browser, { width: 1440, height: 900 }, 'reduce');
   try {
@@ -98,6 +129,7 @@ test('desktop monitor shells share a bounded viewport height and scroll their ow
         contentScrollHeight: content?.scrollHeight ?? 0
       };
     }));
+    console.log('bounded metrics', metrics);
 
     expect(metrics[0].height).toBeGreaterThan(0);
     expect(metrics[1].height).toBeGreaterThan(0);
