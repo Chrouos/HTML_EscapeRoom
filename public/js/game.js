@@ -183,6 +183,7 @@
       if (!response.ok) throw new Error(result.message || 'Operation failed');
       if (liveTransport && result.state) liveTransport.adopt(result);
       else if (result.state) render(result.state, result.countdown);
+      workstation?.appendTerminalResult?.(result.publicResult || result);
     } catch (error) {
       text('[data-feedback]', error.message);
     }
@@ -232,7 +233,7 @@
     transportStatus = status || 'ready';
     const band = root.querySelector('.connection-band');
     const light = root.querySelector('[data-connection-light]') || root.querySelector('.readout-dot');
-    const labels = { lost: 'SIGNAL LOST', reconnecting: 'RECONNECTING', ready: 'LINK ACTIVE' };
+    const labels = { lost: 'LINK RETRYING', reconnecting: 'RECONNECTING', ready: 'LINK ACTIVE' };
     const label = labels[status];
     if (label) connection.textContent = label;
     else if (state) connection.textContent = state.occupancy.ready ? '兩位受試者已連線' : '等待另一位受試者';
@@ -266,7 +267,7 @@
     });
     return liveTransport.start();
   }).catch(error => {
-    connection.textContent = 'SIGNAL LOST';
+    connection.textContent = 'WAITING FOR LINK';
     text('[data-chat-feedback]', error.message);
   });
 })();

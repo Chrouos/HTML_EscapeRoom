@@ -54,9 +54,16 @@ async function mount(page) {
   });
   await page.route('**/api/rooms/*/actions', async route => {
     operationRequest = route.request().postDataJSON();
+    const state = operationRequest.operationId === 'terminal_command' && /^HINT$/i.test(operationRequest.value || '')
+      ? { ...stateFixture, intercom: [{ id: 'hint', type: 'story', text: 'Shared signal: compare the timestamps.' }], workstation: workstationFixture }
+      : stateFixture;
+    const publicResult = operationRequest.operationId === 'terminal_command'
+      ? { command: String(operationRequest.value || '').split(/\s+/)[0].toUpperCase(), output: 'HELP\nSEARCH <node>\nSCAN <filename>\nUNZIP <filename>\nHINT\nSEND <text>' }
+      : { operationId: operationRequest.operationId };
+    const cursor = operationRequest.operationId === 'terminal_command' && /^HINT$/i.test(operationRequest.value || '') ? 2 : 1;
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
-      success: true, stateChanged: false, publicResult: { operationId: operationRequest.operationId },
-      unchanged: false, cursor: 1, state: stateFixture,
+      success: true, stateChanged: false, publicResult,
+      unchanged: false, cursor, state,
       countdown: { status: 'running', remainingMs: 1000 }
     }) });
   });
@@ -88,7 +95,43 @@ test('renders controlled Terminal operations and sends a fresh action id', async
   expect(room.getOperation().operationId).toBe('open_aux');
   expect(room.getOperation().actionId).toMatch(/^[a-zA-Z0-9_-]+$/);
   expect(room.getOperation().actionId).not.toBe(room.getOperation().operationId);
-  await expect(workspace.locator('input')).toHaveCount(0);
+  await expect(workspace.locator('[data-terminal-input]')).toBeVisible();
+  await room.partnerContext.close();
+});
+
+test('accepts a real Terminal command and renders echo plus safe output', async ({ page }) => {
+  const room = await mount(page);
+  const workspace = page.locator('[data-workstation]');
+  await workspace.getByRole('button', { name: 'Terminal', exact: true }).click();
+  const input = workspace.locator('[data-terminal-input]');
+  await expect(input).toBeVisible();
+  await input.fill('HELP');
+  await input.press('Enter');
+  await expect.poll(room.getOperation).toMatchObject({ operationId: 'terminal_command', value: 'HELP' });
+  await expect(workspace.locator('[data-terminal-history]')).toContainText('HELP');
+  await expect(workspace.locator('[data-terminal-output]')).toContainText('SEARCH <node>');
+  await room.partnerContext.close();
+});
+
+test('renders public HINT result in the intercom without audience metadata', async ({ page }) => {
+  const room = await mount(page);
+  const workspace = page.locator('[data-workstation]');
+  await workspace.getByRole('button', { name: 'Terminal', exact: true }).click();
+  await workspace.locator('[data-terminal-input]').fill('HINT');
+  await workspace.locator('[data-terminal-input]').press('Enter');
+  await expect(page.locator('[data-intercom-log]')).toContainText('Shared signal: compare the timestamps.');
+  const serialized = await page.locator('[data-intercom-log]').evaluate(node => node.outerHTML);
+  expect(serialized).not.toMatch(/audience|recipient|broadcast|direct/i);
+  await room.partnerContext.close();
+});
+
+test('keeps the active puzzle shell hidden until the answer file gate opens', async ({ page }) => {
+  const room = await mount(page);
+  await expect(page.locator('[data-puzzle-gate]')).toBeHidden();
+  const gated = structuredClone(workstationFixture);
+  gated.answerGate = { entryId: 'gate', puzzleId: 'main1', open: true };
+  await page.evaluate(fixture => document.querySelector('[data-game-room]').workstation.render(fixture), gated);
+  await expect(page.locator('[data-puzzle-gate]')).toBeVisible();
   await room.partnerContext.close();
 });
 

@@ -20,6 +20,7 @@ export function createWorkstation(root, { onOperation } = {}) {
   let folderPath = [];
   let lastFocusId = '';
   let pendingScroll = 0;
+  const terminalHistory = [];
 
   const id = value => typeof value === 'string' ? value : '';
   const label = value => typeof value === 'string' && value ? value : 'UNTITLED';
@@ -85,6 +86,17 @@ export function createWorkstation(root, { onOperation } = {}) {
       value: typeof operation.value === 'string' ? operation.value : undefined,
       actionId: randomId()
     });
+  }
+
+  function friendlyOperationLabel(operation) {
+    const id = operation?.operationId || '';
+    const labels = {
+      open_aux: 'OPEN AUX',
+      verify_incident_timestamp: 'SCAN incident.log',
+      pair_validate_protocol: 'SEARCH protocol',
+      commit_finale: 'COMMIT FINALE'
+    };
+    return labels[id] || label(operation?.label || operation?.name || id).replace(/_/g, ' ');
   }
 
   function renderApps(container, apps) {
@@ -182,13 +194,57 @@ export function createWorkstation(root, { onOperation } = {}) {
     panel.className = 'workstation-terminal';
     panel.dataset.workstationTerminal = '';
     const heading = document.createElement('h3');
-    heading.textContent = 'TERMINAL';
+    heading.textContent = 'TERMINAL // COMMAND CONSOLE';
     panel.append(heading);
+    const history = document.createElement('div');
+    history.dataset.terminalHistory = '';
+    history.className = 'terminal-history';
+    history.setAttribute('role', 'log');
+    history.setAttribute('aria-live', 'polite');
+    for (const item of terminalHistory) {
+      const line = document.createElement('div');
+      line.className = 'terminal-history-entry';
+      const echo = document.createElement('div');
+      echo.className = 'terminal-echo';
+      echo.textContent = `> ${item.command}`;
+      line.append(echo);
+      if (item.output) {
+        const output = document.createElement('pre');
+        output.dataset.terminalOutput = '';
+        output.textContent = item.output;
+        line.append(output);
+      }
+      history.append(line);
+    }
+    panel.append(history);
     const form = document.createElement('form');
     form.dataset.workstationTerminalForm = '';
+    const labelNode = document.createElement('label');
+    labelNode.textContent = 'ENTER COMMAND';
+    labelNode.htmlFor = `terminal-command-${Date.now()}`;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = labelNode.htmlFor;
+    input.dataset.terminalInput = '';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    input.placeholder = 'HELP, HINT, SEARCH <node> ...';
+    input.maxLength = 1000;
+    const submit = createButton('EXECUTE', { 'data-terminal-submit': '' });
+    submit.type = 'submit';
+    form.append(labelNode, input, submit);
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      const value = input.value.trim();
+      if (!value) return;
+      terminalHistory.push({ command: value, output: '' });
+      render(currentView);
+      invokeOperation({ operationId: 'terminal_command', value });
+      input.value = '';
+    });
     for (const operation of operations.filter(item => item && id(item.operationId)
       && item.locked !== true && item.available !== false)) {
-      const button = createButton(label(operation.label || operation.name || operation.operationId), {
+      const button = createButton(friendlyOperationLabel(operation), {
         'data-terminal-operation': operation.operationId,
         'data-operation-id': operation.operationId
       });
@@ -227,11 +283,13 @@ export function createWorkstation(root, { onOperation } = {}) {
     currentView = next && typeof next === 'object' ? next : {};
     const answerForm = host.closest('[data-operations-workspace]')?.querySelector('[data-action-form]')
       || document.querySelector('[data-action-form]');
+    const puzzleGate = host.closest('[data-operations-workspace]')?.querySelector('[data-puzzle-gate]');
     if (answerForm) {
       const gate = currentView.answerGate;
       const open = gate && gate.open === true;
       answerForm.hidden = !open;
       answerForm.setAttribute('aria-hidden', String(!open));
+      if (puzzleGate) puzzleGate.hidden = !open;
     }
     const apps = appsFor(currentView);
     if (!apps.some(app => app.id === activeApp)) activeApp = apps[0]?.id || 'files';
@@ -307,5 +365,15 @@ export function createWorkstation(root, { onOperation } = {}) {
     }
   });
 
-  return { render, openApp, openEntry, restoreFocus };
+  function appendTerminalResult(result = {}) {
+    const latest = terminalHistory[terminalHistory.length - 1];
+    const output = typeof result.output === 'string' ? result.output : '';
+    const command = typeof result.command === 'string' ? result.command : '';
+    if (!output && !command) return;
+    if (latest && !latest.output) latest.output = output;
+    else terminalHistory.push({ command: command || 'SYSTEM', output });
+    render(currentView);
+  }
+
+  return { render, openApp, openEntry, restoreFocus, appendTerminalResult };
 }
