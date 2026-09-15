@@ -21,6 +21,7 @@ export function createWorkstation(root, { onOperation } = {}) {
   let lastFocusId = '';
   const scrollPositions = new Map();
   const terminalHistory = [];
+  let terminalHistoryIndex = -1;
 
   const id = value => typeof value === 'string' ? value : '';
   const label = value => typeof value === 'string' && value ? value : 'UNTITLED';
@@ -194,8 +195,23 @@ export function createWorkstation(root, { onOperation } = {}) {
     const panel = document.createElement('div');
     panel.className = 'workstation-terminal';
     panel.dataset.workstationTerminal = '';
+    const roleMatch = String(host.closest('[data-game-room]')?.className || '').match(/(?:^|\s)role-([ab])(?:\s|$)/i);
+    const role = (roleMatch?.[1] || 'a').toUpperCase();
+    const prompt = `${role.toLowerCase()}@orpheus:~$`;
+    const readout = document.createElement('div');
+    readout.className = 'terminal-readout';
+    const led = document.createElement('span');
+    led.className = 'terminal-readout-led';
+    led.setAttribute('aria-hidden', 'true');
+    const transport = document.createElement('span');
+    transport.textContent = 'SECURE SHELL // TTY-02';
+    const pathReadout = document.createElement('span');
+    pathReadout.className = 'terminal-readout-path';
+    pathReadout.textContent = '/home/orpheus';
+    readout.append(led, transport, pathReadout);
+    panel.append(readout);
     const heading = document.createElement('h3');
-    heading.textContent = 'TERMINAL // COMMAND CONSOLE';
+    heading.textContent = 'TERMINAL // COMMAND PROMPT';
     panel.append(heading);
     const history = document.createElement('div');
     history.dataset.terminalHistory = '';
@@ -207,11 +223,12 @@ export function createWorkstation(root, { onOperation } = {}) {
       line.className = 'terminal-history-entry';
       const echo = document.createElement('div');
       echo.className = 'terminal-echo';
-      echo.textContent = `> ${item.command}`;
+      echo.textContent = `${prompt} ${item.command}`;
       line.append(echo);
       if (item.output) {
         const output = document.createElement('pre');
         output.dataset.terminalOutput = '';
+        output.className = item.error ? 'terminal-output terminal-output-error' : 'terminal-output';
         output.textContent = item.output;
         line.append(output);
       }
@@ -220,9 +237,11 @@ export function createWorkstation(root, { onOperation } = {}) {
     panel.append(history);
     const form = document.createElement('form');
     form.dataset.workstationTerminalForm = '';
+    form.className = 'terminal-command-form';
     const labelNode = document.createElement('label');
-    labelNode.textContent = 'ENTER COMMAND';
-    labelNode.htmlFor = `terminal-command-${Date.now()}`;
+    labelNode.textContent = 'COMMAND INPUT';
+    labelNode.htmlFor = `terminal-command-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    labelNode.className = 'visually-hidden';
     const input = document.createElement('input');
     input.type = 'text';
     input.id = labelNode.htmlFor;
@@ -230,20 +249,48 @@ export function createWorkstation(root, { onOperation } = {}) {
     input.dataset.workstationId = 'terminal-input';
     input.autocomplete = 'off';
     input.spellcheck = false;
-    input.placeholder = 'HELP, HINT, SEARCH <node> ...';
+    input.placeholder = 'type HELP for available commands';
     input.maxLength = 1000;
-    const submit = createButton('EXECUTE', { 'data-terminal-submit': '' });
+    const promptNode = document.createElement('span');
+    promptNode.className = 'terminal-prompt';
+    promptNode.dataset.terminalPrompt = '';
+    promptNode.textContent = prompt;
+    const submit = createButton('↵', { 'data-terminal-submit': '', 'aria-label': 'Execute command' });
     submit.type = 'submit';
-    form.append(labelNode, input, submit);
+    form.append(labelNode, promptNode, input, submit);
+    input.addEventListener('keydown', event => {
+      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+      if (!terminalHistory.length) return;
+      event.preventDefault();
+      if (event.key === 'ArrowUp') {
+        terminalHistoryIndex = terminalHistoryIndex < 0
+          ? terminalHistory.length - 1 : Math.max(0, terminalHistoryIndex - 1);
+      } else {
+        terminalHistoryIndex = terminalHistoryIndex < 0
+          ? terminalHistory.length : Math.min(terminalHistory.length, terminalHistoryIndex + 1);
+      }
+      input.value = terminalHistoryIndex >= 0 && terminalHistoryIndex < terminalHistory.length
+        ? terminalHistory[terminalHistoryIndex].command : '';
+      input.setSelectionRange(input.value.length, input.value.length);
+    });
     form.addEventListener('submit', event => {
       event.preventDefault();
       const value = input.value.trim();
       if (!value) return;
       terminalHistory.push({ command: value, output: '' });
+      terminalHistoryIndex = -1;
+      lastFocusId = 'terminal-input';
       render(currentView);
       invokeOperation({ operationId: 'terminal_command', value });
-      input.value = '';
     });
+    const shortcuts = document.createElement('details');
+    shortcuts.className = 'terminal-shortcuts';
+    shortcuts.open = true;
+    const summary = document.createElement('summary');
+    summary.textContent = 'SHORTCUTS // AUTHORED OPERATIONS';
+    shortcuts.append(summary);
+    const shortcutList = document.createElement('div');
+    shortcutList.className = 'terminal-shortcut-list';
     for (const operation of operations.filter(item => item && id(item.operationId)
       && item.locked !== true && item.available !== false)) {
       const button = createButton(friendlyOperationLabel(operation), {
@@ -253,9 +300,13 @@ export function createWorkstation(root, { onOperation } = {}) {
       button.dataset.operationId = operation.operationId;
       if (operation.description) button.title = operation.description;
       button.addEventListener('click', () => invokeOperation(operation));
-      form.append(button);
+      shortcutList.append(button);
     }
     panel.append(form);
+    if (shortcutList.children.length) {
+      shortcuts.append(shortcutList);
+      panel.append(shortcuts);
+    }
     container.append(panel);
   }
 
@@ -373,8 +424,13 @@ export function createWorkstation(root, { onOperation } = {}) {
     const output = typeof result.output === 'string' ? result.output : '';
     const command = typeof result.command === 'string' ? result.command : '';
     if (!output && !command) return;
-    if (latest && !latest.output) latest.output = output;
-    else terminalHistory.push({ command: command || 'SYSTEM', output });
+    const error = typeof result.error === 'string' ? result.error : '';
+    if (latest && !latest.output) {
+      latest.output = output || error;
+      latest.error = Boolean(error);
+    }
+    else terminalHistory.push({ command: command || 'SYSTEM', output: output || error, error: Boolean(error) });
+    lastFocusId = 'terminal-input';
     render(currentView);
   }
 

@@ -116,6 +116,23 @@ test('accepts a real Terminal command and renders echo plus safe output', async 
   await room.partnerContext.close();
 });
 
+test('behaves like a command prompt with role prompt and keyboard history', async ({ page }) => {
+  const room = await mount(page);
+  const workspace = page.locator('[data-workstation]');
+  await workspace.getByRole('button', { name: 'Terminal', exact: true }).click();
+  await expect(workspace.locator('[data-terminal-prompt]')).toHaveText('a@orpheus:~$');
+  const input = workspace.locator('[data-terminal-input]');
+  await input.fill('HELP');
+  await input.press('Enter');
+  await expect.poll(room.getOperation).toMatchObject({ operationId: 'terminal_command', value: 'HELP' });
+  await input.press('ArrowUp');
+  await expect(input).toHaveValue('HELP');
+  await input.press('ArrowDown');
+  await expect(input).toHaveValue('');
+  await expect(workspace.locator('[data-terminal-history] .terminal-echo')).toContainText('a@orpheus:~$ HELP');
+  await room.partnerContext.close();
+});
+
 test('renders public HINT result in the intercom without audience metadata', async ({ page }) => {
   const room = await mount(page);
   const workspace = page.locator('[data-workstation]');
