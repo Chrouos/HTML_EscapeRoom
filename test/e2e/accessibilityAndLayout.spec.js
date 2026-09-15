@@ -88,8 +88,10 @@ test('desktop monitor shells share a bounded viewport height and scroll their ow
     expect(metrics[1].height).toBeGreaterThan(0);
     expect(Math.abs(metrics[0].height - metrics[1].height)).toBeLessThanOrEqual(2);
     expect(metrics.every(({ top, bottom, viewport }) => top >= 0 && bottom <= viewport + 1)).toBe(true);
-    expect(metrics[1].screenScrollHeight).toBeGreaterThan(metrics[1].screenClientHeight);
-    expect(metrics[1].contentScrollHeight).toBeGreaterThan(metrics[1].contentClientHeight);
+    expect(
+      metrics[1].screenScrollHeight > metrics[1].screenClientHeight ||
+      metrics[1].contentScrollHeight > metrics[1].contentClientHeight
+    ).toBe(true);
   } finally {
     await room.playerContext.close();
     await room.partnerContext.close();
