@@ -27,3 +27,9 @@
 - Constrained the desktop monitor selector and operations workspace through a finite flex chain (`height: 0` + flex growth, `min-height: 0`, and hidden outer overflow).
 - Made the workstation panel a shrinkable flex column with a definite workstation UI height, allowing `[data-workstation-scroll]` to retain a real scroll range.
 - Kept mobile overrides in the one-pane tab layout; the focused desktop test passed after the fix.
+
+## Reviewer fix: operations panel overlap
+
+- Split the desktop operations workspace into explicit workstation and records columns. The workstation spans the left column while answer/evidence/records panels flow in the right column, preventing pointer-event overlap.
+- Restored a block flow for the mobile operations workspace so the existing one-pane tabs remain unchanged.
+- Focused Playwright checks passed: Files folder exploration (1/1) and desktop full-bleed/scroll retention (1/1), both with `--workers=1 --trace=off`.
