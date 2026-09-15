@@ -68,6 +68,19 @@ test('opening a visible record is role-local and repeated opens are idempotent',
   assert.throws(() => openEntry(room, { role: 'B', playerId: 'player-b' }, 'doc.a_incident_report'), /locked|visible|entry/i);
 });
 
+test('discovered evidence opens as an actor-safe note under Files/NOTES', () => {
+  const room = readyRoom();
+  room.sideEvidence = [{ id: 'timestamp', title: 'Timestamp mismatch', summary: 'Two dates', discovered: true }];
+  const projected = projectWorkstation(room, { role: 'A', playerId: 'player-a' });
+  const note = projected.files.entries.find(item => item.id === 'evidence.timestamp');
+  assert.equal(note.parentId, 'folder.notes');
+  assert.equal(note.text, 'Two dates');
+  const opened = openEntry(room, { role: 'A', playerId: 'player-a' }, 'evidence.timestamp');
+  assert.equal(opened.entry.id, 'evidence.timestamp');
+  assert.ok(room.workstation.A.openedEntryIds.includes('evidence.timestamp'));
+  assert.ok(!room.workstation.B.openedEntryIds.includes('evidence.timestamp'));
+});
+
 test('verify_incident_timestamp requires both reports, records every attempt, and unlocks A-2', () => {
   const room = readyRoom();
   room.workstation.A.roleFacts.push('rapportCount2');

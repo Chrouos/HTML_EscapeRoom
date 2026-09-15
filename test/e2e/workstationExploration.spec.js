@@ -178,6 +178,52 @@ test('keeps the active puzzle shell hidden until the answer file gate opens', as
   await room.partnerContext.close();
 });
 
+test('keeps an opened note visible when a live snapshot refreshes', async ({ page }) => {
+  const room = await mount(page);
+  const workspace = page.locator('[data-workstation]');
+  const opened = structuredClone(workstationFixture);
+  opened.files.entries.push({ id: 'note', name: 'field.note', kind: 'file', parentId: 'root', content: 'first observation' });
+  await page.evaluate(fixture => document.querySelector('[data-game-room]').workstation.render(fixture), opened);
+  await workspace.getByRole('button', { name: 'field.note', exact: true }).click();
+  await expect(workspace.locator('[data-workstation-entry-content]')).toContainText('first observation');
+  const refreshed = structuredClone(opened);
+  refreshed.files.entries.find(entry => entry.id === 'note').content = 'updated observation';
+  refreshed.openedEntryIds = ['note'];
+  await page.evaluate(fixture => document.querySelector('[data-game-room]').workstation.render(fixture), refreshed);
+  await expect(workspace.locator('[data-workstation-entry-content]')).toContainText('updated observation');
+  await room.partnerContext.close();
+});
+
+test('renders terminal entries as openable contextual notes', async ({ page }) => {
+  const room = await mount(page);
+  const workspace = page.locator('[data-workstation]');
+  const fixture = structuredClone(workstationFixture);
+  fixture.terminal.entries = [{ id: 'ai.note', name: 'session.note', kind: 'document', text: 'Keep the signal open.' }];
+  await page.evaluate(f => document.querySelector('[data-game-room]').workstation.render(f), fixture);
+  await workspace.getByRole('button', { name: 'Terminal', exact: true }).click();
+  await expect(workspace.getByRole('button', { name: 'session.note', exact: true })).toBeVisible();
+  await workspace.getByRole('button', { name: 'session.note', exact: true }).click();
+  await expect(workspace.locator('[data-terminal-entry-content]')).toContainText('Keep the signal open.');
+  await expect.poll(room.getOperation).toMatchObject({ operationId: 'open_entry', value: 'ai.note' });
+  await room.partnerContext.close();
+});
+
+test('places discovered evidence in Files notes and hides the bottom report panels', async ({ page }) => {
+  const room = await mount(page);
+  const fixture = structuredClone(stateFixture);
+  fixture.discoveredEvidence = [{ id: 'timestamp', title: 'Timestamp mismatch', summary: 'Two dates' }];
+  fixture.workstation = structuredClone(workstationFixture);
+  fixture.workstation.files.entries.push({ id: 'folder.notes', name: 'NOTES', kind: 'folder', parentId: 'root' });
+  fixture.workstation.files.entries.push({ id: 'evidence.timestamp', name: 'timestamp.note', kind: 'file', parentId: 'folder.notes', content: 'Two dates' });
+  await page.evaluate(f => document.querySelector('[data-game-room]').workstation.render(f), fixture.workstation);
+  const workspace = page.locator('[data-workstation]');
+  await workspace.getByRole('button', { name: 'NOTES', exact: true }).click();
+  await expect(workspace.getByRole('button', { name: 'timestamp.note', exact: true })).toBeVisible();
+  await expect(page.locator('[data-evidence]')).toHaveCount(0);
+  await expect(page.locator('[data-sides]')).toHaveCount(0);
+  await room.partnerContext.close();
+});
+
 test('Backspace and keyboard navigation stay inside the workstation', async ({ page }) => {
   const room = await mount(page);
   const before = page.url();

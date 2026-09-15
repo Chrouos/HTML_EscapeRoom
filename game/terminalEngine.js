@@ -29,6 +29,26 @@ function authoredEntries() {
   return [...terminalEntries, ...ARCHIVE_CONTENTS.filter(entry => !ids.has(entry.id))];
 }
 
+function discoveredEvidenceEntries(room) {
+  const evidence = Array.isArray(room?.sideEvidence) ? room.sideEvidence : [];
+  return evidence.filter(item => item && item.discovered !== false && item.found !== false && item.isDiscovered !== false
+    && typeof item.id === 'string' && item.id).map(item => ({
+    id: `evidence.${item.id}`,
+    sourceEntryId: `evidence.${item.id}`,
+    sourceGroup: 'discovered_evidence',
+    audience: { kind: 'both' },
+    kind: 'document',
+    parentId: 'folder.notes',
+    filename: `${item.id}.note`,
+    text: typeof item.summary === 'string' ? item.summary : typeof item.title === 'string' ? item.title : '',
+    evidenceId: item.id
+  }));
+}
+
+function allEntries(room) {
+  return [...authoredEntries(), ...discoveredEvidenceEntries(room)];
+}
+
 const TERMINAL_HINTS = Object.freeze([
   'ORPHEUS：先確認目前能看見的檔案索引，再決定要不要打開它。',
   'ORPHEUS：時間戳記不會自己改變；把不同來源的紀錄放在一起比對。',
@@ -109,7 +129,7 @@ function parseTerminalCommand(value) {
 
 function visibleEntries(room, role) {
   const visible = new Set(room.workstation[role].unlockedEntryIds || []);
-  return authoredEntries().filter(entry => visible.has(entry.id));
+  return allEntries(room).filter(entry => visible.has(entry.id) || entry.sourceGroup === 'discovered_evidence');
 }
 
 function entryLabel(entry) {
@@ -123,9 +143,11 @@ function executeTerminalCommand(room, player, value) {
   // any state, preserving no-mutation semantics for direct callers.
   const currentVisible = new Set(room.workstation?.[role]?.unlockedEntryIds || []);
   if (parsed.command === 'SCAN') {
-    const target = authoredEntries().find(entry => entry.id.toLowerCase() === parsed.argument.toLowerCase()
+    const target = allEntries(room).find(entry => entry.id.toLowerCase() === parsed.argument.toLowerCase()
       || entryLabel(entry).toLowerCase() === parsed.argument.toLowerCase());
-    if (!target || !currentVisible.has(target.id)) throw commandError('ENTRY_LOCKED', 423, 'File is locked or not visible');
+    if (!target || (!currentVisible.has(target.id) && target.sourceGroup !== 'discovered_evidence')) {
+      throw commandError('ENTRY_LOCKED', 423, 'File is locked or not visible');
+    }
   }
   if (parsed.command === 'UNZIP') {
     const archiveId = parsed.argument.toLowerCase();
@@ -409,10 +431,10 @@ function projectWorkstation(room, player) {
   const opened = new Set(ws.openedEntryIds);
   const buckets = { files: [], terminal: [], logs: [] };
   const archiveIds = new Set(ws.unzippedArchiveIds || []);
-  for (const item of authoredEntries()) {
+  for (const item of allEntries(room)) {
     if (item.archiveOnly && !archiveIds.has(item.archiveId)) continue;
     if (!audienceAllows(item, role)) continue;
-    const unlocked = visible.has(item.id);
+    const unlocked = visible.has(item.id) || item.sourceGroup === 'discovered_evidence';
     if (!unlocked && item.archiveOnly) continue;
     buckets[appForEntry(item)].push(displayEntry(item, opened.has(item.id), !unlocked,
       archiveIds.has(item.archive?.id || item.archiveId)));
@@ -452,8 +474,9 @@ function openEntry(room, player, entryId) {
   const role = assertPlayer(room, player);
   ensureRoom(room);
   refreshWorkstation(room);
-  const entry = authoredEntries().find(item => item.id === entryId);
-  if (!entry || !room.workstation[role].unlockedEntryIds.includes(entryId)) {
+  const entry = allEntries(room).find(item => item.id === entryId);
+  const dynamicEvidence = entry?.sourceGroup === 'discovered_evidence';
+  if (!entry || (!dynamicEvidence && !room.workstation[role].unlockedEntryIds.includes(entryId))) {
     throw Object.assign(new Error('Entry is locked or not visible'), { code: 'ENTRY_LOCKED', status: 423 });
   }
   const ws = room.workstation[role];
@@ -498,8 +521,9 @@ function executeOperation(room, player, operationId, value, options = {}) {
   const ws = room.workstation[role];
   if (operationId === 'open_entry') {
     const entryId = typeof value === 'string' ? value : '';
-    const entry = authoredEntries().find(item => item.id === entryId);
-    if (!entry || !ws.unlockedEntryIds.includes(entryId)) {
+    const entry = allEntries(room).find(item => item.id === entryId);
+    const dynamicEvidence = entry?.sourceGroup === 'discovered_evidence';
+    if (!entry || (!dynamicEvidence && !ws.unlockedEntryIds.includes(entryId))) {
       throw Object.assign(new Error('Entry is locked or not visible'), { code: 'ENTRY_LOCKED', status: 423 });
     }
     if (ws.openedEntryIds.includes(entryId)) return { stateChanged: false, operationId, value };

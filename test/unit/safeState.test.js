@@ -145,6 +145,21 @@ test('safeState keeps locked file metadata while stripping hidden entry content 
   assert.ok(state.workstation.answerGate);
 });
 
+test('safeState projects discovered evidence as safe Files notes', () => {
+  const room = fixtureRoom();
+  room.sideEvidence = [{ id: 'timestamp', title: 'Timestamp mismatch', summary: 'Two dates', discovered: true }];
+  room.workstation.A = {
+    unlockedEntryIds: [], openedEntryIds: [], activeOperations: [], roleFacts: [],
+    actionAttempts: [], completedOperations: [], completedNodes: [], unzippedArchiveIds: []
+  };
+  const state = projectForPlayer(room, { role: 'A', playerId: 'player-a' });
+  const notes = state.workstation.files.entries.filter(entry => entry.parentId === 'folder.notes');
+  assert.equal(notes.length, 1);
+  assert.equal(notes[0].name, 'timestamp.note');
+  assert.equal(notes[0].text, 'Two dates');
+  assert.equal(state.workstation.logs.entries.some(entry => entry.id === 'timestamp'), false);
+});
+
 test('the transitional forPlayer adapter rejects role-only identity input', () => {
   assert.throws(
     () => forPlayer(fixtureRoom(), 'A'),

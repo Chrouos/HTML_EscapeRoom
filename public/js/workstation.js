@@ -51,6 +51,13 @@ export function createWorkstation(root, { onOperation } = {}) {
       && (entry.locked !== true || entry.metadataVisible === true));
   }
 
+  function projectedEntries(view) {
+    const files = filesFor(view);
+    const terminal = Array.isArray(view.terminal?.entries) ? view.terminal.entries : [];
+    const logs = Array.isArray(view.logs?.entries) ? view.logs.entries : [];
+    return [...files, ...terminal, ...logs].filter(entry => entry && id(entry.id));
+  }
+
   function rootIdFor(view, entries) {
     const candidate = id(view.files?.rootId) || id(view.rootId);
     if (candidate && entries.some(entry => entry.id === candidate)) return candidate;
@@ -235,6 +242,38 @@ export function createWorkstation(root, { onOperation } = {}) {
       history.append(line);
     }
     panel.append(history);
+
+    const notes = (Array.isArray(terminal.entries) ? terminal.entries : [])
+      .filter(entry => entry && id(entry.id) && entry.available !== false && entry.visible !== false);
+    if (notes.length) {
+      const notesSection = document.createElement('section');
+      notesSection.className = 'terminal-notes';
+      const notesHeading = document.createElement('h4');
+      notesHeading.textContent = 'CONTEXTUAL NOTES';
+      notesSection.append(notesHeading);
+      const noteList = document.createElement('div');
+      noteList.className = 'terminal-note-list';
+      for (const entry of notes) {
+        const button = createButton(label(entry.name || entry.title || entry.filename || entry.id), {
+          'data-terminal-entry': entry.id,
+          'data-workstation-id': entry.id
+        });
+        button.addEventListener('click', () => openTerminalEntry(entry));
+        noteList.append(button);
+      }
+      notesSection.append(noteList);
+      if (currentView.__openedEntry) {
+        const opened = notes.find(entry => entry.id === currentView.__openedEntry);
+        if (opened) {
+          const content = document.createElement('pre');
+          content.dataset.terminalEntryContent = '';
+          content.textContent = typeof opened.content === 'string' ? opened.content
+            : typeof opened.text === 'string' ? opened.text : '';
+          notesSection.append(content);
+        }
+      }
+      panel.append(notesSection);
+    }
     const form = document.createElement('form');
     form.dataset.workstationTerminalForm = '';
     form.className = 'terminal-command-form';
@@ -333,7 +372,13 @@ export function createWorkstation(root, { onOperation } = {}) {
 
   function render(next = {}) {
     captureViewState();
-    currentView = next && typeof next === 'object' ? next : {};
+    const previousOpened = currentView.__openedEntry;
+    const incoming = next && typeof next === 'object' ? next : {};
+    // Poll/live snapshots do not carry a client navigation cursor. Keep the
+    // note currently open as long as that entry is still in the safe actor
+    // projection, so a state update never ejects the player from a document.
+    currentView = previousOpened && projectedEntries(incoming).some(entry => entry.id === previousOpened)
+      ? { ...incoming, __openedEntry: previousOpened } : incoming;
     const answerForm = host.closest('[data-operations-workspace]')?.querySelector('[data-action-form]')
       || document.querySelector('[data-action-form]');
     const puzzleGate = host.closest('[data-operations-workspace]')?.querySelector('[data-puzzle-gate]');
@@ -391,6 +436,17 @@ export function createWorkstation(root, { onOperation } = {}) {
     // Opening a record is a stateful workstation action. Persist it so
     // server-side mission triggers and role-local openedEntryIds stay in sync
     // across refreshes and the other player's projection remains untouched.
+    if (typeof onOperation === 'function') {
+      onOperation({ operationId: 'open_entry', value: entry.id, actionId: randomId() });
+    }
+  }
+
+  function openTerminalEntry(entry) {
+    if (!entry || !id(entry.id)) return;
+    captureViewState();
+    currentView = { ...currentView, __openedEntry: entry.id };
+    lastFocusId = entry.id;
+    render(currentView);
     if (typeof onOperation === 'function') {
       onOperation({ operationId: 'open_entry', value: entry.id, actionId: randomId() });
     }

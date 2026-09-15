@@ -31,6 +31,7 @@ const terminalEntries = Object.freeze([
   entry('folder.root', 'file_tree', both, '', { kind: 'folder', filename: 'FILES', unlockWhen: { publicFact: 'roomCreated' } }),
   entry('folder.case', 'file_tree', both, '', { kind: 'folder', parentId: 'folder.root', filename: 'CASE FILES', unlockWhen: { publicFact: 'roomCreated' } }),
   entry('folder.archives', 'file_tree', both, '', { kind: 'folder', parentId: 'folder.root', filename: 'ARCHIVES', unlockWhen: { publicFact: 'roomCreated' } }),
+  entry('folder.notes', 'file_tree', both, '', { kind: 'folder', parentId: 'folder.root', filename: 'NOTES', unlockWhen: { publicFact: 'roomCreated' } }),
   entry('folder.private_a', 'file_tree', host, '', { kind: 'folder', parentId: 'folder.root', filename: 'A / PRIVATE', unlockWhen: { publicFact: 'roomCreated' } }),
   entry('folder.private_b', 'file_tree', guest, '', { kind: 'folder', parentId: 'folder.root', filename: 'B / PRIVATE', unlockWhen: { publicFact: 'roomCreated' } }),
   entry('answer.main1', 'answer_gate', both, '回答欄位已封存。先讀取本檔案，再提交目前階段的回應。', { parentId: 'folder.case', filename: 'answer_main1.lock', answerGate: { puzzleId: 'main1' }, unlockWhen: { publicFact: 'roomCreated' } }),
