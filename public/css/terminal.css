@@ -24,3 +24,40 @@
 .connection-band[data-signal="reconnecting"]{border-left:3px solid var(--amber);padding-left:10px;background:linear-gradient(90deg,#27251d,transparent 65%)}
 @media(max-width:700px){.intercom-empty{min-height:108px;padding:16px;font-size:10px}.message::after{top:8px;right:9px;font-size:7px}.message-sender{padding-right:68px}}
 @media(prefers-reduced-motion:reduce){.chat-log{scroll-behavior:auto}}
+
+/* Compact diegetic room header: the monitors remain the primary surface while
+   the room plaque and containment timer read like instruments on a console. */
+.game-site-header{min-height:72px}
+.game-site-header .header-readout{display:none}
+.game-room-shell{padding-block:14px 12px}
+.game-room-shell .status-bar{grid-template-columns:minmax(180px,240px) minmax(0,1fr) auto;gap:24px;min-height:82px;padding:12px 18px;border-radius:2px;background:linear-gradient(110deg,#0f2029,#0c1820 65%,#111d24)}
+.status-plaque{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;align-items:center;column-gap:12px;row-gap:0;align-self:stretch;padding:3px 18px 3px 0;border-right:1px solid var(--line)}
+.status-plaque .status-key{grid-column:1 / -1;margin:0}
+.status-room{font:600 24px/1.2 var(--mono);letter-spacing:.12em;color:var(--cyan)}
+.role-b .status-room{color:var(--amber)}
+.status-role{font:9px/1.4 var(--mono);letter-spacing:.12em;color:var(--muted);align-self:end;padding-bottom:2px}
+.status-stage{min-width:0}
+.status-stage .status-value{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.status-timer{justify-self:end;min-width:160px;padding:4px 0 4px 22px;border-left:1px solid #31505a;text-align:right}
+.status-timer .status-key{white-space:nowrap}
+.status-timer .countdown{font-size:30px;line-height:1.2;text-shadow:0 0 12px #8cd4c944}
+.connection-band{padding-block:7px 12px}
+
+@media(max-width:1000px){
+  .game-room-shell .status-bar{grid-template-columns:minmax(160px,220px) minmax(0,1fr) auto;gap:16px}
+  .status-timer{min-width:142px;padding-left:14px}
+}
+
+@media(max-width:700px){
+  .game-site-header{min-height:66px}
+  .game-room-shell{padding-top:10px}
+  .game-room-shell .status-bar{grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto;gap:9px 12px;min-height:0;padding:10px 12px}
+  .status-plaque{border-right:0;padding:0}
+  .status-room{font-size:20px}
+  .status-role{font-size:8px}
+  .status-timer{min-width:116px;padding:0 0 0 10px}
+  .status-timer .countdown{font-size:21px}
+  .game-room-shell .status-stage{grid-column:1 / -1;display:flex;align-items:baseline;gap:9px;padding-top:7px;border-top:1px solid var(--line)}
+  .status-stage .status-value{margin-top:0;font-size:12px}
+  .connection-band{padding-block:6px 10px}
+}

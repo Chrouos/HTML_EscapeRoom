@@ -43,6 +43,20 @@ test('desktop renders two accessible monitors without horizontal overflow', asyn
 
     await expect(intercom).toBeVisible();
     await expect(operations).toBeVisible();
+    const statusMetrics = await player.locator('.status-bar').evaluate(node => {
+      const rect = node.getBoundingClientRect();
+      const plaque = node.querySelector('.status-plaque')?.getBoundingClientRect();
+      const timer = node.querySelector('.status-timer')?.getBoundingClientRect();
+      return {
+        height: rect.height,
+        plaqueLeft: plaque?.left ?? 0,
+        timerRight: timer?.right ?? 0,
+        viewportRight: innerWidth
+      };
+    });
+    expect(statusMetrics.height).toBeLessThanOrEqual(110);
+    expect(statusMetrics.plaqueLeft).toBeGreaterThanOrEqual(0);
+    expect(statusMetrics.timerRight).toBeLessThanOrEqual(statusMetrics.viewportRight);
     await expect(intercom.getByRole('log')).toHaveCount(1);
     await expect(operations.locator('[data-operations-workspace]')).toHaveCount(1);
     await expect(player.getByRole('radiogroup', { name: 'Monitor selection' })).toBeHidden();
