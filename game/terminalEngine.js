@@ -18,6 +18,33 @@ const ARCHIVE_MANIFESTS = Object.freeze({
   'mirror_backup.zip': Object.freeze(['log.mirror_backup', 'log.token_reissue', 'archive.mirror.checksum'])
 });
 
+const TERMINAL_MUTATIONS = Object.freeze([
+  Object.freeze({
+    command: 'UNLOCK', targetEntryId: 'mutation.a.hidden_audit', roles: Object.freeze(['A']),
+    requires: Object.freeze({ all: [{ publicFact: 'main1Completed' }, { roleFact: 'incidentVerificationAttempted' }] }),
+    effect: Object.freeze({ type: 'unlock', grantPermission: 'a.audit.read' }),
+    success: '權限確認：隱藏稽核備註已掛載。', denied: '權限不足：目前的紀錄還不能確認這份稽核備註。'
+  }),
+  Object.freeze({
+    command: 'DELETE', targetEntryId: 'mutation.a.local_mirror', roles: Object.freeze(['A']),
+    requires: Object.freeze({ publicFact: 'main2Completed' }), requiresPermission: 'a.audit.read',
+    effect: Object.freeze({ type: 'delete' }),
+    success: '本地鏡像已移除；共同檔案未受影響。', denied: '權限不足：這份本地鏡像仍受保護。'
+  }),
+  Object.freeze({
+    command: 'ADD', targetEntryId: 'mutation.b.recovered_note', roles: Object.freeze(['B']),
+    requires: Object.freeze({ all: [{ publicFact: 'main2Completed' }, { roleFact: 'bFlaggedIdentity' }] }),
+    effect: Object.freeze({ type: 'add', grantPermission: 'b.recovery.write' }),
+    success: '恢復備註已加入 B / PRIVATE。', denied: '權限不足：尚未取得恢復備註的寫入權限。'
+  }),
+  Object.freeze({
+    command: 'RESTORE', targetEntryId: 'mutation.a.local_mirror', roles: Object.freeze(['A']),
+    requires: Object.freeze({ publicFact: 'main2Completed' }), requiresPermission: 'a.audit.read',
+    effect: Object.freeze({ type: 'restore' }),
+    success: '本地鏡像已恢復，請重新比對它與共同備份。', denied: '無法恢復：這份鏡像沒有可用的刪除紀錄。'
+  })
+]);
+
 const ARCHIVE_CONTENTS = Object.freeze([
   Object.freeze({ id: 'archive.case_bundle.index', sourceGroup: 'case_bundle', audience: { kind: 'both' }, unlockWhen: { all: [] }, archiveOnly: true, archiveId: 'case_bundle.zip', kind: 'document', text: '封存索引：case_bundle 的最後寫入順序仍可由原始紀錄交叉驗證。' }),
   Object.freeze({ id: 'archive.incident.raw_notes', sourceGroup: 'incident_bundle', audience: { kind: 'both' }, unlockWhen: { all: [] }, archiveOnly: true, archiveId: 'incident_bundle.zip', kind: 'document', text: '碎片備註：事故音軌與索引時間不是同一個來源。' }),
@@ -131,7 +158,7 @@ function parseTerminalCommand(value) {
   }
   const input = value.trim();
   if (!input) throw commandError('INVALID_COMMAND', 400, 'Invalid terminal command');
-  const match = /^(HELP|HINT|SEARCH|SCAN|UNZIP|SEND)(?:\s+([\s\S]*))?$/i.exec(input);
+  const match = /^(HELP|HINT|SEARCH|SCAN|UNZIP|UNLOCK|DELETE|ADD|RESTORE|SEND)(?:\s+([\s\S]*))?$/i.exec(input);
   if (!match) throw commandError('INVALID_COMMAND', 400, 'Unknown terminal command');
   const command = match[1].toUpperCase();
   const argument = match[2] === undefined ? '' : match[2].trim();
@@ -151,16 +178,51 @@ function parseTerminalCommand(value) {
 
 function visibleEntries(room, role) {
   const visible = new Set(room.workstation[role].unlockedEntryIds || []);
-  return allEntries(room).filter(entry => visible.has(entry.id) || entry.sourceGroup === 'discovered_evidence');
+  const deleted = new Set(room.workstation[role].deletedEntryIds || []);
+  return allEntries(room).filter(entry => !deleted.has(entry.id)
+    && (visible.has(entry.id) || entry.sourceGroup === 'discovered_evidence'));
 }
 
 function entryLabel(entry) {
   return entry.filename || entry.name || entry.id;
 }
 
+function mutationFor(room, command, argument) {
+  const normalized = argument.toLowerCase();
+  return TERMINAL_MUTATIONS.find(mutation => mutation.command === command
+    && allEntries(room).some(entry => entry.id === mutation.targetEntryId
+      && (entry.id.toLowerCase() === normalized || entryLabel(entry).toLowerCase() === normalized)));
+}
+
+function mutationError(message) {
+  return commandError('PERMISSION_REQUIRED', 423, message);
+}
+
+function applyTerminalMutation(room, role, mutation, target) {
+  const ws = room.workstation[role];
+  ws.manualUnlockedEntryIds ??= [];
+  ws.deletedEntryIds ??= [];
+  ws.addedEntryIds ??= [];
+  ws.permissions ??= [];
+  ws.appliedMutationIds ??= [];
+  const effect = mutation.effect;
+  if (effect.type === 'unlock' && !ws.manualUnlockedEntryIds.includes(target.id)) ws.manualUnlockedEntryIds.push(target.id);
+  if (effect.type === 'delete' && !ws.deletedEntryIds.includes(target.id)) ws.deletedEntryIds.push(target.id);
+  if (effect.type === 'add' && !ws.addedEntryIds.includes(target.id)) ws.addedEntryIds.push(target.id);
+  if (effect.type === 'restore') ws.deletedEntryIds = ws.deletedEntryIds.filter(id => id !== target.id);
+  if (effect.grantPermission && !ws.permissions.includes(effect.grantPermission)) ws.permissions.push(effect.grantPermission);
+  ws.appliedMutationIds.push(`${mutation.command}:${target.id}`);
+}
+
 function executeTerminalCommand(room, player, value) {
   const parsed = parseTerminalCommand(value);
   const role = assertPlayer(room, player);
+  const mutationCommands = new Set(['UNLOCK', 'DELETE', 'ADD', 'RESTORE']);
+  const mutation = mutationCommands.has(parsed.command)
+    ? mutationFor(room, parsed.command, parsed.argument) : null;
+  if (mutationCommands.has(parsed.command) && !mutation) {
+    throw commandError('ENTRY_LOCKED', 423, 'File is locked or not visible');
+  }
   // Reject locked targets before ensureRoom/refreshWorkstation can backfill
   // any state, preserving no-mutation semantics for direct callers.
   const currentVisible = new Set(room.workstation?.[role]?.unlockedEntryIds || []);
@@ -185,11 +247,41 @@ function executeTerminalCommand(room, player, value) {
   }
 
   const visible = visibleEntries(room, role);
+  if (mutation) {
+    const target = allEntries(room).find(entry => entry.id === mutation.targetEntryId);
+    const ws = room.workstation[role];
+    if (!mutation.roles.includes(role)) throw mutationError(mutation.denied);
+    const mutationId = `${mutation.command}:${target.id}`;
+    if (ws.appliedMutationIds.includes(mutationId)) {
+      return { stateChanged: false, command: parsed.command, output: 'Operation already applied', publicEvents: [], unlockedEntryIds: [] };
+    }
+    if (mutation.requiresPermission && !ws.permissions.includes(mutation.requiresPermission)) {
+      throw mutationError(mutation.denied);
+    }
+    if (!evaluatePredicate(mutation.requires, predicateState(room, role))) {
+      throw mutationError(mutation.denied);
+    }
+    if (mutation.command === 'DELETE' && (!target.deletable || !visible.some(entry => entry.id === target.id))) {
+      throw commandError('ENTRY_LOCKED', 423, 'File is locked or not visible');
+    }
+    if (mutation.command === 'RESTORE' && !ws.deletedEntryIds.includes(target.id)) {
+      throw mutationError(mutation.denied);
+    }
+    applyTerminalMutation(room, role, mutation, target);
+    refreshWorkstation(room);
+    return {
+      stateChanged: true,
+      command: parsed.command,
+      output: mutation.success,
+      publicEvents: [],
+      unlockedEntryIds: room.workstation[role].unlockedEntryIds.filter(id => id === target.id)
+    };
+  }
   if (parsed.command === 'HELP') {
     return {
       stateChanged: false,
       command: parsed.command,
-      output: 'HELP\nSEARCH <node>\nSCAN <filename>\nUNZIP <filename>\nHINT\nSEND <text>',
+      output: 'HELP\nSEARCH <node>\nSCAN <filename>\nUNZIP <filename>\nUNLOCK <filename>\nDELETE <filename>\nADD <filename>\nRESTORE <filename>\nHINT\nSEND <text>',
       publicEvents: [], unlockedEntryIds: []
     };
   }
@@ -344,6 +436,10 @@ function hasPrivateFacts(entry, ws) {
 }
 
 function entryVisible(room, role, entry) {
+  const ws = room.workstation[role];
+  if (entry.mutationOnly && !ws.manualUnlockedEntryIds?.includes(entry.id)
+    && !ws.addedEntryIds?.includes(entry.id)) return false;
+  if (ws.deletedEntryIds?.includes(entry.id)) return false;
   if (entry.archiveOnly && !room.workstation[role].unzippedArchiveIds?.includes(entry.archiveId)) return false;
   if ((entry.id === 'doc.a_incident_report' || entry.id === 'doc.b_incident_report')
     && !room.publicFacts.includes('main1Completed')) return false;
@@ -388,9 +484,17 @@ function refreshWorkstation(room) {
   for (const role of ROLES) {
     const ws = room.workstation[role];
     ws.unzippedArchiveIds ??= [];
+    ws.manualUnlockedEntryIds ??= [];
+    ws.deletedEntryIds ??= [];
+    ws.addedEntryIds ??= [];
+    ws.permissions ??= [];
+    ws.appliedMutationIds ??= [];
     const unlocked = authoredEntries().filter(entry => entryVisible(room, role, entry)
       || expandedEntryVisible(room, role, entry, ws.unzippedArchiveIds)).map(entry => entry.id);
-    ws.unlockedEntryIds = [...new Set(unlocked)];
+    const manual = authoredEntries().filter(entry => !ws.deletedEntryIds.includes(entry.id)
+      && audienceAllows(entry, role)
+      && (ws.manualUnlockedEntryIds.includes(entry.id) || ws.addedEntryIds.includes(entry.id))).map(entry => entry.id);
+    ws.unlockedEntryIds = [...new Set([...unlocked, ...manual])];
     const completed = new Set(ws.completedOperations);
     ws.activeOperations = operations
       .filter(operation => operationVisible(room, role, operation)
@@ -447,6 +551,12 @@ function displayEntry(entry, opened, locked = false, archiveExpanded = false) {
   if (locked) return result;
   result.text = entry.text;
   result.verificationEntries = (entry.verificationEntries || []).map(item => item.entryId);
+  if (entry.imageUrl && opened) {
+    result.imageUrl = entry.imageUrl;
+    result.imageAlt = entry.imageAlt;
+    result.imageCaption = entry.imageCaption;
+    result.imageRole = entry.imageRole;
+  }
   return result;
 }
 
@@ -462,8 +572,10 @@ function projectWorkstation(room, player) {
   for (const item of allEntries(room)) {
     if (item.archiveOnly && !archiveIds.has(item.archiveId)) continue;
     if (!audienceAllows(item, role)) continue;
+    if (ws.deletedEntryIds?.includes(item.id)) continue;
     const app = appForEntry(item);
     const unlocked = visible.has(item.id) || item.sourceGroup === 'discovered_evidence' || item.sourceGroup === 'side_investigation';
+    if (item.mutationOnly && !unlocked) continue;
     if (!unlocked && item.archiveOnly) continue;
     if (!unlocked && app !== 'files') continue;
     buckets[app].push(displayEntry(item, opened.has(item.id), !unlocked,
@@ -496,7 +608,11 @@ function projectWorkstation(room, player) {
     // `open_entry` is a transport-only callback used by Files clicks; it is
     // intentionally not rendered as a generic Terminal button.
     activeOperations: ws.activeOperations.filter(operationId => operationId !== 'open_entry'),
-    roleFacts: [...ws.roleFacts]
+    roleFacts: [...ws.roleFacts],
+    permissions: [...ws.permissions],
+    deletedEntryIds: [...ws.deletedEntryIds],
+    addedEntryIds: [...ws.addedEntryIds],
+    appliedMutationIds: [...ws.appliedMutationIds]
   };
 }
 

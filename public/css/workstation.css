@@ -68,7 +68,7 @@
 
 .workstation-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  grid-template-columns: minmax(220px, .72fr) minmax(0, 1.28fr);
   grid-template-rows: minmax(0, 1fr);
   gap: clamp(16px, 2vw, 28px);
   align-items: stretch;
@@ -234,9 +234,9 @@
   min-height: 0;
   flex: 1 1 auto;
   position: relative;
-  overflow: auto;
-  padding-bottom: 40px;
-  background: #45615866;
+  overflow: hidden;
+  padding-bottom: 0;
+  background: transparent;
 }
 
 .operations-workspace:has(> [data-puzzle-gate]:not([hidden]), > .evidence-panel:not([hidden]), > .side-panel:not([hidden])) {
@@ -249,6 +249,7 @@
   flex-direction: column;
   grid-column: 1;
   grid-row: 1 / span 3;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -406,6 +407,17 @@
 
   .operations-workspace {
     display: block;
+    overflow: visible;
+  }
+
+  .workstation-ui {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .workstation-content {
+    overflow: visible;
   }
 
   .operations-workspace > [data-workstation] {
@@ -455,8 +467,7 @@
 @media (min-width: 760px) {
   .workstation-shell {
     position: relative;
-    background-image: linear-gradient(90deg, transparent 49.85%, #9debd31c 50%, transparent 50.15%);
-    background-size: 100% 100%;
+    background-image: none;
   }
 
   .operations-screen::before {
@@ -467,9 +478,8 @@
     right: 10px;
     left: auto;
     transform: none;
-    padding: 2px 0 2px 8px;
+    padding: 2px 0;
     border: 0;
-    border-left: 1px solid #4f8178;
     background: transparent;
     color: #9debd3;
     font: 8px/1.4 var(--mono);
@@ -479,33 +489,8 @@
     pointer-events: none;
   }
 
-  .operations-workspace::before {
-    content: "";
-    position: absolute;
-    z-index: 0;
-    top: 12px;
-    bottom: 12px;
-    left: 50%;
-    width: 1px;
-    background: linear-gradient(180deg, transparent, #9debd35e 18%, #d5b77254 50%, #9debd35e 82%, transparent);
-    box-shadow: 0 0 12px #9debd326;
-    pointer-events: none;
-  }
-
-  .operations-workspace::after {
-    content: "";
-    position: absolute;
-    z-index: 0;
-    inset: 0;
-    background: radial-gradient(circle at 50% 50%, #9debd30c, transparent 28%);
-    pointer-events: none;
-  }
-
-  /* Leave a real scrollable tail behind the console buffer cue so keyboard
-     and wheel users can discover the lower records even before the first
-     puzzle panel opens. */
   .operations-workspace {
-    padding-bottom: 18px;
+    padding-bottom: 0;
   }
 
   .operations-workspace > * {
@@ -518,36 +503,11 @@
   }
 
   .operations-monitor .workstation-panel {
-    border-right: 1px solid #446d69;
-    box-shadow: inset -12px 0 28px #9debd30b;
+    border-right: 0;
+    box-shadow: none;
     align-self: start;
-    height: auto;
-    min-height: max(100%, 584px);
-  }
-
-  .workstation-startup-note {
-    position: relative;
-    margin-bottom: 14px;
-    padding: 12px 14px 12px 16px;
-    border: 1px solid #315b57;
-    border-left: 3px solid var(--phosphor);
-    background: linear-gradient(110deg, #0e282b, #102027 75%);
-    box-shadow: inset 0 0 18px #9debd30b;
-  }
-
-  .workstation-startup-note::after {
-    content: "READY";
-    position: absolute;
-    top: 10px;
-    right: 12px;
-    color: #6eaaa0;
-    font: 8px var(--mono);
-    letter-spacing: .12em;
-  }
-
-  .workstation-startup-note p {
-    max-width: 34rem;
-    padding-right: 42px;
+    height: 100%;
+    min-height: 0;
   }
 
   .puzzle-panel {
@@ -573,14 +533,6 @@
 
   .operations-workspace > .terminal-panel {
     padding: 18px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .operations-screen::before,
-  .operations-workspace::before,
-  .operations-workspace::after {
-    box-shadow: none;
   }
 }
 
@@ -618,7 +570,9 @@
 .workstation-ui {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  min-height: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
   color: var(--phosphor);
 }
 
@@ -662,6 +616,7 @@
 .workstation-content {
   min-height: 0;
   padding-top: 14px;
+  overflow: hidden;
 }
 
 .workstation-scroll,
@@ -677,6 +632,7 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  overflow: hidden;
   color: #b9dfd5;
   font-family: var(--mono);
 }
@@ -799,7 +755,7 @@
 
 .terminal-history {
   flex: 1 1 auto;
-  min-height: 110px;
+  min-height: 0;
   max-height: none;
   overflow: auto;
   margin: 0 0 12px;
@@ -849,6 +805,7 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
+  flex: 0 0 auto;
   margin-top: 10px;
   padding: 8px 10px;
   border: 1px solid #2f5754;
@@ -1077,32 +1034,6 @@
   line-height: 1.7;
 }
 
-.operations-scroll-cue {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  max-width: calc(100% - 20px);
-  margin: 0;
-  padding: 5px 9px;
-  border: 1px solid #31524f;
-  border-left: 2px solid var(--amber);
-  background: #08181cd9;
-  color: #6f9790;
-  font: 8px/1.4 var(--mono);
-  letter-spacing: .08em;
-  pointer-events: none;
-  opacity: .78;
-}
-
-.operations-scroll-cue-label {
-  color: var(--amber);
-  white-space: nowrap;
-}
-
 @media (max-width: 759px) {
   .game-room-shell {
     width: calc(100% - 32px);
@@ -1146,12 +1077,6 @@
     font-size: 11px;
   }
 
-  .operations-scroll-cue {
-    margin-right: 2px;
-    right: 6px;
-    bottom: 6px;
-    font-size: 7px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1256,6 +1181,17 @@
 
   .operations-workspace {
     display: block;
+    overflow: visible;
+  }
+
+  .workstation-ui {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .workstation-content {
+    overflow: visible;
   }
 
   /* At tablet width a hidden puzzle should not reserve a fake second column
@@ -1268,8 +1204,6 @@
     min-height: 0;
   }
 
-  .operations-workspace::before,
-  .operations-workspace::after,
   .operations-screen::before {
     display: none;
   }
@@ -1291,7 +1225,20 @@
   grid-template-columns: minmax(132px, .42fr) minmax(0, 1fr);
   gap: 10px;
   height: 100%;
-  min-height: 100%;
+  min-height: 0;
+}
+
+.workstation-files-layout.is-reader-focused {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.workstation-files-layout.is-reader-focused [data-workstation-tree] {
+  display: none;
+}
+
+.workstation-files-layout.is-reader-focused .workstation-directory {
+  min-height: 0;
+  height: 100%;
 }
 
 .workstation-file-tree,
@@ -1404,6 +1351,11 @@
   scrollbar-width: thin;
 }
 
+.workstation-directory > h3 {
+  font-size: 17px;
+  line-height: 1.45;
+}
+
 .workstation-breadcrumb {
   overflow: hidden;
   margin: 0 8px 8px;
@@ -1456,6 +1408,9 @@
 }
 
 .workstation-document {
+  display: flex;
+  flex-direction: column;
+  height: calc(100% - 8px);
   min-height: 190px;
   border: 1px solid #315b57;
   border-left: 3px solid var(--phosphor);
@@ -1471,14 +1426,57 @@
   padding: 12px 14px;
   border-bottom: 1px solid #234447;
   color: var(--phosphor);
-  font: 11px/1.5 var(--mono);
+  font: 13px/1.5 var(--mono);
+}
+
+.workstation-document h4 [data-workstation-back] {
+  flex: 0 0 auto;
+  min-width: 32px;
+  min-height: 30px;
+  padding: 3px 8px;
+  border: 1px solid #315b57;
+  background: #0b2024;
+  color: #a7c7c1;
+  font: 14px/1 var(--mono);
+}
+
+.workstation-document-media {
+  margin: 0;
+  padding: 12px 14px 0;
+}
+
+.workstation-document-media img {
+  display: block;
+  width: min(100%, 560px);
+  max-height: 260px;
+  object-fit: cover;
+  border: 1px solid #315b57;
+  filter: saturate(.72) contrast(1.05);
+  opacity: .9;
+}
+
+.workstation-document-media.is-atmosphere img {
+  max-height: 190px;
+  opacity: .72;
+}
+
+.workstation-document-media figcaption {
+  max-width: 560px;
+  padding-top: 6px;
+  color: #789a98;
+  font: 10px/1.55 var(--mono);
 }
 
 .workstation-document [data-workstation-entry-content] {
+  min-height: 0;
+  overflow: auto;
+  padding-block: 18px;
   margin: 0;
   border: 0;
   background: transparent;
   box-shadow: none;
+  font: 15px/1.95 var(--sans);
+  letter-spacing: .01em;
 }
 
 .workstation-document form {
@@ -1507,7 +1505,43 @@
   color: #f4c77c;
 }
 
+@media (min-width: 1000px) {
+  .intercom-monitor {
+    width: 100%;
+    max-width: min(34vw, 460px);
+    justify-self: start;
+  }
+
+  .intercom-monitor .monitor-screen .chat-panel {
+    padding: 14px;
+  }
+
+  .intercom-monitor .panel-heading {
+    gap: 6px 10px;
+    padding-bottom: 12px;
+    margin-bottom: 14px;
+  }
+
+  .intercom-monitor .chat-log {
+    font-size: 11px;
+  }
+}
+
 @media (max-width: 759px) {
+  .operations-workspace {
+    overflow: visible;
+  }
+
+  .workstation-ui {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .workstation-content {
+    overflow: visible;
+  }
+
   .workstation-files-layout {
     grid-template-columns: 1fr;
   }

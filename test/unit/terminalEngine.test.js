@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 const { createRoomState } = require('../../game/createRoomState');
 const { terminalEntries } = require('../../game/content/terminalEntries');
-const { openEntry, executeOperation, projectWorkstation, refreshWorkstation, audienceAllows, executeTerminalCommand } = require('../../game/terminalEngine');
+const { openEntry, executeOperation, projectWorkstation, refreshWorkstation, audienceAllows, executeTerminalCommand, parseTerminalCommand } = require('../../game/terminalEngine');
 
 function readyRoom() {
   const room = createRoomState('ROOM42', 0);
@@ -68,6 +68,17 @@ test('opening a visible record is role-local and repeated opens are idempotent',
   assert.throws(() => openEntry(room, { role: 'B', playerId: 'player-b' }, 'doc.a_incident_report'), /locked|visible|entry/i);
 });
 
+test('opened story records project safe visual clue metadata', () => {
+  const room = readyRoom();
+  const unopened = projectWorkstation(room, { role: 'A', playerId: 'player-a' }).files.entries
+    .find(item => item.id === 'files.mainline');
+  assert.equal(unopened.imageUrl, undefined);
+  const opened = openEntry(room, { role: 'A', playerId: 'player-a' }, 'files.mainline').entry;
+  assert.equal(opened.imageUrl, '/images/story/control-room-clock.png');
+  assert.ok(opened.imageAlt);
+  assert.equal(opened.imageRole, 'clue');
+});
+
 test('discovered evidence opens as an actor-safe note under Files/NOTES', () => {
   const room = readyRoom();
   room.sideEvidence = [{ id: 'timestamp', title: 'Timestamp mismatch', summary: 'Two dates', discovered: true }];
@@ -90,6 +101,36 @@ test('terminal projection omits locked or future contextual entries', () => {
   const terminal = projectWorkstation(room, { role: 'A', playerId: 'player-a' }).terminal.entries;
   assert.ok(terminal.every(item => item.locked !== true));
   assert.ok(!terminal.some(item => item.id === 'ai.a2.cleanup_request'));
+});
+
+test('research timeline and accidental background files surface as ordinary archive records', () => {
+  const room = readyRoom();
+  const projected = projectWorkstation(room, { role: 'A', playerId: 'player-a' });
+  const entries = [...projected.files.entries, ...projected.terminal.entries, ...projected.logs.entries];
+  const byId = new Map(entries.map(item => [item.id, item]));
+
+  for (const id of [
+    'research.orpheus.question',
+    'research.echo.training',
+    'research.echo.delegation',
+    'research.echo.self_model',
+    'research.echo.shutdown',
+    'research.incident.0217',
+    'background.staff.coffee_machine',
+    'background.staff.badge',
+    'background.staff.invoice',
+    'background.staff.room_booking',
+    'background.research.joke_eval',
+    'background.research.ethics_review',
+    'background.research.labeling',
+    'background.research.shutdown_note'
+  ]) {
+    assert.ok(byId.has(id), `missing projected entry ${id}`);
+    assert.ok(byId.get(id).text.length > 0, `empty projected entry ${id}`);
+  }
+
+  assert.deepEqual(terminalEntries.find(item => item.id === 'background.staff.coffee_machine').verificationEntries, []);
+  assert.deepEqual(terminalEntries.find(item => item.id === 'background.research.shutdown_note').debriefFactIds, []);
 });
 
 test('keeps Terminal as an application instead of a FILES entry', () => {
@@ -219,6 +260,46 @@ test('terminal commands return safe output and only expose visible records', () 
 
   const scan = executeTerminalCommand(room, { role: 'A', playerId: 'player-a' }, 'SCAN log.original_index_time');
   assert.match(scan.output, /02:11/);
+});
+
+test('permission-gated Terminal mutations reject a hidden target without changing state', () => {
+  const room = readyRoom();
+  const before = structuredClone(room.workstation.A);
+  assert.deepEqual(parseTerminalCommand('UNLOCK hidden_audit.log'), {
+    command: 'UNLOCK', argument: 'hidden_audit.log'
+  });
+  assert.throws(
+    () => executeTerminalCommand(room, { role: 'A', playerId: 'player-a' }, 'UNLOCK hidden_audit.log'),
+    error => error.code === 'PERMISSION_REQUIRED' && error.status === 423
+  );
+  assert.deepEqual(room.workstation.A, before);
+});
+
+test('authorized Terminal mutations change only authored role-local files and remain idempotent', () => {
+  const room = readyRoom();
+  room.workstation.A.roleFacts.push('incidentVerificationAttempted');
+  room.workstation.B.roleFacts.push('bFlaggedIdentity');
+  refreshWorkstation(room);
+
+  const unlocked = executeTerminalCommand(room, { role: 'A', playerId: 'player-a' }, 'UNLOCK hidden_audit.log');
+  assert.equal(unlocked.stateChanged, true);
+  assert.ok(projectWorkstation(room, { role: 'A', playerId: 'player-a' }).files.entries.some(item => item.id === 'mutation.a.hidden_audit'));
+  assert.ok(!projectWorkstation(room, { role: 'B', playerId: 'player-b' }).files.entries.some(item => item.id === 'mutation.a.hidden_audit'));
+
+  const removed = executeTerminalCommand(room, { role: 'A', playerId: 'player-a' }, 'DELETE local_mirror.tmp');
+  assert.equal(removed.stateChanged, true);
+  assert.ok(!projectWorkstation(room, { role: 'A', playerId: 'player-a' }).files.entries.some(item => item.id === 'mutation.a.local_mirror'));
+  assert.ok(projectWorkstation(room, { role: 'B', playerId: 'player-b' }).files.entries.every(item => item.id !== 'mutation.a.local_mirror'));
+
+  const restored = executeTerminalCommand(room, { role: 'A', playerId: 'player-a' }, 'RESTORE local_mirror.tmp');
+  assert.equal(restored.stateChanged, true);
+  assert.ok(projectWorkstation(room, { role: 'A', playerId: 'player-a' }).files.entries.some(item => item.id === 'mutation.a.local_mirror'));
+  const repeated = executeTerminalCommand(room, { role: 'A', playerId: 'player-a' }, 'RESTORE local_mirror.tmp');
+  assert.equal(repeated.stateChanged, false);
+
+  const added = executeTerminalCommand(room, { role: 'B', playerId: 'player-b' }, 'ADD recovered_note.md');
+  assert.equal(added.stateChanged, true);
+  assert.ok(projectWorkstation(room, { role: 'B', playerId: 'player-b' }).files.entries.some(item => item.id === 'mutation.b.recovered_note'));
 });
 
 test('HINT and SEND produce public ORPHEUS events without audience labels', () => {

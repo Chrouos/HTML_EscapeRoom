@@ -160,6 +160,16 @@ function validateContent(bundle = defaultContent) {
     for (const fallback of entry.mainlineFallbackOperationIds || []) if (!operationIds.has(fallback)) errors.push(`entry ${entry.id} fallback ${fallback} missing`);
     for (const factId of entry.debriefFactIds || []) if (!debrief.some(item => item.factId === factId)) errors.push(`entry ${entry.id} references missing debrief fact ${factId}`);
     for (const { value, path } of allStrings(entry.text || '', `entry ${entry.id}.text`)) if (DELIVERY_LABEL_RE.test(value)) errors.push(`entry ${entry.id} visible copy contains delivery label`);
+    if (entry.imageUrl !== undefined) {
+      if (typeof entry.imageUrl !== 'string' || !/^\/images\/story\/[a-z0-9-]+\.png$/i.test(entry.imageUrl)) {
+        errors.push(`entry ${entry.id} image must reference a local story asset`);
+      }
+      if (typeof entry.imageAlt !== 'string' || !entry.imageAlt.trim()) errors.push(`entry ${entry.id} image requires alternative text`);
+      if (!['clue', 'atmosphere'].includes(entry.imageRole)) errors.push(`entry ${entry.id} image has invalid role`);
+      if (entry.imageCaption !== undefined && typeof entry.imageCaption !== 'string') errors.push(`entry ${entry.id} image caption must be text`);
+    } else if (entry.imageAlt !== undefined || entry.imageCaption !== undefined || entry.imageRole !== undefined) {
+      errors.push(`entry ${entry.id} image metadata requires imageUrl`);
+    }
   }
   for (const item of dialogue) {
     try { validateAudience(item.audience); } catch { errors.push(`dialogue ${item.id} has invalid audience`); }

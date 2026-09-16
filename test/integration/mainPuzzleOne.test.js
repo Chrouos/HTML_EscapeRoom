@@ -229,3 +229,22 @@ test('terminal command route accepts authenticated HINT and rejects unsafe UNZIP
   });
   assert.equal(unsafe.status, 400);
 });
+
+test('Terminal mutation permissions stay private across the production route', async () => {
+  const { a, b, code } = await roomPair();
+  await action(a, code, { actionId: 'mutation-main1', operationId: 'complete_main1' });
+  await action(a, code, { actionId: 'mutation-open-a-report', operationId: 'open_entry', value: 'doc.a_incident_report' });
+  await action(b, code, { actionId: 'mutation-open-b-report', operationId: 'open_entry', value: 'doc.b_incident_report' });
+  const verified = await action(a, code, { actionId: 'mutation-verify-incident', operationId: 'verify_incident_timestamp' });
+  assert.equal(verified.status, 200);
+
+  const unlocked = await action(a, code, {
+    actionId: 'mutation-unlock-audit', operationId: 'terminal_command', value: 'UNLOCK hidden_audit.log'
+  });
+  assert.equal(unlocked.status, 200);
+  assert.match(unlocked.body.publicResult.output, /稽核|掛載/);
+  const aState = await roomState(a, code);
+  const bState = await roomState(b, code);
+  assert.ok(aState.body.state.workstation.files.entries.some(entry => entry.name === 'hidden_audit.log'));
+  assert.doesNotMatch(JSON.stringify(bState.body.state), /hidden_audit\.log|a\.audit\.read/);
+});

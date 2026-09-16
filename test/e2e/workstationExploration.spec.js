@@ -9,7 +9,7 @@ const workstationFixture = {
     entries: [
       { id: 'root', name: 'FILES', kind: 'folder', parentId: null },
       { id: 'briefs', name: 'BRIEFS', kind: 'folder', parentId: 'root' },
-      { id: 'incident', name: 'incident.log', kind: 'file', parentId: 'briefs', content: '02:17 — signal loss' },
+      { id: 'incident', name: 'incident.log', kind: 'file', parentId: 'briefs', content: '02:17 — signal loss', imageUrl: '/images/story/control-room-clock.png', imageAlt: 'Independent clock in the control room.', imageCaption: 'The clock is not corrected by the console.', imageRole: 'clue' },
       { id: 'locked', name: 'blackbox.txt', kind: 'file', parentId: 'root', locked: true, content: 'never send this' }
     ]
   },
@@ -84,9 +84,44 @@ test('explores Files folders and entries without leaking locked names', async ({
   await expect(workspace).not.toContainText('blackbox.txt');
   await workspace.getByRole('button', { name: 'incident.log', exact: true }).click();
   await expect(workspace.locator('[data-workstation-directory] [data-workstation-entry-content]')).toContainText('02:17');
+  await expect(workspace.locator('[data-workstation-files-layout].is-reader-focused')).toHaveCount(1);
+  await expect(workspace.locator('[data-workstation-tree]')).toBeHidden();
+  await expect(workspace.locator('[data-workstation-document]')).toHaveAttribute('data-reader-focused', 'true');
+  await expect(workspace.locator('[data-workstation-document] h4 [data-workstation-back]')).toHaveCount(1);
+  await expect(workspace.locator('[data-workstation-document-media] img')).toHaveAttribute('src', /control-room-clock\.png$/);
   await expect.poll(room.getOperation).toMatchObject({ operationId: 'open_entry', value: 'incident' });
   await workspace.getByRole('button', { name: /back/i }).click();
   await expect(workspace.getByRole('button', { name: 'incident.log', exact: true })).toBeVisible();
+  await room.partnerContext.close();
+});
+
+test('focused reader spends the available height on the document body', async ({ page }) => {
+  const room = await mount(page);
+  const fixture = structuredClone(workstationFixture);
+  fixture.files.entries.find(entry => entry.id === 'incident').content = Array.from({ length: 42 }, (_, index) => `line ${index + 1} — 02:17 signal record`).join('\n\n');
+  await page.evaluate(f => document.querySelector('[data-game-room]').workstation.render(f), fixture);
+  const workspace = page.locator('[data-workstation]');
+  await workspace.getByRole('button', { name: 'BRIEFS', exact: true }).click();
+  await workspace.getByRole('button', { name: 'incident.log', exact: true }).click();
+  const readerBody = workspace.locator('[data-workstation-entry-content]');
+  await expect.poll(async () => readerBody.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
+  await expect.poll(async () => page.locator('.operations-screen').evaluate(node => node.scrollHeight <= node.clientHeight + 1)).toBe(true);
+  await room.partnerContext.close();
+});
+
+test('keeps the root Files folder as a directory and uses a symbol-only back control', async ({ page }) => {
+  const room = await mount(page);
+  const fixture = structuredClone(workstationFixture);
+  fixture.text = 'This startup text belongs to the workstation boot sequence.';
+  await page.evaluate(f => document.querySelector('[data-game-room]').workstation.render(f), fixture);
+  const workspace = page.locator('[data-workstation]');
+
+  await expect(workspace.locator('[data-startup-note]')).toHaveCount(0);
+  await workspace.getByRole('button', { name: 'BRIEFS', exact: true }).click();
+  await workspace.getByRole('button', { name: 'incident.log', exact: true }).click();
+  const back = workspace.getByRole('button', { name: 'Back to folder', exact: true });
+  await expect(back).toHaveText('←');
+  await expect(back).not.toContainText('Back to folder');
   await room.partnerContext.close();
 });
 
@@ -143,6 +178,10 @@ test('shows command suggestions after slash input and fills the existing CLI com
   const suggestions = workspace.locator('[data-terminal-suggestions]');
   await expect(suggestions).toBeVisible();
   await expect(suggestions).toContainText('HELP');
+  await expect(suggestions).toContainText('UNLOCK <filename>');
+  await expect(suggestions).toContainText('DELETE <filename>');
+  await expect(suggestions).toContainText('ADD <filename>');
+  await expect(suggestions).toContainText('RESTORE <filename>');
   await suggestions.getByRole('button', { name: 'HELP', exact: true }).click();
   await expect(input).toHaveValue('HELP');
   await input.fill('/');
@@ -191,6 +230,28 @@ test('accepts a real Terminal command and renders echo plus safe output', async 
   await expect(workspace.locator('[data-terminal-history]')).toContainText('HELP');
   await expect(workspace.locator('[data-terminal-output]')).toContainText('SEARCH <node>');
   await expect(input).toBeFocused();
+  await room.partnerContext.close();
+});
+
+test('keeps Terminal history scrollable while the command input stays visible', async ({ page }) => {
+  const room = await mount(page);
+  const workspace = page.locator('[data-workstation]');
+  await workspace.getByRole('button', { name: 'Terminal', exact: true }).click();
+  const input = workspace.locator('[data-terminal-input]');
+
+  for (let index = 0; index < 12; index += 1) {
+    await input.fill(`HELP ${index}`);
+    await input.press('Enter');
+    await expect.poll(room.getOperation).toMatchObject({ operationId: 'terminal_command' });
+  }
+
+  const history = workspace.locator('[data-terminal-history]');
+  await expect(history).toBeVisible();
+  await expect(input).toBeVisible();
+  await expect.poll(async () => history.evaluate(node => ({
+    overflowY: getComputedStyle(node).overflowY,
+    canScroll: node.scrollHeight > node.clientHeight
+  }))).toEqual({ overflowY: 'auto', canScroll: true });
   await room.partnerContext.close();
 });
 
@@ -349,13 +410,13 @@ test('submits the current side-investigation step from its opened Files note', a
   await room.partnerContext.close();
 });
 
-test('shows the safe startup note inside Files without a clue report heading', async ({ page }) => {
+test('keeps the Files root as a directory without a startup note or clue report heading', async ({ page }) => {
   const room = await mount(page);
   const fixture = structuredClone(workstationFixture);
   fixture.text = 'Check the shared index before touching the archive.';
   await page.evaluate(f => document.querySelector('[data-game-room]').workstation.render(f), fixture);
   const workspace = page.locator('[data-workstation]');
-  await expect(workspace.locator('[data-startup-note]')).toContainText('Check the shared index');
+  await expect(workspace.locator('[data-startup-note]')).toHaveCount(0);
   await expect(workspace).not.toContainText('你的線索');
   await room.partnerContext.close();
 });

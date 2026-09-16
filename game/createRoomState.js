@@ -7,9 +7,11 @@ function createWorkstationState() {
     actionAttempts: [],
     completedOperations: [],
     completedNodes: [],
+    manualUnlockedEntryIds: [],
     deletedEntryIds: [],
     addedEntryIds: [],
-    permissions: []
+    permissions: [],
+    appliedMutationIds: []
   };
 }
 

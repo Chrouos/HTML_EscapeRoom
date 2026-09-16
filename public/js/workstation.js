@@ -252,6 +252,8 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
 
     const filesLayout = document.createElement('div');
     filesLayout.className = 'workstation-files-layout';
+    filesLayout.dataset.workstationFilesLayout = '';
+    if (opened && !isFolder(opened)) filesLayout.classList.add('is-reader-focused');
 
     const treePanel = document.createElement('aside');
     treePanel.className = 'workstation-file-tree';
@@ -325,47 +327,69 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
     heading.textContent = opened && !isFolder(opened) ? entryName(opened) : entryName(folder || { name: 'FILES' });
     directory.append(heading);
 
-    if (folderPath.length > 1 || opened) {
-      const back = createButton(opened ? 'Back to folder' : 'Back', { 'data-workstation-back': '' });
-      back.addEventListener('click', () => {
-        captureViewState();
-        if (opened) {
-          currentView = { ...currentView };
-          delete currentView.__openedEntry;
-          lastFocusId = folderId;
-        } else {
-          expandedFolders.delete(folderId);
-          folderPath.pop();
-          lastFocusId = folderPath[folderPath.length - 1] || '';
-        }
-        render(currentView);
-      });
-      directory.append(back);
-    }
+    const goBack = () => {
+      captureViewState();
+      if (opened) {
+        currentView = { ...currentView };
+        delete currentView.__openedEntry;
+        lastFocusId = folderId;
+      } else {
+        expandedFolders.delete(folderId);
+        folderPath.pop();
+        lastFocusId = folderPath[folderPath.length - 1] || '';
+      }
+      render(currentView);
+    };
 
-    if (!opened && folderId === rootId && typeof view.text === 'string' && view.text.trim()) {
-      const startup = document.createElement('section');
-      startup.dataset.startupNote = '';
-      startup.className = 'workstation-startup-note';
-      const startupLabel = document.createElement('span');
-      startupLabel.textContent = 'STARTUP NOTE // README';
-      const startupText = document.createElement('p');
-      startupText.textContent = view.text;
-      startup.append(startupLabel, startupText);
-      directory.append(startup);
+    if ((folderPath.length > 1 && !opened) || (opened && isFolder(opened))) {
+      const backLabel = opened ? 'Back to folder' : 'Back to parent folder';
+      const back = createButton('←', {
+        'data-workstation-back': '',
+        'aria-label': backLabel,
+        title: backLabel
+      });
+      back.addEventListener('click', goBack);
+      directory.append(back);
     }
 
     if (opened && !isFolder(opened)) {
       const documentPanel = document.createElement('article');
       documentPanel.className = 'workstation-document';
       documentPanel.dataset.workstationDocument = '';
+      documentPanel.dataset.readerFocused = 'true';
       const documentTitle = document.createElement('h4');
       documentTitle.append(entryIcon(opened), document.createTextNode(entryName(opened)));
+      const back = createButton('←', {
+        'data-workstation-back': '',
+        'aria-label': 'Back to folder',
+        title: 'Back to folder'
+      });
+      back.addEventListener('click', goBack);
+      documentTitle.prepend(back);
       const content = document.createElement('pre');
       content.dataset.workstationEntryContent = '';
       content.textContent = typeof opened.content === 'string' ? opened.content
         : typeof opened.text === 'string' ? opened.text : '';
-      documentPanel.append(documentTitle, content);
+      documentPanel.append(documentTitle);
+      if (opened.imageUrl) {
+        const figure = document.createElement('figure');
+        figure.className = `workstation-document-media is-${opened.imageRole === 'atmosphere' ? 'atmosphere' : 'clue'}`;
+        figure.dataset.workstationDocumentMedia = '';
+        const image = document.createElement('img');
+        image.src = opened.imageUrl;
+        image.alt = typeof opened.imageAlt === 'string' ? opened.imageAlt : '';
+        image.loading = 'lazy';
+        image.decoding = 'async';
+        image.addEventListener('error', () => figure.remove());
+        figure.append(image);
+        if (opened.imageCaption) {
+          const caption = document.createElement('figcaption');
+          caption.textContent = opened.imageCaption;
+          figure.append(caption);
+        }
+        documentPanel.append(figure);
+      }
+      documentPanel.append(content);
       if (opened.puzzleId && opened.opened === true && opened.complete !== true && typeof onPuzzleAction === 'function') {
         const puzzleForm = document.createElement('form');
         puzzleForm.dataset.investigationForm = opened.puzzleId;
@@ -384,7 +408,7 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
         documentPanel.append(puzzleForm);
       }
       directory.append(documentPanel);
-    } else if (!view.text && !opened) {
+    } else if (!opened) {
       const empty = document.createElement('p');
       empty.className = 'workstation-directory-empty';
       empty.textContent = '從左側選取文件以開啟完整內容。';
@@ -466,7 +490,11 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
     suggestions.dataset.terminalSuggestions = '';
     suggestions.hidden = true;
     suggestions.setAttribute('role', 'listbox');
-    const suggestionCommands = ['HELP', 'SEARCH <node>', 'SCAN <filename>', 'UNZIP <filename>', 'HINT', 'SEND <text>'];
+    const suggestionCommands = [
+      'HELP', 'SEARCH <node>', 'SCAN <filename>', 'UNZIP <filename>',
+      'UNLOCK <filename>', 'DELETE <filename>', 'ADD <filename>', 'RESTORE <filename>',
+      'HINT', 'SEND <text>'
+    ];
     const suggestionButtons = suggestionCommands.map(command => {
       const suggestion = createButton(command, { 'data-terminal-suggestion': command });
       suggestion.addEventListener('click', () => {
