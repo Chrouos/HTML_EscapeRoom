@@ -90,7 +90,7 @@ test('explores Files folders and entries without leaking locked names', async ({
   await room.partnerContext.close();
 });
 
-test('keeps folders and documents in one ordered tree and opens the answer reader on the right', async ({ page }) => {
+test('keeps folders and documents in one ordered tree and opens the request workspace separately', async ({ page }) => {
   const room = await mount(page);
   const fixture = structuredClone(workstationFixture);
   fixture.files.entries = [
@@ -113,6 +113,8 @@ test('keeps folders and documents in one ordered tree and opens the answer reade
   await expect(workspace.getByRole('button', { name: 'protocol.txt', exact: true })).toBeVisible();
   await workspace.getByRole('button', { name: 'answer.lock', exact: true }).click();
   await expect(workspace.locator('[data-workstation-document]')).toContainText('解鎖密碼已準備');
+  await expect(workspace.locator('[data-workstation-app="request"]')).toBeEnabled();
+  await workspace.locator('[data-workstation-app="request"]').click();
   await expect(workspace.locator('[data-workstation-answer-form]')).toBeVisible();
   await expect(workspace.locator('[data-workstation-answer-form] input[name="value"]')).toBeVisible();
   await room.partnerContext.close();
@@ -477,5 +479,73 @@ test('fills the desktop viewport and preserves workstation scroll on live render
   await page.evaluate(fixture => document.querySelector('[data-game-room]').workstation.render(fixture), longFixture);
   const after = await scroll.evaluate(node => node.scrollTop);
   expect(after).toBeGreaterThanOrEqual(Math.max(0, before - 2));
+  await room.partnerContext.close();
+});
+
+test('lets the workstation fill Monitor 2 while the request bridge is hidden', async ({ page }) => {
+  await page.setViewportSize({ width: 1143, height: 778 });
+  const room = await mount(page);
+  const geometry = await page.locator('[data-operations-workspace]').evaluate(workspace => {
+    const workstation = workspace.querySelector('[data-workstation]');
+    const workspaceRect = workspace.getBoundingClientRect();
+    const workstationRect = workstation.getBoundingClientRect();
+    return {
+      workspaceRight: workspaceRect.right,
+      workstationRight: workstationRect.right,
+      requestHidden: workspace.querySelector('[data-puzzle-gate]')?.hidden === true
+    };
+  });
+
+  expect(geometry.requestHidden).toBe(true);
+  expect(geometry.workspaceRight - geometry.workstationRight).toBeLessThanOrEqual(2);
+  await room.partnerContext.close();
+});
+
+test('keeps long Files labels inside the tree at medium desktop widths', async ({ page }) => {
+  await page.setViewportSize({ width: 1143, height: 778 });
+  const room = await mount(page);
+  const fixture = structuredClone(workstationFixture);
+  fixture.files.entries = [
+    { id: 'root', name: 'FILES', kind: 'folder', parentId: null },
+    { id: 'private', name: 'B / PRIVATE', kind: 'folder', parentId: 'root' },
+    { id: 'roster', name: 'doc.b_experiment_roster', kind: 'file', parentId: 'private', content: 'Roster' },
+    { id: 'checksum', name: 'doc.b_checksum_verification', kind: 'file', parentId: 'private', content: 'Checksum' }
+  ];
+  await page.evaluate(fixtureValue => document.querySelector('[data-game-room]').workstation.render(fixtureValue), fixture);
+  const workspace = page.locator('[data-workstation]');
+  await workspace.getByRole('button', { name: 'B / PRIVATE', exact: true }).click();
+  const metrics = await workspace.locator('[data-workstation-tree]').evaluate(tree => ({
+    clientWidth: tree.clientWidth,
+    scrollWidth: tree.scrollWidth,
+    labels: [...tree.querySelectorAll('.workstation-entry-name')].map(node => ({
+      text: node.textContent,
+      clientWidth: node.clientWidth,
+      overflow: getComputedStyle(node).overflow,
+      textOverflow: getComputedStyle(node).textOverflow,
+      whiteSpace: getComputedStyle(node).whiteSpace
+    }))
+  }));
+
+  expect(metrics.scrollWidth - metrics.clientWidth).toBeLessThanOrEqual(1);
+  expect(metrics.labels.every(label => label.clientWidth > 0
+    && label.overflow === 'hidden'
+    && label.textOverflow === 'ellipsis'
+    && label.whiteSpace === 'nowrap')).toBe(true);
+  await room.partnerContext.close();
+});
+
+test('does not render a full-width divider beneath workstation tabs at medium desktop widths', async ({ page }) => {
+  await page.setViewportSize({ width: 1126, height: 778 });
+  const room = await mount(page);
+  const tabs = page.locator('[data-workstation] .workstation-apps');
+  await expect(tabs).toBeVisible();
+
+  const divider = await tabs.evaluate(node => ({
+    borderBottomStyle: getComputedStyle(node).borderBottomStyle,
+    borderBottomWidth: getComputedStyle(node).borderBottomWidth
+  }));
+
+  expect(divider.borderBottomStyle).toBe('none');
+  expect(divider.borderBottomWidth).toBe('0px');
   await room.partnerContext.close();
 });

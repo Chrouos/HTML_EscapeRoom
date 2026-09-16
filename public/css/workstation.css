@@ -226,7 +226,7 @@
 
 .operations-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(220px, .75fr);
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   grid-auto-rows: auto;
   gap: 1px;
@@ -237,6 +237,10 @@
   overflow: auto;
   padding-bottom: 40px;
   background: #45615866;
+}
+
+.operations-workspace:has(> [data-puzzle-gate]:not([hidden]), > .evidence-panel:not([hidden]), > .side-panel:not([hidden])) {
+  grid-template-columns: minmax(0, 1.25fr) minmax(220px, .75fr);
 }
 
 .operations-workspace > [data-workstation] {
@@ -622,7 +626,6 @@
   display: flex;
   gap: 6px;
   padding: 0 0 14px;
-  border-bottom: 1px solid #31524f;
   position: sticky;
   top: 0;
   z-index: 2;
@@ -1322,6 +1325,7 @@
   display: flex;
   align-items: center;
   width: 100%;
+  min-width: 0;
   min-height: 32px;
   justify-content: flex-start;
   gap: 6px;
@@ -1333,6 +1337,13 @@
   color: #8eb5ac;
   font: 10px/1.4 var(--mono);
   text-align: left;
+}
+
+.workstation-entry-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .workstation-tree-entry:hover:not(:disabled),

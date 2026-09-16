@@ -19,6 +19,34 @@ test('default narrative manifests satisfy the content contract', () => {
   assert.deepEqual(validateContent(content), []);
 });
 
+test('Files narrative entries use readable filenames and carry the story trail', () => {
+  const entries = new Map(content.terminalEntries.map(entry => [entry.id, entry]));
+  const narrativeIds = [
+    'files.mainline',
+    'log.original_index_time',
+    'log.personnel_transfer',
+    'audio.original_incident_timestamp',
+    'doc.a_assignment_appendix',
+    'doc.b_experiment_roster',
+    'doc.a_incident_report',
+    'doc.b_incident_report',
+    'doc.a_solo_protocol',
+    'doc.b_solo_protocol'
+  ];
+
+  for (const id of narrativeIds) {
+    const entry = entries.get(id);
+    assert.ok(entry, `missing narrative entry ${id}`);
+    assert.match(entry.filename || '', /\.(md|log|txt|transcript)$/i, `${id} needs a readable filename`);
+    assert.ok(entry.text.length >= 70, `${id} needs authored story content`);
+  }
+
+  assert.match(entries.get('files.mainline').text, /ORPHEUS|研究設施/i);
+  assert.match(entries.get('log.original_index_time').text, /02:17|事故|索引/i);
+  assert.match(entries.get('doc.b_experiment_roster').text, /受試者|身份|實驗/i);
+  assert.match(entries.get('doc.a_solo_protocol').text, /出口|覆核|簽章/i);
+});
+
 test('rejects duplicate content IDs', () => {
   const terminalEntries = [...content.terminalEntries, { ...content.terminalEntries[0] }];
   assert.match(errorsFor({ terminalEntries }).join('\n'), /duplicate.*id/i);
