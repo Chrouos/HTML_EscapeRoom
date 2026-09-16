@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 
 const { validateContent, assertValidContent } = require('../../game/content/validateContent');
 const { content, evaluatePredicate } = require('../../game/content/contentSchema');
+const { mainPuzzles } = require('../../game/content/mainPuzzles');
+const { sidePuzzles } = require('../../game/content/sidePuzzles');
 
 function cloneBundle(overrides = {}) {
   return {
@@ -17,6 +19,23 @@ function errorsFor(overrides) {
 
 test('default narrative manifests satisfy the content contract', () => {
   assert.deepEqual(validateContent(content), []);
+});
+
+test('graduated puzzle hints never print a canonical answer', () => {
+  for (const puzzle of [...Object.values(mainPuzzles), ...Object.values(sidePuzzles)]) {
+    for (const step of Object.values(puzzle.steps)) {
+      const answers = step.acceptedAnswers || (step.answer ? [step.answer] : []);
+      for (const hint of step.hints || []) {
+        for (const answer of answers) {
+          assert.doesNotMatch(
+            hint.replace(/\s+/g, '').toLowerCase(),
+            new RegExp(String(answer).replace(/\s+/g, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&').toLowerCase()),
+            `${puzzle.puzzleId}:${step.stepId} hint must stay directional`
+          );
+        }
+      }
+    }
+  }
 });
 
 test('Files narrative entries use readable filenames and carry the story trail', () => {
@@ -45,6 +64,14 @@ test('Files narrative entries use readable filenames and carry the story trail',
   assert.match(entries.get('log.original_index_time').text, /02:17|事故|索引/i);
   assert.match(entries.get('doc.b_experiment_roster').text, /受試者|身份|實驗/i);
   assert.match(entries.get('doc.a_solo_protocol').text, /出口|覆核|簽章/i);
+});
+
+test('background files remain valid without evidence links', () => {
+  const background = content.terminalEntries.filter(entry => entry.narrativeRole === 'background');
+  assert.ok(background.length >= 8);
+  assert.deepEqual(validateContent(content), []);
+  assert.ok(background.every(entry => entry.verificationEntries.length === 0));
+  assert.ok(background.every(entry => entry.debriefFactIds.length === 0));
 });
 
 test('rejects duplicate content IDs', () => {

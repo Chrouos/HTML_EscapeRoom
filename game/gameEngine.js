@@ -23,9 +23,15 @@ function prepare(room, puzzle) {
   room.completedSteps[puzzle.puzzleId] ??= [];
   room.attempts[puzzle.puzzleId] ??= {};
   room.hints[puzzle.puzzleId] ??= {};
+  room.hintsByRole ??= { A: {}, B: {} };
+  for (const role of ['A', 'B']) {
+    room.hintsByRole[role] ??= {};
+    room.hintsByRole[role][puzzle.puzzleId] ??= {};
+  }
   for (const id of Object.keys(puzzle.steps)) {
     room.attempts[puzzle.puzzleId][id] ??= 0;
     room.hints[puzzle.puzzleId][id] ??= [];
+    for (const role of ['A', 'B']) room.hintsByRole[role][puzzle.puzzleId][id] ??= [];
   }
 }
 
@@ -104,6 +110,7 @@ function initializeGame(room, pendingEvents = []) {
   room.sideEvidence ??= [];
   room.attempts ??= {};
   room.hints ??= {};
+  room.hintsByRole ??= { A: {}, B: {} };
   ensureRoom(room);
   // Room creation and joins enqueue the opening ORPHEUS cadence before the
   // second actor is present. Flush it only once both authenticated actors can
@@ -126,6 +133,8 @@ function initializeGame(room, pendingEvents = []) {
       room.publicProgress = progress(room, puzzle, stepId);
     }
     appendStoryEvents(room, story[puzzle.puzzleId]?.initial || [], pendingEvents);
+    const navigationHint = story[puzzle.puzzleId]?.navigationHints?.[stepId];
+    if (navigationHint) appendStoryEvents(room, [navigationHint], pendingEvents);
   } else {
     room.publicProgress = { chapter: room.chapter, mainProgress: [...room.mainProgress] };
     room.privateClues ??= { A: { text: '' }, B: { text: '' } };
@@ -345,9 +354,10 @@ function submitAction(room, player, action, pendingEvents = []) {
     const attempt = ++room.attempts[action.puzzleId][stepId];
     const hints = (step.hints || []).filter((_, index) => attempt >= step.hintThresholds[index]);
     room.hints[action.puzzleId][stepId] = hints;
+    room.hintsByRole[role][action.puzzleId][stepId] = hints;
     const events = appendStoryEvents(room, [{ id: action.puzzleId + '-' + stepId + '-error-' + attempt, type: 'error',
       text: hints.length ? 'ECHO：資料不符。' + hints.at(-1) : 'ECHO：資料不符。請再次比對兩人的紀錄。',
-      audience: { kind: 'both' } }], pendingEvents);
+      audience: { kind: 'role', role: role === 'A' ? 'host' : 'guest' } }], pendingEvents);
     initializeGame(room, pendingEvents);
     return { stateChanged: true, events, publicResult: { correct: false, attempt, hints } };
   }

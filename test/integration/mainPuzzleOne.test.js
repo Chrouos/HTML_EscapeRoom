@@ -32,6 +32,11 @@ async function action(jar, code, body) {
   return { status: response.status, body: await response.json() };
 }
 
+async function roomState(jar, code) {
+  const response = await jar.fetch(`${server.baseUrl}/api/rooms/${code}/state`);
+  return { status: response.status, body: await response.json() };
+}
+
 test('action API rejects missing identity and malformed actions without mutation', async () => {
   const { a, code } = await roomPair();
   const before = app.locals.roomStore.getRoom(code);
@@ -129,6 +134,34 @@ test('two roles solve Main 1; retries and completed steps cannot advance twice',
   assert.equal(again.body.stateChanged, false);
   assert.equal(again.body.cursor, done.body.cursor);
   assert.deepEqual(again.body.state.intercom, done.body.state.intercom);
+});
+
+test('ECHO gives a folder direction at opening and observes the next step', async () => {
+  const { a, code } = await roomPair();
+  const opening = await (await a.fetch(`${server.baseUrl}/api/rooms/${code}/state`)).json();
+  const openingTexts = opening.state.intercom.map(message => message.text);
+  assert.ok(openingTexts.some(text => text.includes('FILES') && text.includes('CASE FILES')));
+
+  const identity = await action(a, code, {
+    actionId: 'echo-navigation-identity', puzzleId: 'main1', stepId: 'identity', value: 'ORPHEUS-17'
+  });
+  assert.equal(identity.status, 200);
+  assert.equal(identity.body.state.publicProgress.stepId, 'startup');
+  assert.ok(identity.body.state.intercom.some(message =>
+    message.text.includes('A / PRIVATE') && message.text.includes('B / PRIVATE')));
+});
+
+test('private answer failures stay on the submitting player', async () => {
+  const { a, b, code } = await roomPair();
+  const failed = await action(a, code, {
+    actionId: 'private-failure-a', puzzleId: 'main1', stepId: 'identity', value: 'wrong'
+  });
+  assert.equal(failed.status, 200);
+  assert.ok(failed.body.state.intercom.some(message => message.text.includes('資料不符')));
+
+  const bState = await roomState(b, code);
+  assert.equal(bState.status, 200);
+  assert.doesNotMatch(JSON.stringify(bState.body.state.intercom), /資料不符/);
 });
 
 test('a public action advances both actor cursors and returns no audience metadata', async () => {

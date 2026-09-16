@@ -6,7 +6,10 @@ function createWorkstationState() {
     roleFacts: [],
     actionAttempts: [],
     completedOperations: [],
-    completedNodes: []
+    completedNodes: [],
+    deletedEntryIds: [],
+    addedEntryIds: [],
+    permissions: []
   };
 }
 
@@ -38,6 +41,7 @@ function createRoomState(roomCode, createdAt) {
     sideEvidence: [],
     attempts: {},
     hints: {},
+    hintsByRole: { A: {}, B: {} },
     messages: [],
     pendingChoices: {},
     countdownStartedAt: null,

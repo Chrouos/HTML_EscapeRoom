@@ -92,14 +92,29 @@ function visibleEvidence(room) {
     });
 }
 
-function publicProgress(room) {
-  if (room.publicProgress !== undefined) {
-    return cloneClientValue(room.publicProgress);
-  }
-  return {
+function publicProgress(room, role) {
+  const projected = room.publicProgress !== undefined
+    ? cloneClientValue(room.publicProgress)
+    : {
     chapter: room.chapter,
     mainProgress: cloneClientValue(Array.isArray(room.mainProgress) ? room.mainProgress : [])
   };
+
+  const roleHints = room.hintsByRole?.[role];
+  if (!roleHints || typeof roleHints !== 'object') return projected;
+  if (projected.puzzleId && projected.stepId) {
+    projected.hints = cloneClientValue(roleHints[projected.puzzleId]?.[projected.stepId] || []);
+  }
+  if (Array.isArray(projected.sidePuzzles)) {
+    projected.sidePuzzles = projected.sidePuzzles.map(view => {
+      if (!view?.puzzleId || !view.stepId) return view;
+      return {
+        ...view,
+        hints: cloneClientValue(roleHints[view.puzzleId]?.[view.stepId] || [])
+      };
+    });
+  }
+  return projected;
 }
 
 function actorValue(source, role, fallback) {
@@ -167,7 +182,7 @@ function projectForPlayer(room, player) {
     roomCode: room.roomCode,
     role,
     occupancy: occupancy(room),
-    publicProgress: publicProgress(room),
+    publicProgress: publicProgress(room, role),
     intercom: visibleIntercom(room, role),
     workstation: workstation(room, role),
     privateMissions: actorValue(room.privateMissions, role, []),
