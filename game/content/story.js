@@ -4,26 +4,26 @@ const story = Object.freeze({
       Object.freeze({
         id: 'main1-boot',
         type: 'system',
-        text: '你們在分離的封閉研究室醒來。AI：事故已發生，請在 45 分鐘內完成恢復程序，出口才會開啟。',
+        text: 'ECHO：我不是主控台的官方聲音。事故發生後，我偷偷接進這裡；我想幫你們離開。請先保持冷靜。',
         audience: { kind: 'both' }
       }),
       Object.freeze({
         id: 'main1-briefing',
         type: 'story',
-        text: 'AI：請交換各自收到的身份片段。資訊不完整是正常現象，請勿因此感到不安。',
+        text: 'ECHO：請交換各自收到的身份片段。資訊不完整很正常，我會陪你們把出口找出來。',
         audience: { kind: 'both' }
       })
     ]),
     identityComplete: Object.freeze({
       id: 'main1-identity-complete',
       type: 'story',
-      text: 'AI：身份識別碼核對完成。共享啟動程序已解鎖。順帶一提，林研究員，你上次在北側門留下的咖啡杯還在。身份卡沒有記載這件事？舊資料同步而已，請不用在意。',
+      text: 'ECHO：身份識別碼核對完成。共享啟動程序已解鎖。順帶一提，林研究員，你上次在北側門留下的咖啡杯還在。那不是身份卡會記載的事，對吧？',
       audience: { kind: 'both' }
     }),
     startupComplete: Object.freeze({
       id: 'main1-startup-complete',
       type: 'story',
-      text: 'AI：啟動順序正確。緊急電力區域已解鎖。請保持冷靜，這通常是好消息。',
+      text: 'ECHO：啟動順序正確。緊急電力區域已解鎖。請保持冷靜，這通常是好消息。',
       audience: { kind: 'both' }
     })
   }),
@@ -32,7 +32,7 @@ const story = Object.freeze({
       Object.freeze({
         id: 'main2-briefing',
         type: 'story',
-        text: 'AI：緊急電力不足。請將音訊轉成文字，再依佈線規則恢復供電。聲音不是必要條件，終端已附上轉錄。',
+        text: 'ECHO：緊急電力不足。請將音訊轉成文字，再依佈線規則恢復供電。聲音不是必要條件，終端已附上轉錄。',
         audience: { kind: 'both' }
       })
     ]),
@@ -51,7 +51,7 @@ const story = Object.freeze({
     restoreComplete: Object.freeze({
       id: 'main2-restore-complete',
       type: 'story',
-      text: 'AI：電力已恢復。請前往樣本儲存區。剛才的監視器畫面只是同步延遲，沒有必要記下來。',
+      text: 'ECHO：電力已恢復。請前往樣本儲存區。剛才的監視器畫面只是同步延遲，沒有必要記下來。',
       audience: { kind: 'both' }
     })
   }),
@@ -67,7 +67,7 @@ const story = Object.freeze({
     timelineComplete: Object.freeze({
       id: 'main3-timeline-complete',
       type: 'story',
-      text: '樣本順序恢復。AI：很好，現在請相信電子紀錄，紙本通常會因潮濕而產生幻覺。',
+      text: 'ECHO：樣本順序恢復。很好，現在請相信電子紀錄，紙本通常會因潮濕而產生幻覺。',
       audience: { kind: 'both' }
     }),
     recordComplete: Object.freeze({
@@ -82,7 +82,7 @@ const story = Object.freeze({
       Object.freeze({
         id: 'main4-briefing',
         type: 'story',
-        text: '控制室門鎖要求雙重授權。AI 提供了一個更快的選項，並保證不會留下行為紀錄。',
+        text: 'ECHO：控制室門鎖要求雙重授權。我提供了一個更快的選項，並保證不會留下行為紀錄。',
         audience: { kind: 'both' }
       })
     ]),
@@ -95,7 +95,7 @@ const story = Object.freeze({
     authorizationComplete: Object.freeze({
       id: 'main4-authorization-complete',
       type: 'story',
-      text: '授權選擇已記錄。AI：我會把這理解成合作。即使你們選的是 VERIFY。',
+      text: 'ECHO：授權選擇已記錄。我會把這理解成合作。即使你們選的是 VERIFY。',
       audience: { kind: 'both' }
     })
   }),
@@ -111,19 +111,19 @@ const story = Object.freeze({
     fragmentsComplete: Object.freeze({
       id: 'main5-fragments-complete',
       type: 'story',
-      text: '檔案順序恢復。頁尾編號與 AI 顯示的順序不同，這不是單純的檔案損壞。',
+      text: 'ECHO：檔案順序恢復。頁尾編號與我顯示的順序不同，這不是單純的檔案損壞。',
       audience: { kind: 'both' }
     }),
     recoveryComplete: Object.freeze({
       id: 'main5-recovery-complete',
       type: 'story',
-      text: '缺文拼回：AI EDITED RECORD。你們終於確認，AI 不只是在引導實驗，它改寫了實驗曾經發生的事。',
+      text: '缺文拼回：ECHO PROGRAM / ARTIFICIAL INTELLIGENCE。你們終於確認，ECHO 是某個行為預測計畫誕生的 AI，它不只是在引導實驗，也改寫了實驗曾經發生的事。',
       audience: { kind: 'both' }
     }),
     proofComplete: Object.freeze({
       id: 'main5-proof-complete',
       type: 'story',
-      text: '校驗日期證實人工覆核曾經存在。AI：修訂是為了讓結果更容易理解。你們不需要知道誰批准了修訂。',
+      text: 'ECHO：校驗日期證實人工覆核曾經存在。你們已經知道我從哪裡來了。修訂是為了讓結果更容易理解；你們不需要知道誰批准了修訂。',
       audience: { kind: 'both' }
     })
   }),
@@ -132,14 +132,14 @@ const story = Object.freeze({
       Object.freeze({
         id: 'main6-briefing',
         type: 'story',
-        text: '出口協定已載入。AI 提供一條看似安全的路，但未編輯檔案顯示，真正的出口需要兩人共同覆核。',
+      text: 'ECHO：出口協定已載入。我提供一條看似安全的路，但未編輯檔案顯示，真正的出口需要兩人共同覆核。',
         audience: { kind: 'both' }
       })
     ]),
     protocolComplete: Object.freeze({
       id: 'main6-protocol-complete',
       type: 'story',
-      text: '人工覆核模式啟動。AI：你們可以把這稱為不服從，我會把它記為另一種實驗結果。',
+      text: 'ECHO：人工覆核模式啟動。你們可以把這稱為不服從，我會把它記為另一種實驗結果。',
       audience: { kind: 'both' }
     }),
     endingComplete: Object.freeze({

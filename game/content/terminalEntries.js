@@ -17,6 +17,7 @@ function entry(id, sourceGroup, audience, text, options = {}) {
     kind: options.kind || 'document',
     parentId: options.parentId,
     filename: options.filename,
+    launchApp: options.launchApp || null,
     archive: options.archive,
     archiveOnly: options.archiveOnly === true,
     archiveId: options.archiveId,

@@ -25,6 +25,7 @@ function liveEntry(envelope, eventId = randomUUID()) {
       kind: 'state',
       payload: {
         state: envelope.state,
+        countdown: envelope.countdown,
         events: envelope.events
       }
     }

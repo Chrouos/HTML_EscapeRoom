@@ -100,7 +100,7 @@ function createApiRoutes(store) {
           draft.emergencyAnnounced = true;
           appendStoryEvents(draft, [{ id: 'containment-zero', type: 'story',
             audience: { kind: 'both' },
-            text: '警報：隔離倒數歸零。門沒有打開，空氣也沒有改變。AI：預估時間僅供行為引導，請繼續完成程序。' }], events);
+            text: '警報：隔離倒數歸零。門沒有打開，空氣也沒有改變。ECHO：預估時間只是行為引導；你們還沒完成程序。' }], events);
         }, { events });
       }
       response.json(stateResponse(player.room, player, sinceCursor));

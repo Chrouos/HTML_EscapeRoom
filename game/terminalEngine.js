@@ -434,7 +434,8 @@ function displayEntry(entry, opened, locked = false, archiveExpanded = false) {
     locked: Boolean(locked),
     metadataVisible: true,
     opened: Boolean(opened || entry.opened),
-    answerGate: entry.answerGate || null
+    answerGate: entry.answerGate || null,
+    launchApp: entry.launchApp || null
   };
   if (entry.puzzleId) {
     result.puzzleId = entry.puzzleId;

@@ -534,7 +534,7 @@ test('polling rejects an unchanged response that carries a malformed player stat
         unchanged: true,
         cursor: latestCursor + 1,
         state,
-        countdown: { status: 'running', remainingMs: 1000 }
+        countdown: { status: 'running', remainingMs: 60000 }
       }) });
       return;
     }
@@ -625,7 +625,7 @@ test('native polling fetch rejection keeps backoff and does not start snapshot r
         unchanged: false,
         cursor: 1,
         state,
-        countdown: { status: 'running', remainingMs: 1000 }
+        countdown: { status: 'running', remainingMs: 60000 }
       }), { status: 200, headers: { 'content-type': 'application/json' } });
     };
 

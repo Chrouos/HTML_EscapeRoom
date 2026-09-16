@@ -118,7 +118,7 @@ async function primeRapport(a, b, prefix) {
 }
 
 test.describe('private narrative secrecy and causality', () => {
-  test('real room creation and join persist the three shared ORPHEUS opening announcements', async ({ browser }) => {
+  test('real room creation and join persist the official and ECHO opening announcements', async ({ browser }) => {
     const room = await createPair(browser);
     try {
       const aState = (await getState(room.a)).body;
@@ -130,6 +130,7 @@ test.describe('private narrative secrecy and causality', () => {
         ]));
         expect(state.state.intercom.filter(message => message.contentId.startsWith('orpheus.')).length)
           .toBeGreaterThanOrEqual(3);
+        expect(state.state.intercom.some(message => message.text.includes('偷偷接進來'))).toBe(true);
       }
 
       // The public opening is projected to each actor stream once per

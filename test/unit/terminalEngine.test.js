@@ -92,6 +92,17 @@ test('terminal projection omits locked or future contextual entries', () => {
   assert.ok(!terminal.some(item => item.id === 'ai.a2.cleanup_request'));
 });
 
+test('keeps Terminal as an application instead of a FILES entry', () => {
+  const room = createRoomState('ROOM42', 0);
+  room.players.A = { playerId: 'player-a' };
+  room.players.B = { playerId: 'player-b' };
+  room.publicFacts = ['roomCreated', 'hostJoined', 'guestJoined'];
+  const projected = projectWorkstation(room, { role: 'A', playerId: 'player-a' });
+  assert.ok(!projected.files.entries.some(item => item.launchApp === 'terminal'));
+  assert.ok(!projected.files.entries.some(item => item.name?.toUpperCase() === 'TERMINAL'));
+  assert.ok(!projected.terminal.entries.some(item => item.launchApp === 'terminal'));
+});
+
 test('available side investigations project as Files/NOTES launch entries', () => {
   const room = readyRoom();
   room.publicProgress = { sidePuzzles: [{ puzzleId: 'side2', title: 'ANOMALY', hook: 'Inspect the anomaly.', opened: false, complete: false }] };

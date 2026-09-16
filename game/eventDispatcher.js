@@ -2,7 +2,7 @@ const { randomUUID } = require('node:crypto');
 const { isDeepStrictEqual } = require('node:util');
 
 const { resolveRecipients } = require('./audience');
-const { projectForPlayer } = require('./safeState');
+const { projectForPlayer, countdown } = require('./safeState');
 
 const STREAM_RETENTION_LIMIT = 256;
 
@@ -92,6 +92,7 @@ function dispatchProjectionChanges({ before, draft, events = [] }) {
     const envelope = {
       cursor: stream.cursor + 1,
       state,
+      countdown: countdown(draft),
       events: resolvedEvents
         .filter(event => event.recipients.includes(role))
         .map(event => structuredClone(event.item))

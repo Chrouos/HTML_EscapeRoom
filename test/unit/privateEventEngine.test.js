@@ -27,7 +27,7 @@ test('public announcements lead the room and no direct line leaks before main1',
   assert.ok(events.length >= 3);
   assert.ok(events.every(event => event.audience.kind === 'both'));
   assert.ok(events.every(event => !event.channel && event.type === 'system'));
-  assert.ok(events.every(event => event.text && event.text.startsWith('ORPHEUS')));
+  assert.ok(events.every(event => event.text && /^(?:ORPHEUS|ECHO)[：:]/.test(event.text)));
   assert.equal(room.directDialogueState.A.deliveredContentIds.length, 0);
   assert.equal(room.directDialogueState.B.deliveredContentIds.length, 0);
 });

@@ -20,6 +20,7 @@ async function mountIntercom(page, name, messages) {
     root.id = `fixture-${name}`;
     root.innerHTML = `
       <div data-intercom-log role="log" aria-label="Transmission log" aria-live="off"></div>
+      <div data-intercom-alarm role="alert" hidden></div>
       <p data-intercom-announcer class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>
     `;
     document.body.replaceChildren(root);
@@ -37,6 +38,21 @@ test('labels player messages A or B while every AI line is only ORPHEUS', async 
   await expect(log.locator('.message-orpheus')).toHaveCount(2);
   await expect(log.locator('.message-orpheus').nth(0)).toHaveText(/ORPHEUSProceed together\./);
   await expect(log.locator('.message-orpheus').nth(1)).toHaveText(/ORPHEUSDo not disclose cabinet seven\./);
+});
+
+test('separates ECHO styling and keeps containment alarms out of the message log', async ({ page }) => {
+  await mountIntercom(page, 'sources', [
+    { id: 'official', type: 'story', text: 'ORPHEUS：官方指示。' },
+    { id: 'echo', type: 'story', text: 'ECHO：我偷偷接進來幫你們。' },
+    { id: 'alarm', type: 'story', text: '警報：隔離倒數歸零。' }
+  ]);
+
+  const fixture = page.locator('#fixture-sources');
+  await expect(fixture.locator('.message-orpheus')).toHaveCount(1);
+  await expect(fixture.locator('.message-echo')).toHaveCount(1);
+  await expect(fixture.locator('.message-alarm')).toHaveCount(0);
+  await expect(fixture.locator('[data-intercom-alarm]')).toBeVisible();
+  await expect(fixture.locator('[data-intercom-alarm]')).toContainText('隔離倒數歸零');
 });
 
 test('renders no delivery metadata in text, classes, attributes, or accessibility labels', async ({ page }) => {
@@ -62,7 +78,7 @@ test('an A-only projected entry leaves no trace in the B intercom', async ({ pag
   await expect(log.locator('.message')).toHaveCount(3);
   await expect(fixture).not.toContainText('Do not disclose cabinet seven.');
   await expect(fixture).not.toContainText(/placeholder|missing|gap|unread|delayed|timing/i);
-  await expect(fixture.locator('[hidden], [data-sequence], [data-unread], time')).toHaveCount(0);
+  await expect(fixture.locator('[hidden]:not([data-intercom-alarm]), [data-sequence], [data-unread], time')).toHaveCount(0);
 });
 
 test('rejects player entries without a canonical A or B payload role', async ({ page }) => {

@@ -222,6 +222,22 @@ test('resume replays ordered actor envelopes and valid acknowledgements cannot f
   socket.close();
 });
 
+test('live state events carry the running countdown with the projected state', async () => {
+  const room = await createRoom();
+  app.locals.roomStore.joinRoom(room.roomCode);
+
+  const socket = await connect(room);
+  const inbox = messages(socket);
+  socket.send(JSON.stringify({ type: 'resume', cursor: 0 }));
+  transact(room, 'countdown');
+
+  const frame = await inbox.next();
+  assert.equal(frame.type, 'event');
+  assert.equal(frame.event.payload.countdown.status, 'running');
+  assert.equal(typeof frame.event.payload.countdown.remainingMs, 'number');
+  socket.close();
+});
+
 test('ack persists only a sent actor cursor and reconnect skips confirmed events', async () => {
   const room = await createRoom();
   transact(room, 1);

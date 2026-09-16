@@ -29,6 +29,12 @@ function isMessage(value) {
     || (isRecord(value.payload) && (value.payload.role === 'A' || value.payload.role === 'B'));
 }
 
+function isCountdown(value) {
+  return isRecord(value)
+    && (value.status === undefined || typeof value.status === 'string')
+    && (value.remainingMs === undefined || value.remainingMs === null || Number.isFinite(value.remainingMs));
+}
+
 function isEvidence(value) {
   return isRecord(value)
     && optionalString(value.title)
@@ -98,6 +104,7 @@ function isEventFrame(frame) {
     && frame.event.kind === 'state'
     && isRecord(frame.event.payload)
     && isState(frame.event.payload.state)
+    && (frame.event.payload.countdown === undefined || isCountdown(frame.event.payload.countdown))
     && Array.isArray(frame.event.payload.events);
 }
 
@@ -280,7 +287,7 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
       return;
     }
     try {
-      onSnapshot(frame.event.payload.state);
+      onSnapshot(frame.event.payload.state, frame.event.payload.countdown);
     } catch {
       hasSnapshot = false;
       resync();

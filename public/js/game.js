@@ -13,6 +13,9 @@
   let legacyPanels;
   let liveTransport;
   let latestCountdown;
+  let countdownSnapshot;
+  let countdownTicker;
+  let timeoutFailureShown = false;
   let transportStatus = 'booting';
 
   // The two monitors share one DOM tree. On narrow screens we only hide the
@@ -28,7 +31,9 @@
     if (!selector || tabs.length === 0) return;
 
     const focusByMonitor = new Map();
-    const media = window.matchMedia('(max-width: 759px)');
+    // Tablet-sized windows need the focused monitor flow too. At 848px the
+    // two CRTs no longer have enough room to remain side by side.
+    const media = window.matchMedia('(max-width: 980px)');
     let activeId = tabs.find(tab => tab.checked)?.id || tabs[0].id;
 
     function rememberFocus() {
@@ -99,12 +104,87 @@
     if (node) node.textContent = value;
   }
 
-  function countdown(value) {
+  function showTimeoutFailure() {
+    if (timeoutFailureShown || state?.ending) return;
+    timeoutFailureShown = true;
+    root.classList.add('timeout-failure');
+    root.setAttribute('aria-busy', 'true');
+    form.querySelector('button').disabled = true;
+    chatForm.querySelector('input').disabled = true;
+    chatForm.querySelector('button').disabled = true;
+
+    const ending = root.querySelector('[data-ending]');
+    if (ending) {
+      ending.hidden = false;
+      ending.dataset.failure = 'timeout';
+      ending.replaceChildren();
+      const eyebrow = document.createElement('p');
+      eyebrow.className = 'eyebrow';
+      eyebrow.textContent = 'CONTAINMENT FAILURE';
+      const title = document.createElement('h2');
+      title.textContent = '隔離倒數結束';
+      const body = document.createElement('p');
+      body.textContent = '連線未能在期限內完成校驗。終端機將中止本次實驗。';
+      const back = document.createElement('a');
+      back.className = 'button button-primary';
+      back.href = '/';
+      back.textContent = '立即返回大廳';
+      ending.append(eyebrow, title, body, back);
+      window.setTimeout(() => window.location.assign('/'), 4800);
+    } else {
+      window.location.assign('/');
+    }
+  }
+
+  function paintCountdown(value) {
     const remaining = value?.remainingMs;
     text('[data-countdown]', remaining == null ? '等待連線' :
       String(Math.floor(remaining / 60000)).padStart(2, '0') + ':' +
       String(Math.floor(remaining / 1000) % 60).padStart(2, '0'));
+    const expired = remaining != null && remaining <= 0;
     root.classList.toggle('emergency', value?.status === 'emergency');
+    if (expired) showTimeoutFailure();
+  }
+
+  function countdown(value) {
+    if (value) {
+      latestCountdown = value;
+      countdownSnapshot = {
+        ...value,
+        receivedAt: performance.now()
+      };
+    }
+    if (countdownSnapshot) paintCountdown(countdownSnapshot);
+  }
+
+  countdownTicker = window.setInterval(() => {
+    if (!countdownSnapshot || countdownSnapshot.remainingMs == null) return;
+    const elapsed = Math.max(0, performance.now() - countdownSnapshot.receivedAt);
+    const remainingMs = Math.max(0, countdownSnapshot.remainingMs - elapsed);
+    paintCountdown({
+      status: remainingMs === 0 ? 'emergency' : countdownSnapshot.status,
+      remainingMs
+    });
+  }, 1000);
+
+  function answerFormat(stepId) {
+    const formats = {
+      identity: '格式提示：名稱與編號之間保留連字號。',
+      startup: '格式提示：三段指令以空格分隔，依序輸入。',
+      decode: '格式提示：輸入解碼後的英文單字。',
+      route: '格式提示：三個節點以空格分隔，依序輸入。',
+      timeline: '格式提示：樣本名稱以空格分隔，依序輸入。',
+      record: '格式提示：日期使用 YYYY-MM-DD。',
+      ending: '格式提示：輸入一個可用的處置選項。'
+    };
+    return formats[stepId] || '先比對兩端資訊，再送出目前階段的回應。';
+  }
+
+  function flashRoomState(className) {
+    root.classList.remove(className);
+    void root.offsetWidth;
+    root.classList.add(className);
+    window.setTimeout(() => root.classList.remove(className), 520);
   }
 
   function render(next, nextCountdown) {
@@ -128,16 +208,23 @@
     const progress = next.publicProgress;
     root.dataset.step = `${progress.puzzleId || ''}:${progress.stepId || ''}`;
     text('[data-prompt]', progress.prompt || (next.ending ? '實驗已結束。' : '等待設施指示'));
+    text('[data-puzzle-chapter]', progress.chapter ? `CHAPTER ${String(progress.chapter).padStart(2, '0')}` : 'CHAPTER 01');
+    text('[data-puzzle-step]', progress.title || '等待設施指示');
+    text('[data-puzzle-format]', answerFormat(progress.stepId));
     text('[data-clues]', next.clues.text || '');
     text('[data-stage]', progress.title || '出口協定');
     countdown(next.countdown);
+    root.classList.toggle('room-awaiting-partner', !next.occupancy.ready);
     intercom.render(next.intercom || []);
     if (workstation) workstation.render({
       ...(next.workstation || {}),
       sidePuzzles: next.publicProgress?.sidePuzzles || []
     });
-    if (legacyPanels) legacyPanels.render(next);
-    form.querySelector('button').disabled = busy.has(form) || !next.occupancy.ready || !progress.stepId || Boolean(next.ending);
+    if (!timeoutFailureShown && legacyPanels) legacyPanels.render(next);
+    form.querySelector('button').disabled = timeoutFailureShown
+      || busy.has(form) || !next.occupancy.ready || !progress.stepId || Boolean(next.ending);
+    chatForm.querySelector('input').disabled = timeoutFailureShown || !next.occupancy.ready;
+    chatForm.querySelector('button').disabled = timeoutFailureShown || !next.occupancy.ready || busy.has(chatForm);
   }
 
   async function sendAction(target, action, feedback) {
@@ -161,6 +248,8 @@
       pending.delete(target);
       if (target.elements.value.value === request.value) target.reset();
       feedback.textContent = result.publicResult?.message || (result.publicResult?.correct === false ? '資料不符，請查看通訊中的提示。' : '操作已記錄');
+      if (result.publicResult?.correct === false) flashRoomState('answer-rejected');
+      else if (result.stateChanged) flashRoomState('puzzle-advanced');
       if (liveTransport) liveTransport.adopt(result);
       else render(result.state, result.countdown);
     } catch (error) {

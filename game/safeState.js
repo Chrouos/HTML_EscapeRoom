@@ -203,4 +203,4 @@ function forPlayer(room, player) {
   };
 }
 
-module.exports = { projectForPlayer, stateResponse, forPlayer };
+module.exports = { projectForPlayer, stateResponse, forPlayer, countdown };

@@ -346,7 +346,7 @@ function submitAction(room, player, action, pendingEvents = []) {
     const hints = (step.hints || []).filter((_, index) => attempt >= step.hintThresholds[index]);
     room.hints[action.puzzleId][stepId] = hints;
     const events = appendStoryEvents(room, [{ id: action.puzzleId + '-' + stepId + '-error-' + attempt, type: 'error',
-      text: hints.length ? 'AI：資料不符。' + hints.at(-1) : 'AI：資料不符。請再次比對兩人的紀錄。',
+      text: hints.length ? 'ECHO：資料不符。' + hints.at(-1) : 'ECHO：資料不符。請再次比對兩人的紀錄。',
       audience: { kind: 'both' } }], pendingEvents);
     initializeGame(room, pendingEvents);
     return { stateChanged: true, events, publicResult: { correct: false, attempt, hints } };
@@ -354,7 +354,7 @@ function submitAction(room, player, action, pendingEvents = []) {
   room.completedSteps[action.puzzleId].push(stepId);
   if (authorization) room.authorizationChoice = action.value.trim().toUpperCase();
   const events = appendStoryEvents(room, [story[action.puzzleId]?.[stepId + 'Complete'] || {
-    id: action.puzzleId + '-' + stepId + '-complete', type: 'story', text: 'AI：' + step.title + '已完成。',
+    id: action.puzzleId + '-' + stepId + '-complete', type: 'story', text: 'ECHO：' + step.title + '已完成。',
     audience: { kind: 'both' } }], pendingEvents);
   const nextStep = currentStep(room, puzzle);
   if (!nextStep) {

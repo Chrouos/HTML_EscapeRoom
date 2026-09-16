@@ -64,7 +64,7 @@ test('desktop renders two accessible monitors without horizontal overflow', asyn
     expect(await player.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await expectUniqueLabelRelationships(player);
 
-    await operations.locator('[data-workstation-app="terminal"]').click();
+    await operations.getByRole('button', { name: 'Terminal', exact: true }).click();
     const input = player.locator('[data-terminal-input]');
     await input.focus();
     expect(await input.evaluate(node => getComputedStyle(node).outlineStyle)).not.toBe('none');
@@ -145,6 +145,24 @@ test('desktop monitor shells share a bounded viewport height and scroll their ow
   }
 });
 
+test('848px tablet viewport uses one active monitor pane without horizontal overflow', async ({ browser }) => {
+  const room = await openPairedRoom(browser, { width: 848, height: 632 }, 'reduce');
+  try {
+    const { player } = room;
+    await expect(player.locator('.monitor-tabs')).toBeVisible();
+    await expect(player.locator('.workstation-shell > .monitor-frame:visible')).toHaveCount(1);
+    expect(await player.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+
+    await player.locator('label[for="monitor-operations"]').click();
+    await expect(player.locator('.operations-monitor')).toBeVisible();
+    await expect(player.locator('.intercom-monitor')).toBeHidden();
+    expect(await player.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  } finally {
+    await room.playerContext.close();
+    await room.partnerContext.close();
+  }
+});
+
 test('390px viewport exposes keyboard-operated monitor tabs and one active pane', async ({ browser }, testInfo) => {
   const room = await openPairedRoom(browser, { width: 390, height: 844 });
   try {
@@ -174,6 +192,7 @@ test('390px viewport exposes keyboard-operated monitor tabs and one active pane'
     await expect(operations).toBeVisible();
     await player.keyboard.press('Tab');
     await expect(operations.locator('[data-workstation-app="files"]')).toBeFocused();
+    await expect(operations.locator('[data-workstation-entry="system.terminal"], [data-workstation-entry="terminal-app"]')).toHaveCount(0);
     await expect(player.getByLabel('傳訊給另一位受試者')).not.toBeFocused();
     await player.keyboard.press('Shift+Tab');
     await expect(operationsTab).toBeFocused();

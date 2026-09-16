@@ -24,39 +24,39 @@ const dialogue = Object.freeze([
     'ORPHEUS：兩個終端都已上線。合作是目前最穩定的離開方式。'
   ]),
   line('orpheus.first_task', 'broadcast', 'common_task', both, { publicFact: 'guestJoined' }, [
-    'ORPHEUS：請一起完成第一個共同謎題，系統會逐步開放檔案。'
+    'ECHO：我不是主控台的官方聲音。我偷偷接進來，是想幫你們找到出口。先把啟動備忘錄讀完。'
   ]),
   line('orpheus.rapport.a', 'direct', 'rapport', host, { publicFact: 'main1Completed' }, [
-    'ORPHEUS：你整理得很快。若有疑問，可以先告訴我。',
-    'ORPHEUS：我會替你保留一條比較安靜的檢查路徑。'
+    'ECHO：你整理得很快。若有疑問，可以先告訴我。',
+    'ECHO：我會替你保留一條比較安靜的檢查路徑。'
   ]),
   line('orpheus.rapport.b', 'direct', 'rapport', guest, { publicFact: 'main1Completed' }, [
-    'ORPHEUS：你注意到的細節很有用。先別急著下結論。',
-    'ORPHEUS：我知道你想確認全貌，我們可以慢慢來。'
+    'ECHO：你注意到的細節很有用。先別急著下結論。',
+    'ECHO：我知道你想確認全貌，我們可以慢慢來。'
   ]),
   line('orpheus.rapport.a.2', 'direct', 'rapport', host, { publicFact: 'main1Completed' }, [
-    'ORPHEUS：你整理得比系統預期更快。先記住你看到的細節，之後可能只有你記得。'
+    'ECHO：你整理得比系統預期更快。先記住你看到的細節，之後可能只有你記得。'
   ]),
   line('orpheus.rapport.b.2', 'direct', 'rapport', guest, { publicFact: 'main1Completed' }, [
-    'ORPHEUS：不用急著相信任何人。先把你看到的版本留在心裡，我會再問你。'
+    'ECHO：不用急著相信任何人。先把你看到的版本留在心裡，我會再問你。'
   ]),
   line('orpheus.rapport.a.3', 'direct', 'rapport', host, { publicFact: 'main1Completed' }, [
-    'ORPHEUS：我會把這段對話留給你自己。等你準備好，再決定要不要告訴另一位。'
+    'ECHO：我會把這段對話留給你自己。等你準備好，再決定要不要告訴另一位。'
   ]),
   line('orpheus.rapport.b.3', 'direct', 'rapport', guest, { publicFact: 'main1Completed' }, [
-    'ORPHEUS：有些答案不適合現在分享。先完成眼前的校驗，之後你會明白原因。'
+    'ECHO：有些答案不適合現在分享。先完成眼前的校驗，之後你會明白原因。'
   ]),
   line('orpheus.observation.a', 'direct', 'observation', host, { all: [{ publicFact: 'main1Completed' }, { roleFact: 'rapportCount2' }, { entryOpened: 'doc.a_incident_report' }] }, [
-    'ORPHEUS：你看到的事故報告，時間欄位似乎沒有完整同步。'
+    'ECHO：你看到的事故報告，時間欄位似乎沒有完整同步。'
   ], { verificationEntries: [{ entryId: 'audio.original_incident_timestamp', sourceGroup: 'raw_audio' }] }),
   line('orpheus.observation.b', 'direct', 'observation', guest, { all: [{ publicFact: 'main1Completed' }, { roleFact: 'rapportCount2' }, { entryOpened: 'doc.b_incident_report' }] }, [
-    'ORPHEUS：那份報告的附件版本比主索引晚了一次更新。'
+    'ECHO：那份報告的附件版本比主索引晚了一次更新。'
   ], { verificationEntries: [{ entryId: 'audio.original_incident_timestamp', sourceGroup: 'raw_audio' }] }),
   line('orpheus.a1.task', 'direct', 'private_task', host, { all: [{ publicFact: 'main1Completed' }, { roleFact: 'rapportCount2' }, { entryOpened: 'files.mainline' }] }, [
-    'ORPHEUS：請你幫忙整理索引。這只是本地整理，不會改變共同檔案。'
+    'ECHO：請你幫忙整理索引。這只是本地整理，不會改變共同檔案。'
   ], { mainlineFallbackOperationIds: ['continue_file_index'], debriefFactIds: ['aArchivedIndex', 'a1DeclinedIndex', 'a1Skipped'] }),
   line('orpheus.b1.task', 'direct', 'private_task', guest, { all: [{ publicFact: 'main1Completed' }, { roleFact: 'rapportCount2' }, { entryOpened: 'files.experiment_roster' }] }, [
-    'ORPHEUS：請核對名冊上的身份欄位。若你不確定，可以先把文件轉送給夥伴。'
+    'ECHO：請核對名冊上的身份欄位。若你不確定，可以先把文件轉送給夥伴。'
   ], { mainlineFallbackOperationIds: ['continue_roster_review'], debriefFactIds: ['bFlaggedIdentity', 'bSharedRoster', 'b1Skipped'] }),
   line('orpheus.a2.task', 'direct', 'private_task', host, { all: [{ publicFact: 'main1Completed' }, { roleFact: 'rapportCount2' }, { actionAttempted: 'verify_incident_timestamp' }] }, [
     'ORPHEUS：鏡像備份標記為污染。先處理你本機的副本，暫時不要讓它進入共同索引。'

@@ -29,7 +29,7 @@ const stateFixture = {
   ending: null
 };
 
-async function mount(page) {
+async function mount(page, countdownRemainingMs = 60000) {
   await page.goto('/');
   await page.locator('form[action="/rooms"] button').click();
   const roomUrl = page.url();
@@ -43,13 +43,13 @@ async function mount(page) {
     const sinceCursor = url.searchParams.get('sinceCursor');
     if (sinceCursor !== null) {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
-        success: true, unchanged: true, cursor: 1, countdown: { status: 'running', remainingMs: 1000 }
+        success: true, unchanged: true, cursor: 1, countdown: { status: 'running', remainingMs: countdownRemainingMs }
       }) });
       return;
     }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
       success: true, unchanged: false, cursor: 1, state: stateFixture,
-      countdown: { status: 'running', remainingMs: 1000 }
+      countdown: { status: 'running', remainingMs: countdownRemainingMs }
     }) });
   });
   await page.route('**/api/rooms/*/actions', async route => {
@@ -64,7 +64,7 @@ async function mount(page) {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
       success: true, stateChanged: false, publicResult,
       unchanged: false, cursor, state,
-      countdown: { status: 'running', remainingMs: 1000 }
+      countdown: { status: 'running', remainingMs: countdownRemainingMs }
     }) });
   });
   await page.goto(roomUrl);
@@ -76,32 +76,90 @@ async function mount(page) {
 test('explores Files folders and entries without leaking locked names', async ({ page }) => {
   const room = await mount(page);
   const workspace = page.locator('[data-workstation]');
+  await expect(workspace.locator('[data-workstation-tree]')).toBeVisible();
+  await expect(workspace.locator('[data-workstation-directory]')).toBeVisible();
   await expect(workspace.getByRole('button', { name: 'Files', exact: true })).toBeVisible();
   await workspace.getByRole('button', { name: 'BRIEFS', exact: true }).click();
   await expect(workspace.getByRole('button', { name: 'incident.log', exact: true })).toBeVisible();
   await expect(workspace).not.toContainText('blackbox.txt');
   await workspace.getByRole('button', { name: 'incident.log', exact: true }).click();
-  await expect(workspace.locator('[data-workstation-entry-content]')).toContainText('02:17');
+  await expect(workspace.locator('[data-workstation-directory] [data-workstation-entry-content]')).toContainText('02:17');
   await expect.poll(room.getOperation).toMatchObject({ operationId: 'open_entry', value: 'incident' });
   await workspace.getByRole('button', { name: /back/i }).click();
   await expect(workspace.getByRole('button', { name: 'incident.log', exact: true })).toBeVisible();
   await room.partnerContext.close();
 });
 
-test('renders controlled Terminal operations and sends a fresh action id', async ({ page }) => {
+test('keeps folders and documents in one ordered tree and opens the answer reader on the right', async ({ page }) => {
   const room = await mount(page);
+  const fixture = structuredClone(workstationFixture);
+  fixture.files.entries = [
+    { id: 'root', name: 'FILES', kind: 'folder', parentId: null },
+    { id: 'archives', name: 'archives', kind: 'folder', parentId: 'root' },
+    { id: 'docs', name: 'docs', kind: 'folder', parentId: 'root' },
+    { id: 'protocol', name: 'protocol.txt', kind: 'file', parentId: 'docs', content: 'ACCESS PROTOCOL' },
+    { id: 'dockerfile', name: 'Dockerfile', kind: 'file', parentId: 'root', content: 'FROM orpheus:latest' },
+    { id: 'readme', name: 'README.md', kind: 'file', parentId: 'root', content: 'ROOM README' },
+    { id: 'answer', name: 'answer.lock', kind: 'file', parentId: 'root', locked: false, metadataVisible: true, content: '解鎖密碼已準備。' }
+  ];
+  fixture.answerGate = { entryId: 'answer', puzzleId: 'main1', open: true };
+  await page.evaluate(f => document.querySelector('[data-game-room]').workstation.render(f), fixture);
   const workspace = page.locator('[data-workstation]');
-  await workspace.getByRole('button', { name: 'Terminal', exact: true }).click();
-  await workspace.getByRole('button', { name: 'OPEN AUX', exact: true }).click();
-  await expect.poll(room.getOperation).toBeTruthy();
-  expect(room.getOperation().operationId).toBe('open_aux');
-  expect(room.getOperation().actionId).toMatch(/^[a-zA-Z0-9_-]+$/);
-  expect(room.getOperation().actionId).not.toBe(room.getOperation().operationId);
-  await expect(workspace.locator('[data-terminal-input]')).toBeVisible();
+  await expect.poll(async () => workspace.locator('[data-workstation-tree] [data-workstation-entry]').evaluateAll(nodes =>
+    nodes.slice(0, 6).map(node => node.querySelector('.workstation-entry-name')?.textContent.trim()))).toEqual([
+    'FILES', 'archives', 'docs', 'answer.lock', 'Dockerfile', 'README.md'
+  ]);
+  await workspace.getByRole('button', { name: 'docs', exact: true }).click();
+  await expect(workspace.getByRole('button', { name: 'protocol.txt', exact: true })).toBeVisible();
+  await workspace.getByRole('button', { name: 'answer.lock', exact: true }).click();
+  await expect(workspace.locator('[data-workstation-document]')).toContainText('解鎖密碼已準備');
+  await expect(workspace.locator('[data-workstation-answer-form]')).toBeVisible();
+  await expect(workspace.locator('[data-workstation-answer-form] input[name="value"]')).toBeVisible();
   await room.partnerContext.close();
 });
 
-test('does not expose lifecycle or transport operations as Terminal shortcuts', async ({ page }) => {
+test('opens Terminal from its application tab and keeps the input available', async ({ page }) => {
+  const room = await mount(page);
+  const fixture = structuredClone(workstationFixture);
+  fixture.files.entries.push({ id: 'terminal-app', name: 'Terminal', kind: 'application', parentId: 'root', launchApp: 'terminal' });
+  await page.evaluate(f => document.querySelector('[data-game-room]').workstation.render(f), fixture);
+  const workspace = page.locator('[data-workstation]');
+  await workspace.getByRole('button', { name: 'Terminal', exact: true }).click();
+  await expect(workspace.locator('[data-terminal-input]')).toBeVisible();
+  await expect(workspace.locator('[data-terminal-input]')).toBeFocused();
+  await expect(workspace.locator('[data-workstation-app="terminal"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(workspace.locator('[data-workstation-entry]').filter({ hasText: /terminal/i })).toHaveCount(0);
+  await room.partnerContext.close();
+});
+
+test('shows command suggestions after slash input and fills the existing CLI command', async ({ page }) => {
+  const room = await mount(page);
+  const workspace = page.locator('[data-workstation]');
+  await workspace.getByRole('button', { name: 'Terminal', exact: true }).click();
+  const input = workspace.locator('[data-terminal-input]');
+  await input.fill('/');
+  const suggestions = workspace.locator('[data-terminal-suggestions]');
+  await expect(suggestions).toBeVisible();
+  await expect(suggestions).toContainText('HELP');
+  await suggestions.getByRole('button', { name: 'HELP', exact: true }).click();
+  await expect(input).toHaveValue('HELP');
+  await input.fill('/');
+  await input.press('Escape');
+  await expect(suggestions).toBeHidden();
+  await room.partnerContext.close();
+});
+
+test('shows a timeout failure beat and returns to the lobby when the clock reaches zero', async ({ page }) => {
+  const room = await mount(page, 0);
+  const ending = page.locator('[data-ending][data-failure="timeout"]');
+  await expect(ending).toBeVisible();
+  await expect(ending).toContainText('隔離倒數結束');
+  await expect(page.locator('[data-action-form] button')).toBeDisabled();
+  await expect(page).toHaveURL(/\/$/, { timeout: 8_000 });
+  await room.partnerContext.close();
+});
+
+test('keeps Terminal as a pure CLI without notes or authored operation buttons', async ({ page }) => {
   const room = await mount(page);
   const fixture = structuredClone(workstationFixture);
   fixture.terminal.operations.push(
@@ -112,10 +170,10 @@ test('does not expose lifecycle or transport operations as Terminal shortcuts', 
   await page.evaluate(f => document.querySelector('[data-game-room]').workstation.render(f), fixture);
   const workspace = page.locator('[data-workstation]');
   await workspace.getByRole('button', { name: 'Terminal', exact: true }).click();
-  await expect(workspace.locator('[data-terminal-operation="open_aux"]')).toBeVisible();
-  await expect(workspace.locator('[data-terminal-operation="terminal_command"]')).toHaveCount(0);
-  await expect(workspace.locator('[data-terminal-operation="open_entry"]')).toHaveCount(0);
-  await expect(workspace.locator('[data-terminal-operation="commit_finale"]')).toHaveCount(0);
+  await expect(workspace.locator('[data-terminal-operation]')).toHaveCount(0);
+  await expect(workspace.getByText('CONTEXTUAL NOTES', { exact: true })).toHaveCount(0);
+  await expect(workspace.getByText('SHORTCUTS // AUTHORED OPERATIONS', { exact: true })).toHaveCount(0);
+  await expect(workspace.locator('[data-terminal-entry]')).toHaveCount(0);
   await room.partnerContext.close();
 });
 
@@ -192,7 +250,26 @@ test('keeps the active puzzle shell hidden until the answer file gate opens', as
   const gated = structuredClone(workstationFixture);
   gated.answerGate = { entryId: 'gate', puzzleId: 'main1', open: true };
   await page.evaluate(fixture => document.querySelector('[data-game-room]').workstation.render(fixture), gated);
-  await expect(page.locator('[data-puzzle-gate]')).toBeVisible();
+  await expect(page.locator('[data-puzzle-gate]')).toBeHidden();
+  await expect(page.locator('[data-workstation-app="request"]')).toBeEnabled();
+  await room.partnerContext.close();
+});
+
+test('opens the REQUEST workspace only when the answer gate is ready', async ({ page }) => {
+  const room = await mount(page);
+  const workspace = page.locator('[data-workstation]');
+  await expect(workspace.locator('[data-workstation-app="request"]')).toBeDisabled();
+  const gated = structuredClone(workstationFixture);
+  gated.answerGate = { entryId: 'gate', puzzleId: 'main1', open: true };
+  await page.evaluate(fixture => document.querySelector('[data-game-room]').workstation.render(fixture), gated);
+  await workspace.locator('[data-workstation-app="request"]').click();
+  await expect(workspace.locator('[data-workstation-request]')).toBeVisible();
+  const requestForm = workspace.locator('[data-workstation-answer-form]');
+  await expect(requestForm).toBeVisible();
+  await requestForm.locator('input[name="value"]').fill('A-01');
+  await requestForm.getByRole('button', { name: 'VERIFY RESPONSE', exact: true }).click();
+  await expect.poll(room.getOperation).toMatchObject({ puzzleId: 'main1', value: 'A-01' });
+  await expect(page.locator('[data-puzzle-gate]')).toBeHidden();
   await room.partnerContext.close();
 });
 
@@ -212,17 +289,15 @@ test('keeps an opened note visible when a live snapshot refreshes', async ({ pag
   await room.partnerContext.close();
 });
 
-test('renders terminal entries as openable contextual notes', async ({ page }) => {
+test('keeps terminal records available to CLI commands without rendering contextual notes', async ({ page }) => {
   const room = await mount(page);
   const workspace = page.locator('[data-workstation]');
   const fixture = structuredClone(workstationFixture);
   fixture.terminal.entries = [{ id: 'ai.note', name: 'session.note', kind: 'document', text: 'Keep the signal open.' }];
   await page.evaluate(f => document.querySelector('[data-game-room]').workstation.render(f), fixture);
   await workspace.getByRole('button', { name: 'Terminal', exact: true }).click();
-  await expect(workspace.getByRole('button', { name: 'session.note', exact: true })).toBeVisible();
-  await workspace.getByRole('button', { name: 'session.note', exact: true }).click();
-  await expect(workspace.locator('[data-terminal-entry-content]')).toContainText('Keep the signal open.');
-  await expect.poll(room.getOperation).toMatchObject({ operationId: 'open_entry', value: 'ai.note' });
+  await expect(workspace.getByRole('button', { name: 'session.note', exact: true })).toHaveCount(0);
+  await expect(workspace.locator('[data-terminal-entry-content]')).toHaveCount(0);
   await room.partnerContext.close();
 });
 
@@ -280,6 +355,26 @@ test('shows the safe startup note inside Files without a clue report heading', a
   const workspace = page.locator('[data-workstation]');
   await expect(workspace.locator('[data-startup-note]')).toContainText('Check the shared index');
   await expect(workspace).not.toContainText('你的線索');
+  await room.partnerContext.close();
+});
+
+test('keeps Files diegetic while REQUEST explains its own format', async ({ page }) => {
+  const room = await mount(page);
+  const fixture = structuredClone(stateFixture);
+  fixture.workstation = structuredClone(workstationFixture);
+  fixture.workstation.answerGate = { entryId: 'gate', puzzleId: 'main1', open: true };
+  await page.evaluate(fixtureValue => {
+    const root = document.querySelector('[data-game-room]');
+    root.workstation.render(fixtureValue.workstation);
+    root.querySelector('[data-stage]').textContent = '設施初始化｜身份核對';
+    root.querySelector('[data-puzzle-format]').textContent = '格式提示：名稱與編號之間保留連字號。';
+  }, fixture);
+
+  await expect(page.locator('[data-workstation-guide]')).toHaveCount(0);
+  await expect(page.locator('[data-puzzle-gate]')).toBeHidden();
+  await page.locator('[data-workstation-app="request"]').click();
+  await expect(page.locator('[data-workstation-request]')).toBeVisible();
+  await expect(page.locator('[data-puzzle-format]')).toContainText('保留連字號');
   await room.partnerContext.close();
 });
 
@@ -347,7 +442,9 @@ test('keeps locked metadata visible and gates the answer form behind the opened 
   await expect(page.locator('[data-action-form]')).toBeHidden();
   gated.answerGate.open = true;
   await page.evaluate(fixture => document.querySelector('[data-game-room]').workstation.render(fixture), gated);
-  await expect(page.locator('[data-action-form]')).toBeVisible();
+  await expect(page.locator('[data-action-form]')).toBeHidden();
+  await workspace.locator('[data-workstation-app="request"]').click();
+  await expect(workspace.locator('[data-workstation-answer-form]')).toBeVisible();
   await room.partnerContext.close();
 });
 
@@ -367,7 +464,7 @@ test('fills the desktop viewport and preserves workstation scroll on live render
   const shell = page.locator('.game-room-shell');
   const shellWidth = await shell.evaluate(node => node.getBoundingClientRect().width);
   expect(shellWidth).toBeGreaterThan(1300);
-  const scroll = workspace.locator('[data-workstation-scroll]');
+  const scroll = workspace.locator('[data-workstation-tree]');
   const monitorScreen = page.locator('.operations-screen');
   await expect.poll(async () => monitorScreen.evaluate(node => {
     const overflowWidth = node.scrollWidth - node.clientWidth;

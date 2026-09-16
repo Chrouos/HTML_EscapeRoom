@@ -21,6 +21,7 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
   let currentView = {};
   let activeApp = 'files';
   let folderPath = [];
+  let expandedFolders = new Set();
   let lastFocusId = '';
   const scrollPositions = new Map();
   const terminalHistory = [];
@@ -35,12 +36,21 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
 
   function appsFor(view) {
     const declared = Array.isArray(view.apps) ? view.apps : null;
-    if (declared) return declared.filter(app => app && id(app.id));
-    return [
+    const apps = declared
+      ? declared.filter(app => app && id(app.id))
+      : [
       { id: 'files', label: 'Files' },
       { id: 'terminal', label: 'Terminal' },
-      { id: 'logs', label: 'Logs' }
-    ];
+      { id: 'logs', label: 'Logs' },
+      { id: 'request', label: 'Request' }
+      ];
+    if (!apps.some(app => app.id === 'terminal')) {
+      apps.splice(Math.min(1, apps.length), 0, { id: 'terminal', label: 'Terminal' });
+    }
+    const request = apps.find(app => app.id === 'request');
+    if (!request) apps.push({ id: 'request', label: 'Request', ready: view.answerGate?.open === true });
+    else request.ready = view.answerGate?.open === true;
+    return apps;
   }
 
   function filesFor(view) {
@@ -51,6 +61,7 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
         : Array.isArray(view.entries) ? view.entries : [];
     const safeEntries = entries.filter(entry => entry && id(entry.id)
       && entry.available !== false && entry.visible !== false
+      && entry.app !== 'terminal' && entry.launchApp !== 'terminal'
       && (entry.locked !== true || entry.metadataVisible === true));
     const investigations = Array.isArray(view.sidePuzzles) ? view.sidePuzzles
       .filter(item => item && id(item.puzzleId))
@@ -67,9 +78,10 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
       })) : [];
     const known = new Set(safeEntries.map(entry => entry.id));
     const needsNotesFolder = investigations.length && !known.has('folder.notes');
+    const rootId = rootIdHint(view, safeEntries);
     return [
       ...safeEntries,
-      ...(needsNotesFolder ? [{ id: 'folder.notes', name: 'NOTES', kind: 'folder', parentId: rootIdHint(view, safeEntries) }] : []),
+      ...(needsNotesFolder ? [{ id: 'folder.notes', name: 'NOTES', kind: 'folder', parentId: rootId }] : []),
       ...investigations.filter(entry => !known.has(entry.id))
     ];
   }
@@ -97,8 +109,8 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
 
   function captureViewState() {
     const scrollKey = `${activeApp}:${folderPath.join('/')}:${currentView.__openedEntry || ''}`;
-    const scroll = host.querySelector('[data-workstation-scroll], [data-terminal-history], [data-workstation-log]');
-    if (scroll) scrollPositions.set(scrollKey, scroll.scrollTop);
+    const scrolls = host.querySelectorAll('[data-workstation-tree], [data-workstation-scroll], [data-terminal-history], [data-workstation-log]');
+    scrolls.forEach((scroll, index) => scrollPositions.set(`${scrollKey}:${index}`, scroll.scrollTop));
     const focused = document.activeElement;
     if (focused && host.contains(focused)) {
       const focusId = focused.dataset.workstationId || focused.dataset.workstationApp;
@@ -126,23 +138,6 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
     });
   }
 
-  function friendlyOperationLabel(operation) {
-    const id = operation?.operationId || '';
-    const labels = {
-      open_aux: 'OPEN AUX',
-      verify_incident_timestamp: 'SCAN incident.log',
-      pair_validate_protocol: 'SEARCH protocol',
-      commit_finale: 'COMMIT FINALE'
-    };
-    return labels[id] || label(operation?.label || operation?.name || id).replace(/_/g, ' ');
-  }
-
-  function visibleShortcut(operation) {
-    const operationId = String(operation?.operationId || '').toLowerCase();
-    return operationId && !['terminal_command', 'open_entry', 'commit_finale'].includes(operationId)
-      && !/^(debug|lifecycle|reset|boot)_/.test(operationId);
-  }
-
   function renderApps(container, apps) {
     const nav = document.createElement('nav');
     nav.className = 'workstation-apps';
@@ -151,32 +146,204 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
       const button = createButton(label(app.label || app.name || app.id), { 'data-workstation-app': app.id });
       button.dataset.workstationApp = app.id;
       button.setAttribute('aria-pressed', String(activeApp === app.id));
+      if (app.id === 'request') {
+        const ready = app.ready === true;
+        button.dataset.workstationRequestState = ready ? 'ready' : 'standby';
+        button.setAttribute('aria-label', 'Request');
+        if (!ready) button.disabled = true;
+        const status = document.createElement('span');
+        status.className = 'workstation-request-dot';
+        status.setAttribute('aria-hidden', 'true');
+        button.append(status);
+      }
       button.addEventListener('click', () => {
         captureViewState();
         activeApp = app.id;
         folderPath = [];
-        lastFocusId = app.id;
+        lastFocusId = app.id === 'terminal' ? 'terminal-input' : app.id;
         render(currentView);
+        if (app.id === 'terminal') {
+          window.queueMicrotask(() => host.querySelector('[data-terminal-input]')?.focus());
+        }
       });
       nav.append(button);
     }
     container.append(nav);
   }
 
+  function entryName(entry) {
+    return label(entry.name || entry.title || entry.id);
+  }
+
+  function entryIcon(entry) {
+    const isFolder = entry.kind === 'folder' || entry.type === 'folder';
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.classList.add('workstation-entry-icon', isFolder ? 'is-folder' : 'is-file');
+    svg.innerHTML = isFolder
+      ? '<path d="M3.5 7.5h6l1.8 2h9.2v9.2H3.5z"/><path d="M3.5 7.5V5.3h6.2l1.7 2.2"/>'
+      : '<path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4M9 12h6M9 16h6"/>';
+    return svg;
+  }
+
+  function entryButton(entry, extraAttributes = {}) {
+    const isFolder = entry.kind === 'folder' || entry.type === 'folder';
+    const name = entryName(entry);
+    const button = createButton('', {
+      'data-workstation-entry': entry.id,
+      'data-workstation-id': entry.id,
+      ...extraAttributes
+    });
+    button.dataset.workstationEntry = entry.id;
+    button.dataset.workstationId = entry.id;
+    button.dataset.entryKind = isFolder ? 'folder' : 'file';
+    button.dataset.entryState = entry.locked === true ? 'locked' : 'available';
+    button.setAttribute('aria-label', name);
+    const icon = entryIcon(entry);
+    if (entry.locked === true) icon.classList.add('is-locked');
+    const textNode = document.createElement('span');
+    textNode.className = 'workstation-entry-name';
+    textNode.textContent = name;
+    button.append(icon, textNode);
+    if (entry.locked === true) {
+      button.disabled = true;
+      button.setAttribute('aria-disabled', 'true');
+    } else {
+      button.addEventListener('click', () => openEntry(entry.id));
+    }
+    return button;
+  }
+
+  function folderPathFor(folderId, entries, rootId) {
+    const byId = new Map(entries.map(entry => [entry.id, entry]));
+    const path = [];
+    const seen = new Set();
+    let current = folderId;
+    while (current && !seen.has(current)) {
+      seen.add(current);
+      path.unshift(current);
+      if (current === rootId) break;
+      current = byId.get(current)?.parentId;
+    }
+    return path[0] === rootId ? path : (rootId ? [rootId] : []);
+  }
+
   function renderFiles(container, view) {
     const entries = filesFor(view);
     const rootId = rootIdFor(view, entries);
-    if (!folderPath.length || !entries.some(entry => entry.id === folderPath[folderPath.length - 1]
-      && (entry.kind === 'folder' || entry.type === 'folder'))) folderPath = rootId ? [rootId] : [];
+    const isFolder = entry => entry.kind === 'folder' || entry.type === 'folder';
+    const folders = entries.filter(isFolder);
+    const byId = new Map(entries.map(entry => [entry.id, entry]));
+    const childrenOf = parentId => entries
+      .filter(entry => entry.parentId === parentId)
+      .sort((a, b) => {
+        const folderOrder = Number(isFolder(b)) - Number(isFolder(a));
+        return folderOrder || entryName(a).localeCompare(entryName(b), undefined, { numeric: true, sensitivity: 'base' });
+      });
+
+    if (!folderPath.length || !byId.has(folderPath[folderPath.length - 1])
+      || !isFolder(byId.get(folderPath[folderPath.length - 1]))) folderPath = rootId ? [rootId] : [];
+    if (rootId && !expandedFolders.has(rootId)) expandedFolders.add(rootId);
+    expandedFolders = new Set([...expandedFolders].filter(folderId => byId.has(folderId) && isFolder(byId.get(folderId))));
     const folderId = folderPath[folderPath.length - 1] || rootId;
-    const folder = entries.find(entry => entry.id === folderId);
-    const scroll = document.createElement('div');
-    scroll.className = 'workstation-scroll';
-    scroll.dataset.workstationScroll = '';
+    const folder = byId.get(folderId);
+    const opened = byId.get(currentView.__openedEntry);
+
+    const filesLayout = document.createElement('div');
+    filesLayout.className = 'workstation-files-layout';
+
+    const treePanel = document.createElement('aside');
+    treePanel.className = 'workstation-file-tree';
+    treePanel.dataset.workstationTree = '';
+    treePanel.setAttribute('aria-label', 'Files and folders');
+    const treeHeading = document.createElement('h3');
+    treeHeading.textContent = 'FILES';
+    treePanel.append(treeHeading);
+    const tree = document.createElement('div');
+    tree.className = 'workstation-folder-tree';
+    tree.setAttribute('role', 'tree');
+
+    const renderTreeEntry = (entry, depth = 0) => {
+      const folderEntry = isFolder(entry);
+      const expanded = expandedFolders.has(entry.id);
+      const button = createButton('', {
+        'data-workstation-entry': entry.id,
+        'data-workstation-id': entry.id,
+        'data-entry-kind': folderEntry ? 'folder' : 'file',
+        'aria-selected': String(entry.id === folderId || entry.id === opened?.id),
+        ...(folderEntry ? { 'aria-expanded': String(expanded) } : {})
+      });
+      button.className = `workstation-tree-entry ${folderEntry ? 'is-folder' : 'is-file'}`;
+      button.style.setProperty('--folder-depth', depth);
+      button.setAttribute('aria-label', entryName(entry));
+      button.dataset.entryState = entry.locked === true ? 'locked' : 'available';
+      const twisty = document.createElement('span');
+      twisty.className = `workstation-tree-twisty ${folderEntry ? '' : 'is-hidden'}`;
+      twisty.setAttribute('aria-hidden', 'true');
+      twisty.textContent = folderEntry ? (expanded ? '▾' : '▸') : '';
+      const icon = entryIcon(entry);
+      if (entry.locked === true) icon.classList.add('is-locked');
+      button.append(twisty, icon, Object.assign(document.createElement('span'), {
+        className: 'workstation-entry-name', textContent: entryName(entry)
+      }));
+      if (entry.locked === true) {
+        button.disabled = true;
+        button.setAttribute('aria-disabled', 'true');
+      } else if (folderEntry) {
+        button.addEventListener('click', () => {
+          captureViewState();
+          if (expanded) expandedFolders.delete(entry.id);
+          else expandedFolders.add(entry.id);
+          folderPath = folderPathFor(entry.id, entries, rootId);
+          currentView = { ...currentView };
+          delete currentView.__openedEntry;
+          lastFocusId = entry.id;
+          render(currentView);
+        });
+      } else {
+        button.addEventListener('click', () => openEntry(entry.id));
+      }
+      tree.append(button);
+      if (folderEntry && expanded) {
+        for (const child of childrenOf(entry.id)) renderTreeEntry(child, depth + 1);
+      }
+    };
+
+    const rootFolder = folders.find(entry => entry.id === rootId);
+    if (rootFolder) renderTreeEntry(rootFolder);
+    treePanel.append(tree);
+
+    const directory = document.createElement('section');
+    directory.className = 'workstation-directory workstation-scroll';
+    directory.dataset.workstationDirectory = '';
+    const breadcrumb = document.createElement('div');
+    breadcrumb.className = 'workstation-breadcrumb';
+    breadcrumb.textContent = folderPath.map(idValue => entryName(byId.get(idValue) || { name: idValue })).join(' / ');
+    directory.append(breadcrumb);
     const heading = document.createElement('h3');
-    heading.textContent = label(folder?.name || 'FILES');
-    scroll.append(heading);
-    if (folderId === rootId && typeof view.text === 'string' && view.text.trim()) {
+    heading.textContent = opened && !isFolder(opened) ? entryName(opened) : entryName(folder || { name: 'FILES' });
+    directory.append(heading);
+
+    if (folderPath.length > 1 || opened) {
+      const back = createButton(opened ? 'Back to folder' : 'Back', { 'data-workstation-back': '' });
+      back.addEventListener('click', () => {
+        captureViewState();
+        if (opened) {
+          currentView = { ...currentView };
+          delete currentView.__openedEntry;
+          lastFocusId = folderId;
+        } else {
+          expandedFolders.delete(folderId);
+          folderPath.pop();
+          lastFocusId = folderPath[folderPath.length - 1] || '';
+        }
+        render(currentView);
+      });
+      directory.append(back);
+    }
+
+    if (!opened && folderId === rootId && typeof view.text === 'string' && view.text.trim()) {
       const startup = document.createElement('section');
       startup.dataset.startupNote = '';
       startup.className = 'workstation-startup-note';
@@ -185,83 +352,50 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
       const startupText = document.createElement('p');
       startupText.textContent = view.text;
       startup.append(startupLabel, startupText);
-      scroll.append(startup);
+      directory.append(startup);
     }
-    if (folderPath.length > 1 || currentView.__openedEntry) {
-      const back = createButton('Back', { 'data-workstation-back': '' });
-      back.addEventListener('click', () => {
-        captureViewState();
-        if (currentView.__openedEntry) {
-          currentView = { ...currentView };
-          delete currentView.__openedEntry;
-          lastFocusId = folderId;
-        } else {
-          folderPath.pop();
-          lastFocusId = folderPath[folderPath.length - 1] || '';
-        }
-        render(currentView);
-      });
-      scroll.append(back);
-    }
-    const list = document.createElement('div');
-    list.className = 'workstation-entries';
-    list.setAttribute('role', 'list');
-    for (const entry of entries.filter(item => item.parentId === folderId)) {
-      const isFolder = entry.kind === 'folder' || entry.type === 'folder';
-      const button = createButton(label(entry.name || entry.title || entry.id), {
-        'data-workstation-entry': entry.id,
-        'data-workstation-id': entry.id
-      });
-      button.dataset.workstationEntry = entry.id;
-      button.dataset.workstationId = entry.id;
-      button.setAttribute('aria-label', label(entry.name || entry.title || entry.id));
-      if (entry.locked === true) {
-        button.disabled = true;
-        button.setAttribute('aria-disabled', 'true');
-        button.textContent = `🔒 ${button.textContent}`;
-      } else {
-        button.addEventListener('click', () => openEntry(entry.id));
+
+    if (opened && !isFolder(opened)) {
+      const documentPanel = document.createElement('article');
+      documentPanel.className = 'workstation-document';
+      documentPanel.dataset.workstationDocument = '';
+      const documentTitle = document.createElement('h4');
+      documentTitle.append(entryIcon(opened), document.createTextNode(entryName(opened)));
+      const content = document.createElement('pre');
+      content.dataset.workstationEntryContent = '';
+      content.textContent = typeof opened.content === 'string' ? opened.content
+        : typeof opened.text === 'string' ? opened.text : '';
+      documentPanel.append(documentTitle, content);
+      if (opened.puzzleId && opened.opened === true && opened.complete !== true && typeof onPuzzleAction === 'function') {
+        const puzzleForm = document.createElement('form');
+        puzzleForm.dataset.investigationForm = opened.puzzleId;
+        const puzzleInput = document.createElement('input');
+        puzzleInput.name = 'value';
+        puzzleInput.maxLength = 1000;
+        puzzleInput.autocomplete = 'off';
+        puzzleInput.placeholder = 'enter response';
+        const puzzleButton = createButton('SUBMIT NOTE');
+        puzzleButton.type = 'submit';
+        puzzleForm.append(puzzleInput, puzzleButton);
+        puzzleForm.addEventListener('submit', event => {
+          event.preventDefault();
+          onPuzzleAction({ puzzleId: opened.puzzleId, stepId: opened.stepId || 'inspect', value: puzzleInput.value, actionId: randomId() });
+        });
+        documentPanel.append(puzzleForm);
       }
-      list.append(button);
+      directory.append(documentPanel);
+    } else if (!view.text && !opened) {
+      const empty = document.createElement('p');
+      empty.className = 'workstation-directory-empty';
+      empty.textContent = '從左側選取文件以開啟完整內容。';
+      directory.append(empty);
     }
-    scroll.append(list);
-    if (currentView.__openedEntry) {
-      const opened = entries.find(entry => entry.id === currentView.__openedEntry);
-      if (opened && (opened.kind !== 'folder' && opened.type !== 'folder')) {
-        const content = document.createElement('pre');
-        content.dataset.workstationEntryContent = '';
-        content.textContent = typeof opened.content === 'string' ? opened.content
-          : typeof opened.text === 'string' ? opened.text : '';
-        scroll.append(content);
-        if (opened.puzzleId && opened.opened === true && opened.complete !== true && typeof onPuzzleAction === 'function') {
-          const puzzleForm = document.createElement('form');
-          puzzleForm.dataset.investigationForm = opened.puzzleId;
-          const puzzleInput = document.createElement('input');
-          puzzleInput.name = 'value';
-          puzzleInput.maxLength = 1000;
-          puzzleInput.autocomplete = 'off';
-          puzzleInput.placeholder = 'enter response';
-          const puzzleButton = createButton('SUBMIT NOTE');
-          puzzleButton.type = 'submit';
-          puzzleForm.append(puzzleInput, puzzleButton);
-          puzzleForm.addEventListener('submit', event => {
-            event.preventDefault();
-            onPuzzleAction({ puzzleId: opened.puzzleId, stepId: opened.stepId || 'inspect', value: puzzleInput.value, actionId: randomId() });
-          });
-          scroll.append(puzzleForm);
-        }
-      }
-    }
-    container.append(scroll);
+
+    filesLayout.append(treePanel, directory);
+    container.append(filesLayout);
   }
 
   function renderTerminal(container, view) {
-    const terminal = view.terminal || {};
-    const declaredOperations = Array.isArray(terminal.operations) ? terminal.operations
-      : Array.isArray(view.operations) ? view.operations
-        : Array.isArray(terminal.activeOperations) ? terminal.activeOperations : [];
-    const operations = declaredOperations.map(operation => typeof operation === 'string'
-      ? { operationId: operation, label: operation } : operation);
     const panel = document.createElement('div');
     panel.className = 'workstation-terminal';
     panel.dataset.workstationTerminal = '';
@@ -305,55 +439,6 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
       history.append(line);
     }
     panel.append(history);
-
-    const notes = (Array.isArray(terminal.entries) ? terminal.entries : [])
-      .filter(entry => entry && id(entry.id) && entry.available !== false && entry.visible !== false);
-    if (notes.length) {
-      const notesSection = document.createElement('section');
-      notesSection.className = 'terminal-notes';
-      const notesHeading = document.createElement('h4');
-      notesHeading.textContent = 'CONTEXTUAL NOTES';
-      notesSection.append(notesHeading);
-      const noteList = document.createElement('div');
-      noteList.className = 'terminal-note-list';
-      for (const entry of notes) {
-        const button = createButton(label(entry.name || entry.title || entry.filename || entry.id), {
-          'data-terminal-entry': entry.id,
-          'data-workstation-id': entry.id
-        });
-        button.addEventListener('click', () => openTerminalEntry(entry));
-        noteList.append(button);
-      }
-      notesSection.append(noteList);
-      if (currentView.__openedEntry) {
-        const opened = notes.find(entry => entry.id === currentView.__openedEntry);
-        if (opened) {
-          const content = document.createElement('pre');
-          content.dataset.terminalEntryContent = '';
-          content.textContent = typeof opened.content === 'string' ? opened.content
-            : typeof opened.text === 'string' ? opened.text : '';
-          notesSection.append(content);
-          if (opened.puzzleId && opened.opened === true && opened.complete !== true && typeof onPuzzleAction === 'function') {
-            const puzzleForm = document.createElement('form');
-            puzzleForm.dataset.investigationForm = opened.puzzleId;
-            const puzzleInput = document.createElement('input');
-            puzzleInput.name = 'value';
-            puzzleInput.maxLength = 1000;
-            puzzleInput.autocomplete = 'off';
-            puzzleInput.placeholder = 'enter response';
-            const puzzleButton = createButton('SUBMIT NOTE');
-            puzzleButton.type = 'submit';
-            puzzleForm.append(puzzleInput, puzzleButton);
-            puzzleForm.addEventListener('submit', event => {
-              event.preventDefault();
-              onPuzzleAction({ puzzleId: opened.puzzleId, stepId: opened.stepId || 'inspect', value: puzzleInput.value, actionId: randomId() });
-            });
-            notesSection.append(puzzleForm);
-          }
-        }
-      }
-      panel.append(notesSection);
-    }
     const form = document.createElement('form');
     form.dataset.workstationTerminalForm = '';
     form.className = 'terminal-command-form';
@@ -376,7 +461,40 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
     promptNode.textContent = prompt;
     const submit = createButton('↵', { 'data-terminal-submit': '', 'aria-label': 'Execute command' });
     submit.type = 'submit';
+    const suggestions = document.createElement('div');
+    suggestions.className = 'terminal-suggestions';
+    suggestions.dataset.terminalSuggestions = '';
+    suggestions.hidden = true;
+    suggestions.setAttribute('role', 'listbox');
+    const suggestionCommands = ['HELP', 'SEARCH <node>', 'SCAN <filename>', 'UNZIP <filename>', 'HINT', 'SEND <text>'];
+    const suggestionButtons = suggestionCommands.map(command => {
+      const suggestion = createButton(command, { 'data-terminal-suggestion': command });
+      suggestion.addEventListener('click', () => {
+        input.value = command;
+        suggestions.hidden = true;
+        input.focus();
+      });
+      suggestions.append(suggestion);
+      return suggestion;
+    });
+    const updateSuggestions = () => {
+      const value = input.value.trimStart();
+      const active = value.startsWith('/');
+      const query = value.slice(1).trim().toUpperCase();
+      suggestionButtons.forEach(button => {
+        button.hidden = Boolean(query) && !button.dataset.terminalSuggestion.startsWith(query);
+      });
+      suggestions.hidden = !active || !suggestionButtons.some(button => !button.hidden);
+    };
+    input.addEventListener('input', updateSuggestions);
+    input.addEventListener('keydown', event => {
+      if (event.key === 'Escape') {
+        suggestions.hidden = true;
+        return;
+      }
+    });
     form.append(labelNode, promptNode, input, submit);
+    panel.append(suggestions);
     input.addEventListener('keydown', event => {
       if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
       if (!terminalHistory.length) return;
@@ -396,36 +514,70 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
       event.preventDefault();
       const value = input.value.trim();
       if (!value) return;
+      suggestions.hidden = true;
       terminalHistory.push({ command: value, output: '' });
       terminalHistoryIndex = -1;
       lastFocusId = 'terminal-input';
       render(currentView);
       invokeOperation({ operationId: 'terminal_command', value });
     });
-    const shortcuts = document.createElement('details');
-    shortcuts.className = 'terminal-shortcuts';
-    shortcuts.open = true;
-    const summary = document.createElement('summary');
-    summary.textContent = 'SHORTCUTS // AUTHORED OPERATIONS';
-    shortcuts.append(summary);
-    const shortcutList = document.createElement('div');
-    shortcutList.className = 'terminal-shortcut-list';
-    for (const operation of operations.filter(item => item && id(item.operationId)
-      && visibleShortcut(item) && item.locked !== true && item.available !== false)) {
-      const button = createButton(friendlyOperationLabel(operation), {
-        'data-terminal-operation': operation.operationId,
-        'data-operation-id': operation.operationId
-      });
-      button.dataset.operationId = operation.operationId;
-      if (operation.description) button.title = operation.description;
-      button.addEventListener('click', () => invokeOperation(operation));
-      shortcutList.append(button);
-    }
     panel.append(form);
-    if (shortcutList.children.length) {
-      shortcuts.append(shortcutList);
-      panel.append(shortcuts);
+    container.append(panel);
+  }
+
+  function renderRequest(container, view) {
+    const panel = document.createElement('section');
+    panel.className = 'workstation-request';
+    panel.dataset.workstationRequest = '';
+    const heading = document.createElement('h3');
+    heading.textContent = 'REQUEST // SECURE RESPONSE';
+    panel.append(heading);
+    const gate = view.answerGate;
+    if (!gate?.open) {
+      const standby = document.createElement('p');
+      standby.className = 'workstation-request-standby';
+      standby.textContent = '目前沒有待處理的回應需求。';
+      panel.append(standby);
+      container.append(panel);
+      return;
     }
+
+    const operations = host.closest('[data-operations-workspace]');
+    const bridge = operations?.querySelector('[data-action-form]') || document.querySelector('[data-action-form]');
+    const prompt = document.createElement('p');
+    prompt.className = 'workstation-request-prompt';
+    prompt.textContent = bridge?.querySelector('[data-prompt]')?.textContent || '輸入目前階段的解鎖密碼。';
+    const format = document.createElement('p');
+    format.className = 'workstation-request-format';
+    format.textContent = bridge?.querySelector('[data-puzzle-format]')?.textContent || '請先比對兩端資訊，再送出回應。';
+    panel.append(prompt, format);
+
+    const form = document.createElement('form');
+    form.dataset.workstationAnswerForm = '';
+    const labelNode = document.createElement('label');
+    labelNode.textContent = 'SECURE RESPONSE / 解鎖密碼';
+    const input = document.createElement('input');
+    input.name = 'value';
+    input.maxLength = 1000;
+    input.required = true;
+    input.autocomplete = 'off';
+    input.placeholder = '輸入解鎖密碼';
+    const submit = createButton('VERIFY RESPONSE');
+    submit.type = 'submit';
+    const feedback = document.createElement('p');
+    feedback.dataset.workstationRequestFeedback = '';
+    feedback.className = 'workstation-request-feedback';
+    feedback.textContent = bridge?.querySelector('[data-feedback]')?.textContent || '';
+    form.append(labelNode, input, submit, feedback);
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      const bridgeInput = bridge?.elements?.value;
+      const bridgeButton = bridge?.querySelector('button');
+      if (!bridge || !bridgeInput || bridgeButton?.disabled) return;
+      bridgeInput.value = input.value;
+      bridgeButton.click();
+    });
+    panel.append(form);
     container.append(panel);
   }
 
@@ -463,14 +615,18 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
       || document.querySelector('[data-action-form]');
     const puzzleGate = host.closest('[data-operations-workspace]')?.querySelector('[data-puzzle-gate]');
     if (answerForm) {
-      const gate = currentView.answerGate;
-      const open = gate && gate.open === true;
-      answerForm.hidden = !open;
-      answerForm.setAttribute('aria-hidden', String(!open));
-      if (puzzleGate) puzzleGate.hidden = !open;
+      answerForm.hidden = true;
+      answerForm.setAttribute('aria-hidden', 'true');
+      if (puzzleGate) {
+        puzzleGate.hidden = true;
+        puzzleGate.setAttribute('aria-hidden', 'true');
+      }
     }
     const apps = appsFor(currentView);
-    if (!apps.some(app => app.id === activeApp)) activeApp = apps[0]?.id || 'files';
+    if ((activeApp !== 'terminal' && activeApp !== 'request') || activeApp === 'request') {
+      const selected = apps.find(app => app.id === activeApp);
+      if (!selected || (activeApp === 'request' && selected.ready !== true)) activeApp = apps[0]?.id || 'files';
+    }
     const layout = document.createElement('section');
     layout.className = 'workstation-ui';
     layout.dataset.workstationView = activeApp;
@@ -480,12 +636,15 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
     content.setAttribute('aria-live', 'polite');
     if (activeApp === 'terminal') renderTerminal(content, currentView);
     else if (activeApp === 'logs') renderLogs(content, currentView);
+    else if (activeApp === 'request') renderRequest(content, currentView);
     else renderFiles(content, currentView);
     layout.append(content);
     host.replaceChildren(layout);
     const scrollKey = `${activeApp}:${folderPath.join('/')}:${currentView.__openedEntry || ''}`;
-    const scroll = host.querySelector('[data-workstation-scroll], [data-terminal-history], [data-workstation-log]');
-    if (scroll) scroll.scrollTop = scrollPositions.get(scrollKey) || 0;
+    const scrolls = host.querySelectorAll('[data-workstation-tree], [data-workstation-scroll], [data-terminal-history], [data-workstation-log]');
+    scrolls.forEach((scroll, index) => {
+      scroll.scrollTop = scrollPositions.get(`${scrollKey}:${index}`) || 0;
+    });
     restoreFocus();
   }
 
@@ -506,6 +665,16 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
     if (!entry) return;
     captureViewState();
     const isFolder = entry.kind === 'folder' || entry.type === 'folder';
+    if (entry.app === 'terminal' || entry.launchApp === 'terminal') {
+      activeApp = 'terminal';
+      folderPath = [];
+      currentView = { ...currentView };
+      delete currentView.__openedEntry;
+      lastFocusId = 'terminal-input';
+      render(currentView);
+      window.queueMicrotask(() => host.querySelector('[data-terminal-input]')?.focus());
+      return;
+    }
     if (isFolder) {
       if (!folderPath.includes(entry.id)) folderPath.push(entry.id);
     } else {
@@ -519,17 +688,6 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
     if (entry.puzzleId && typeof onPuzzleAction === 'function' && entry.opened !== true) {
       onPuzzleAction({ puzzleId: entry.puzzleId, stepId: 'inspect', value: '', actionId: randomId() });
     } else if (typeof onOperation === 'function') {
-      onOperation({ operationId: 'open_entry', value: entry.id, actionId: randomId() });
-    }
-  }
-
-  function openTerminalEntry(entry) {
-    if (!entry || !id(entry.id)) return;
-    captureViewState();
-    currentView = { ...currentView, __openedEntry: entry.id };
-    lastFocusId = entry.id;
-    render(currentView);
-    if (typeof onOperation === 'function') {
       onOperation({ operationId: 'open_entry', value: entry.id, actionId: randomId() });
     }
   }

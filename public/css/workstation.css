@@ -235,6 +235,7 @@
   flex: 1 1 auto;
   position: relative;
   overflow: auto;
+  padding-bottom: 40px;
   background: #45615866;
 }
 
@@ -443,6 +444,139 @@
 @media (min-width: 760px) {
   .game-room-shell {
     min-height: calc(100vh - 130px);
+  }
+}
+
+/* Visual draft translation: the two consoles read as one linked instrument. */
+@media (min-width: 760px) {
+  .workstation-shell {
+    position: relative;
+    background-image: linear-gradient(90deg, transparent 49.85%, #9debd31c 50%, transparent 50.15%);
+    background-size: 100% 100%;
+  }
+
+  .operations-screen::before {
+    content: "LINK / A  ◇  B";
+    position: absolute;
+    z-index: 2;
+    top: 7px;
+    right: 10px;
+    left: auto;
+    transform: none;
+    padding: 2px 0 2px 8px;
+    border: 0;
+    border-left: 1px solid #4f8178;
+    background: transparent;
+    color: #9debd3;
+    font: 8px/1.4 var(--mono);
+    letter-spacing: .14em;
+    white-space: nowrap;
+    opacity: .5;
+    pointer-events: none;
+  }
+
+  .operations-workspace::before {
+    content: "";
+    position: absolute;
+    z-index: 0;
+    top: 12px;
+    bottom: 12px;
+    left: 50%;
+    width: 1px;
+    background: linear-gradient(180deg, transparent, #9debd35e 18%, #d5b77254 50%, #9debd35e 82%, transparent);
+    box-shadow: 0 0 12px #9debd326;
+    pointer-events: none;
+  }
+
+  .operations-workspace::after {
+    content: "";
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    background: radial-gradient(circle at 50% 50%, #9debd30c, transparent 28%);
+    pointer-events: none;
+  }
+
+  /* Leave a real scrollable tail behind the console buffer cue so keyboard
+     and wheel users can discover the lower records even before the first
+     puzzle panel opens. */
+  .operations-workspace {
+    padding-bottom: 18px;
+  }
+
+  .operations-workspace > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .operations-monitor .monitor-casing {
+    background: linear-gradient(145deg, #2d383b, #182327 58%, #10181b);
+  }
+
+  .operations-monitor .workstation-panel {
+    border-right: 1px solid #446d69;
+    box-shadow: inset -12px 0 28px #9debd30b;
+    align-self: start;
+    height: auto;
+    min-height: max(100%, 584px);
+  }
+
+  .workstation-startup-note {
+    position: relative;
+    margin-bottom: 14px;
+    padding: 12px 14px 12px 16px;
+    border: 1px solid #315b57;
+    border-left: 3px solid var(--phosphor);
+    background: linear-gradient(110deg, #0e282b, #102027 75%);
+    box-shadow: inset 0 0 18px #9debd30b;
+  }
+
+  .workstation-startup-note::after {
+    content: "READY";
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    color: #6eaaa0;
+    font: 8px var(--mono);
+    letter-spacing: .12em;
+  }
+
+  .workstation-startup-note p {
+    max-width: 34rem;
+    padding-right: 42px;
+  }
+
+  .puzzle-panel {
+    border-color: #6c6349;
+    background: linear-gradient(145deg, #202826, #151f23 64%, #17212a);
+  }
+}
+
+/* At tablet widths the operations monitor is too narrow for a side-by-side
+   workspace. Stack its panels so the first FILES view keeps usable width. */
+@media (min-width: 760px) and (max-width: 959px) {
+  .operations-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .operations-workspace > [data-workstation],
+  .operations-workspace > .evidence-panel,
+  .operations-workspace > .side-panel,
+  .operations-workspace > [data-puzzle-gate] {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .operations-workspace > .terminal-panel {
+    padding: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .operations-screen::before,
+  .operations-workspace::before,
+  .operations-workspace::after {
+    box-shadow: none;
   }
 }
 
@@ -742,9 +876,10 @@
 }
 
 .workstation-terminal input:focus-visible {
-  outline: 2px solid var(--amber);
-  outline-offset: 3px;
+  outline: 1px solid var(--phosphor);
+  outline-offset: 2px;
   border-radius: 1px;
+  box-shadow: 0 0 8px #9debd344;
 }
 
 .workstation-terminal form > button[type="submit"] {
@@ -788,6 +923,111 @@
   min-height: 30px;
   padding: 6px 8px;
   font-size: 9px;
+}
+
+.terminal-suggestions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 8px;
+  border: 1px solid #26484a;
+  background: #081a1d;
+}
+
+.terminal-suggestions[hidden] {
+  display: none;
+}
+
+.workstation-terminal .terminal-suggestions button {
+  width: auto;
+  min-height: 30px;
+  padding: 6px 8px;
+  border-color: #315b57;
+  color: #8eb5ac;
+  font-size: 9px;
+}
+
+.workstation-terminal .terminal-suggestions button:hover,
+.workstation-terminal .terminal-suggestions button:focus-visible {
+  border-color: var(--phosphor);
+  color: var(--phosphor);
+  background: #123237;
+}
+
+.workstation-request {
+  min-height: 100%;
+  padding: 14px 2px 24px;
+  color: #b9dfd5;
+}
+
+.workstation-request h3 {
+  margin: 0 0 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #31524f;
+  color: var(--phosphor);
+  font: 12px/1.5 var(--mono);
+  letter-spacing: .13em;
+}
+
+.workstation-request-prompt,
+.workstation-request-format,
+.workstation-request-standby,
+.workstation-request-feedback {
+  color: #8fb2ae;
+  font: 11px/1.7 var(--mono);
+}
+
+.workstation-request-format {
+  padding: 10px 12px;
+  border-left: 2px solid #b98f65;
+  background: #171a18;
+  color: #c4aa7a;
+}
+
+.workstation-request form {
+  display: grid;
+  gap: 8px;
+  max-width: 620px;
+  margin-top: 20px;
+  padding: 14px;
+  border: 1px solid #315b57;
+  border-left: 3px solid var(--phosphor);
+  background: #07161a;
+}
+
+.workstation-request form label {
+  color: var(--phosphor);
+  font: 10px/1.5 var(--mono);
+  letter-spacing: .08em;
+}
+
+.workstation-request form button {
+  justify-self: start;
+  border-color: #47766e;
+  color: var(--phosphor);
+}
+
+.workstation-request-dot {
+  width: 6px;
+  height: 6px;
+  margin-left: 2px;
+  border-radius: 50%;
+  background: #536b69;
+}
+
+.workstation-apps button[data-workstation-request-state="ready"] {
+  border-color: #b98f65;
+  color: #e4b260;
+}
+
+.workstation-apps button[data-workstation-request-state="ready"] .workstation-request-dot {
+  background: #e4b260;
+  box-shadow: 0 0 8px #e4b260;
+}
+
+.workstation-apps button[data-workstation-request-state="standby"] {
+  color: #5d7774;
 }
 
 @keyframes terminal-cursor {
@@ -839,15 +1079,25 @@
   right: 8px;
   bottom: 8px;
   z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 20px);
   margin: 0;
-  padding: 4px 8px;
+  padding: 5px 9px;
   border: 1px solid #31524f;
+  border-left: 2px solid var(--amber);
   background: #08181cd9;
   color: #6f9790;
   font: 8px/1.4 var(--mono);
   letter-spacing: .08em;
   pointer-events: none;
   opacity: .78;
+}
+
+.operations-scroll-cue-label {
+  color: var(--amber);
+  white-space: nowrap;
 }
 
 @media (max-width: 759px) {
@@ -895,6 +1145,8 @@
 
   .operations-scroll-cue {
     margin-right: 2px;
+    right: 6px;
+    bottom: 6px;
     font-size: 7px;
   }
 }
@@ -906,5 +1158,354 @@
 
   .terminal-echo::after {
     animation: none;
+  }
+}
+
+/* At tablet widths each monitor gets the full reading width; the existing
+   radio tabs stay reserved for the mobile breakpoint driven by game.js. */
+@media (min-width: 760px) and (max-width: 999px) {
+  .game-room-shell .monitor-selector {
+    height: auto;
+    flex: none;
+    overflow: visible;
+  }
+
+  .workstation-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    height: auto;
+    max-height: none;
+    gap: 16px;
+    background-image: none;
+  }
+
+  .monitor-frame {
+    max-height: none;
+  }
+}
+
+@media (min-width: 760px) and (max-width: 980px) {
+  .monitor-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .monitor-tab-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .monitor-tab {
+    margin: 0;
+    padding: 11px 8px;
+    border: 1px solid var(--casing-edge);
+    background: #111e24;
+    color: #91a3a9;
+    font: 10px/1.4 var(--mono);
+    letter-spacing: .1em;
+    text-align: center;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .monitor-tab-input:checked + .monitor-tab {
+    border-color: var(--phosphor-dim);
+    background: #18302f;
+    color: var(--phosphor);
+  }
+
+  .monitor-tab-input:focus-visible + .monitor-tab {
+    outline: 3px solid var(--amber);
+    outline-offset: 3px;
+  }
+
+  .workstation-shell {
+    display: block;
+    height: auto;
+    max-height: none;
+  }
+
+  .game-room-shell .monitor-selector {
+    height: auto;
+    flex: none;
+    overflow: visible;
+  }
+
+  .monitor-selector:has(#monitor-intercom:checked) .operations-monitor,
+  .monitor-selector:has(#monitor-operations:checked) .intercom-monitor {
+    display: none;
+  }
+
+  .monitor-casing,
+  .monitor-frame {
+    max-height: none;
+  }
+
+  .monitor-bezel,
+  .monitor-screen {
+    min-height: 0;
+  }
+
+  .operations-workspace {
+    display: block;
+  }
+
+  /* At tablet width a hidden puzzle should not reserve a fake second column
+     beside FILES. Desktop keeps the original scrollable two-column console. */
+  .operations-workspace > [data-workstation],
+  .operations-workspace:has(> [data-puzzle-gate]:not([hidden])) > [data-workstation] {
+    grid-column: 1 / -1;
+    align-self: stretch;
+    height: auto;
+    min-height: 0;
+  }
+
+  .operations-workspace::before,
+  .operations-workspace::after,
+  .operations-screen::before {
+    display: none;
+  }
+
+  .operations-workspace > [data-workstation],
+  .operations-workspace > .terminal-panel {
+    width: 100%;
+  }
+}
+
+.room-awaiting-partner .chat-form {
+  opacity: .55;
+}
+
+/* Files behaves like a real two-pane file manager: the tree stays visible
+   while the selected directory or document occupies the reading pane. */
+.workstation-files-layout {
+  display: grid;
+  grid-template-columns: minmax(132px, .42fr) minmax(0, 1fr);
+  gap: 10px;
+  height: 100%;
+  min-height: 100%;
+}
+
+.workstation-file-tree,
+.workstation-directory {
+  min-width: 0;
+  border: 1px solid #234447;
+  background: linear-gradient(145deg, #0b2024, #071519);
+}
+
+.workstation-file-tree {
+  min-height: 0;
+  max-height: 100%;
+  max-height: 360px;
+  overflow: auto;
+  padding: 10px 6px;
+  scrollbar-color: #46716c transparent;
+  scrollbar-width: thin;
+}
+
+.workstation-file-tree h3,
+.workstation-directory h3 {
+  padding-inline: 8px;
+}
+
+.workstation-folder-tree {
+  display: grid;
+  gap: 2px;
+}
+
+.workstation-tree-entry {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 32px;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 5px 6px;
+  padding-inline-start: calc(6px + (var(--folder-depth, 0) * 14px));
+  border: 0;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: #8eb5ac;
+  font: 10px/1.4 var(--mono);
+  text-align: left;
+}
+
+.workstation-tree-entry:hover:not(:disabled),
+.workstation-tree-entry:focus-visible,
+.workstation-tree-entry[aria-selected="true"] {
+  border-left-color: var(--phosphor);
+  background: #123237;
+  color: var(--phosphor);
+}
+
+.workstation-tree-entry.is-file {
+  color: #a7bfc0;
+}
+
+.workstation-tree-entry:disabled {
+  cursor: not-allowed;
+  opacity: .56;
+}
+
+.workstation-tree-twisty {
+  width: 10px;
+  flex: 0 0 10px;
+  color: #6faaa0;
+  text-align: center;
+}
+
+.workstation-tree-twisty.is-hidden {
+  visibility: hidden;
+}
+
+.workstation-folder-button {
+  width: 100%;
+  min-height: 32px;
+  justify-content: flex-start;
+  gap: 7px;
+  padding: 5px 6px;
+  padding-inline-start: calc(6px + (var(--folder-depth, 0) * 14px));
+  border: 0;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: #8eb5ac;
+  font: 10px/1.4 var(--mono);
+  text-align: left;
+}
+
+.workstation-folder-button:hover,
+.workstation-folder-button:focus-visible,
+.workstation-folder-button[aria-selected="true"] {
+  border-left-color: var(--phosphor);
+  background: #123237;
+  color: var(--phosphor);
+}
+
+.workstation-directory {
+  overflow: auto;
+  padding: 10px;
+  scrollbar-color: #46716c transparent;
+  scrollbar-width: thin;
+}
+
+.workstation-breadcrumb {
+  overflow: hidden;
+  margin: 0 8px 8px;
+  color: #5e8983;
+  font: 9px/1.5 var(--mono);
+  letter-spacing: .06em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workstation-entry-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.45;
+}
+
+.workstation-entry-icon.is-folder {
+  color: #9debd3;
+}
+
+.workstation-entry-icon.is-file {
+  color: #8fb2b2;
+}
+
+.workstation-entry-icon.is-locked {
+  color: #b98f65;
+}
+
+.workstation-directory-list {
+  gap: 5px;
+}
+
+.workstation-directory-list button {
+  gap: 9px;
+}
+
+.workstation-directory-list button::before {
+  display: none;
+}
+
+.workstation-directory-empty {
+  margin: 20px 8px;
+  color: #6f9290;
+  font: 10px/1.7 var(--mono);
+}
+
+.workstation-document {
+  min-height: 190px;
+  border: 1px solid #315b57;
+  border-left: 3px solid var(--phosphor);
+  background: #07161a;
+  box-shadow: inset 0 0 20px #0008;
+}
+
+.workstation-document h4 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  padding: 12px 14px;
+  border-bottom: 1px solid #234447;
+  color: var(--phosphor);
+  font: 11px/1.5 var(--mono);
+}
+
+.workstation-document [data-workstation-entry-content] {
+  margin: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.workstation-document form {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px 14px;
+  border-top: 1px dashed #31524f;
+}
+
+[data-workstation-answer-form] {
+  margin-top: 18px;
+  border: 1px solid #9f7a45;
+  border-left: 3px solid #e4b260;
+  background: #1a1710;
+}
+
+[data-workstation-answer-form] label {
+  color: #e4b260;
+  font: 10px/1.5 var(--mono);
+  letter-spacing: .08em;
+}
+
+[data-workstation-answer-form] button {
+  justify-self: start;
+  border-color: #9f7a45;
+  color: #f4c77c;
+}
+
+@media (max-width: 759px) {
+  .workstation-files-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .workstation-file-tree {
+    max-height: 152px;
+  }
+
+  .workstation-folder-tree {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

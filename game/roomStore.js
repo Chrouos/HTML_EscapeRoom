@@ -250,6 +250,9 @@ function createRoomStore(options = {}) {
     restoreStoreOwnedMetadata(draft, owned);
     updater(draft);
     restoreStoreOwnedMetadata(draft, owned);
+    const countdownView = roomView(draft, currentTime);
+    draft.countdownStatus = countdownView.countdownStatus;
+    draft.countdownRemainingMs = countdownView.countdownRemainingMs;
     const envelopes = dispatchChanges
       ? dispatchProjectionChanges({ before: room, draft, events: options.events || [] })
       : {};
