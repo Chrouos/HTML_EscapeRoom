@@ -18,15 +18,8 @@ const ARCHIVE_MANIFESTS = Object.freeze({
   'mirror_backup.zip': Object.freeze(['log.mirror_backup', 'log.token_reissue', 'archive.mirror.checksum'])
 });
 
-const ARCHIVE_CONTENTS = Object.freeze([
-  Object.freeze({ id: 'archive.case_bundle.index', sourceGroup: 'case_bundle', audience: { kind: 'both' }, unlockWhen: { all: [] }, archiveOnly: true, archiveId: 'case_bundle.zip', kind: 'document', text: '封存索引：case_bundle 的最後寫入順序仍可由原始紀錄交叉驗證。' }),
-  Object.freeze({ id: 'archive.incident.raw_notes', sourceGroup: 'incident_bundle', audience: { kind: 'both' }, unlockWhen: { all: [] }, archiveOnly: true, archiveId: 'incident_bundle.zip', kind: 'document', text: '碎片備註：事故音軌與索引時間不是同一個來源。' }),
-  Object.freeze({ id: 'archive.mirror.checksum', sourceGroup: 'mirror_backup', audience: { kind: 'both' }, unlockWhen: { all: [] }, archiveOnly: true, archiveId: 'mirror_backup.zip', kind: 'document', text: '鏡像摘要：checksum 可從備份與安全記錄交叉比對。' })
-]);
-
 function authoredEntries() {
-  const ids = new Set(terminalEntries.map(entry => entry.id));
-  return [...terminalEntries, ...ARCHIVE_CONTENTS.filter(entry => !ids.has(entry.id))];
+  return [...terminalEntries];
 }
 
 function discoveredEvidenceEntries(room) {
@@ -145,8 +138,25 @@ function parseTerminalCommand(value) {
     }
     return { command, argument };
   }
+  if (command === 'UNZIP') {
+    const [target, ...passwordParts] = argument.split(/\s+/);
+    if (!target || target.length > MAX_TERMINAL_ARGUMENT) {
+      throw commandError('INVALID_COMMAND', 400, 'Invalid terminal command: UNZIP requires one argument');
+    }
+    const password = passwordParts.join(' ');
+    if (password.length > MAX_TERMINAL_ARGUMENT || /[\u0000-\u001f\u007f]/.test(password)) {
+      throw commandError('INVALID_COMMAND', 400, 'Invalid archive password');
+    }
+    return { command, argument: safeArgument(target, 'UNZIP target'), password };
+  }
   if (!argument || /\s/.test(argument)) throw commandError('INVALID_COMMAND', 400, `Invalid terminal command: ${command} requires one argument`);
   return { command, argument: safeArgument(argument, `${command} target`) };
+}
+
+function archivePasswordFor(archiveId) {
+  const archive = authoredEntries().find(entry => entry.archive?.id?.toLowerCase() === archiveId);
+  return typeof archive?.archive?.password === 'string' && archive.archive.password
+    ? archive.archive.password : null;
 }
 
 function visibleEntries(room, role) {
@@ -177,6 +187,10 @@ function executeTerminalCommand(room, player, value) {
       || !ARCHIVE_MANIFESTS[archiveId].some(id => currentVisible.has(id))) {
       throw commandError('ARCHIVE_LOCKED', 423, 'Archive is locked or not visible');
     }
+    const requiredPassword = archivePasswordFor(archiveId);
+    if (requiredPassword && parsed.password !== requiredPassword) {
+      throw commandError('ARCHIVE_PASSWORD', 423, 'Archive password is incorrect');
+    }
   }
   ensureRoom(room);
   refreshWorkstation(room);
@@ -189,7 +203,7 @@ function executeTerminalCommand(room, player, value) {
     return {
       stateChanged: false,
       command: parsed.command,
-      output: 'HELP\nSEARCH <node>\nSCAN <filename>\nUNZIP <filename>\nHINT\nSEND <text>',
+      output: 'HELP\nSEARCH <node>\nSCAN <filename>\nUNZIP <filename> [password]\nHINT\nSEND <text>',
       publicEvents: [], unlockedEntryIds: []
     };
   }
@@ -442,7 +456,11 @@ function displayEntry(entry, opened, locked = false, archiveExpanded = false) {
     result.stepId = entry.stepId || 'inspect';
     result.investigation = { opened: entry.opened === true, complete: entry.complete === true };
   }
-  if (entry.archive) result.archive = { id: entry.archive.id, expanded: Boolean(archiveExpanded) };
+  if (entry.archive) result.archive = {
+    id: entry.archive.id,
+    expanded: Boolean(archiveExpanded),
+    passwordRequired: typeof entry.archive.password === 'string' && entry.archive.password.length > 0
+  };
   if (entry.archiveId && entry.archiveOnly) result.archive = { id: entry.archiveId, expanded: Boolean(archiveExpanded) };
   if (locked) return result;
   result.text = entry.text;

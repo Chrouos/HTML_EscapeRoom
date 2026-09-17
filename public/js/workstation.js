@@ -21,6 +21,8 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
   let currentView = {};
   let activeApp = 'files';
   let folderPath = [];
+  // Kept for compatibility with the legacy tree branch below while the
+  // icon-grid renderer owns the visible Files surface.
   let expandedFolders = new Set();
   let lastFocusId = '';
   const scrollPositions = new Map();
@@ -160,6 +162,10 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
         captureViewState();
         activeApp = app.id;
         folderPath = [];
+        if (app.id === 'files') {
+          currentView = { ...currentView };
+          delete currentView.__openedEntry;
+        }
         lastFocusId = app.id === 'terminal' ? 'terminal-input' : app.id;
         render(currentView);
         if (app.id === 'terminal') {
@@ -177,10 +183,11 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
 
   function entryIcon(entry) {
     const isFolder = entry.kind === 'folder' || entry.type === 'folder';
+    const isArchive = !isFolder && (entry.kind === 'archive' || entry.archive?.id);
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox', '0 0 24 24');
     svg.setAttribute('aria-hidden', 'true');
-    svg.classList.add('workstation-entry-icon', isFolder ? 'is-folder' : 'is-file');
+    svg.classList.add('workstation-entry-icon', isFolder ? 'is-folder' : isArchive ? 'is-archive' : 'is-file');
     svg.innerHTML = isFolder
       ? '<path d="M3.5 7.5h6l1.8 2h9.2v9.2H3.5z"/><path d="M3.5 7.5V5.3h6.2l1.7 2.2"/>'
       : '<path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4M9 12h6M9 16h6"/>';
@@ -189,6 +196,7 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
 
   function entryButton(entry, extraAttributes = {}) {
     const isFolder = entry.kind === 'folder' || entry.type === 'folder';
+    const isArchive = !isFolder && (entry.kind === 'archive' || entry.archive?.id);
     const name = entryName(entry);
     const button = createButton('', {
       'data-workstation-entry': entry.id,
@@ -197,7 +205,7 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
     });
     button.dataset.workstationEntry = entry.id;
     button.dataset.workstationId = entry.id;
-    button.dataset.entryKind = isFolder ? 'folder' : 'file';
+    button.dataset.entryKind = isFolder ? 'folder' : isArchive ? 'archive' : 'file';
     button.dataset.entryState = entry.locked === true ? 'locked' : 'available';
     button.setAttribute('aria-label', name);
     const icon = entryIcon(entry);
@@ -233,7 +241,6 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
     const entries = filesFor(view);
     const rootId = rootIdFor(view, entries);
     const isFolder = entry => entry.kind === 'folder' || entry.type === 'folder';
-    const folders = entries.filter(isFolder);
     const byId = new Map(entries.map(entry => [entry.id, entry]));
     const childrenOf = parentId => entries
       .filter(entry => entry.parentId === parentId)
@@ -244,14 +251,132 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
 
     if (!folderPath.length || !byId.has(folderPath[folderPath.length - 1])
       || !isFolder(byId.get(folderPath[folderPath.length - 1]))) folderPath = rootId ? [rootId] : [];
-    if (rootId && !expandedFolders.has(rootId)) expandedFolders.add(rootId);
-    expandedFolders = new Set([...expandedFolders].filter(folderId => byId.has(folderId) && isFolder(byId.get(folderId))));
     const folderId = folderPath[folderPath.length - 1] || rootId;
     const folder = byId.get(folderId);
     const opened = byId.get(currentView.__openedEntry);
 
     const filesLayout = document.createElement('div');
     filesLayout.className = 'workstation-files-layout';
+
+    // Files uses a single icon-grid pane so it reads like a familiar file
+    // manager. The existing folderPath and openedEntry cursor still drive
+    // navigation, keeping document reading and keyboard back behavior intact.
+    {
+      const directory = document.createElement('section');
+      directory.className = 'workstation-directory workstation-scroll';
+      directory.dataset.workstationDirectory = '';
+      directory.dataset.workstationScroll = '';
+      const breadcrumb = document.createElement('div');
+      breadcrumb.className = 'workstation-breadcrumb';
+      breadcrumb.textContent = folderPath.map(idValue => entryName(byId.get(idValue) || { name: idValue })).join(' / ');
+      directory.append(breadcrumb);
+      const returnToParent = () => {
+        captureViewState();
+        if (opened) {
+          currentView = { ...currentView };
+          delete currentView.__openedEntry;
+          lastFocusId = folderId;
+        } else {
+          folderPath.pop();
+          lastFocusId = folderPath[folderPath.length - 1] || '';
+        }
+        render(currentView);
+      };
+
+      if (!opened) {
+        const heading = document.createElement('h3');
+        heading.textContent = entryName(folder || { name: 'FILES' });
+        directory.append(heading);
+        if (folderPath.length > 1) {
+          const back = createButton('Back', { 'data-workstation-back': '' });
+          back.addEventListener('click', returnToParent);
+          directory.append(back);
+        }
+      }
+
+      if (opened && !isFolder(opened)) {
+        const documentPanel = document.createElement('article');
+        documentPanel.className = 'workstation-document';
+        documentPanel.dataset.workstationDocument = '';
+        const documentTitle = document.createElement('h4');
+        const back = createButton('Back to folder', { 'data-workstation-back': '' });
+        back.addEventListener('click', returnToParent);
+        documentTitle.append(entryIcon(opened), document.createTextNode(entryName(opened)), back);
+        const content = document.createElement('pre');
+        content.dataset.workstationEntryContent = '';
+        content.textContent = typeof opened.content === 'string' ? opened.content
+          : typeof opened.text === 'string' ? opened.text : '';
+        documentPanel.append(documentTitle, content);
+        if (opened.archive?.id) {
+          const archiveForm = document.createElement('form');
+          archiveForm.dataset.workstationArchiveForm = opened.archive.id;
+          archiveForm.className = 'workstation-archive-form';
+          if (opened.archive.passwordRequired === true) {
+            const password = document.createElement('input');
+            password.type = 'password';
+            password.name = 'password';
+            password.autocomplete = 'off';
+            password.maxLength = 120;
+            password.placeholder = 'archive password';
+            password.setAttribute('aria-label', 'Archive password');
+            archiveForm.append(password);
+          }
+          const archiveButton = createButton(opened.archive.expanded === true ? 'EXPANDED' : 'UNZIP');
+          archiveButton.type = 'submit';
+          archiveButton.disabled = opened.archive.expanded === true;
+          archiveForm.append(archiveButton);
+          archiveForm.addEventListener('submit', event => {
+            event.preventDefault();
+            if (opened.archive.expanded === true) return;
+            const password = archiveForm.querySelector('input[name="password"]')?.value.trim() || '';
+            invokeOperation({
+              operationId: 'terminal_command',
+              value: `UNZIP ${opened.archive.id}${password ? ` ${password}` : ''}`
+            });
+          });
+          documentPanel.append(archiveForm);
+        }
+        if (opened.puzzleId && opened.opened === true && opened.complete !== true && typeof onPuzzleAction === 'function') {
+          const puzzleForm = document.createElement('form');
+          puzzleForm.dataset.investigationForm = opened.puzzleId;
+          const puzzleInput = document.createElement('input');
+          puzzleInput.name = 'value';
+          puzzleInput.maxLength = 1000;
+          puzzleInput.autocomplete = 'off';
+          puzzleInput.placeholder = 'enter response';
+          const puzzleButton = createButton('SUBMIT NOTE');
+          puzzleButton.type = 'submit';
+          puzzleForm.append(puzzleInput, puzzleButton);
+          puzzleForm.addEventListener('submit', event => {
+            event.preventDefault();
+            onPuzzleAction({ puzzleId: opened.puzzleId, stepId: opened.stepId || 'inspect', value: puzzleInput.value, actionId: randomId() });
+          });
+          documentPanel.append(puzzleForm);
+        }
+        directory.append(documentPanel);
+      } else {
+        const grid = document.createElement('div');
+        grid.className = 'workstation-file-grid';
+        grid.dataset.workstationFileGrid = '';
+        grid.setAttribute('role', 'list');
+        for (const entry of childrenOf(folderId)) {
+          const card = entryButton(entry);
+          card.classList.add('workstation-file-card');
+          grid.append(card);
+        }
+        if (grid.childElementCount) directory.append(grid);
+        else {
+          const empty = document.createElement('p');
+          empty.className = 'workstation-directory-empty';
+          empty.textContent = '從左側選取文件以開啟完整內容。';
+          directory.append(empty);
+        }
+      }
+
+      filesLayout.append(directory);
+      container.append(filesLayout);
+      return;
+    }
 
     const treePanel = document.createElement('aside');
     treePanel.className = 'workstation-file-tree';
@@ -655,6 +780,10 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
     captureViewState();
     activeApp = appId;
     folderPath = [];
+    if (appId === 'files') {
+      currentView = { ...currentView };
+      delete currentView.__openedEntry;
+    }
     lastFocusId = appId;
     render(currentView);
   }
@@ -677,9 +806,11 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
     }
     if (isFolder) {
       if (!folderPath.includes(entry.id)) folderPath.push(entry.id);
-    } else {
-      currentView = { ...currentView, __openedEntry: entry.id };
+      lastFocusId = entry.id;
+      render(currentView);
+      return;
     }
+    currentView = { ...currentView, __openedEntry: entry.id };
     lastFocusId = entry.id;
     render(currentView);
     // Opening a record is a stateful workstation action. Persist it so

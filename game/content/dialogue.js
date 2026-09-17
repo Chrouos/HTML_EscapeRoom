@@ -52,6 +52,12 @@ const dialogue = Object.freeze([
   line('orpheus.observation.b', 'direct', 'observation', guest, { all: [{ publicFact: 'main1Completed' }, { roleFact: 'rapportCount2' }, { entryOpened: 'doc.b_incident_report' }] }, [
     'ECHO：那份報告的附件版本比主索引晚了一次更新。'
   ], { verificationEntries: [{ entryId: 'audio.original_incident_timestamp', sourceGroup: 'raw_audio' }] }),
+  line('echo.protocol_versions.a', 'direct', 'observation', host, { all: [{ publicFact: 'main1Completed' }, { entryOpened: 'archive.protocol_versions' }] }, [
+    'ECHO：你找到的是合作驗證規章的修訂紀錄。1.4 以前的版本還在；如果要知道現在的規則改過什麼，請自己比對。'
+  ]),
+  line('echo.protocol_versions.b', 'direct', 'observation', guest, { all: [{ publicFact: 'main1Completed' }, { entryOpened: 'archive.protocol_versions' }] }, [
+    'ECHO：你找到的是合作驗證規章的修訂紀錄。1.4 以前的版本還在；如果要知道現在的規則改過什麼，請自己比對。'
+  ]),
   line('orpheus.a1.task', 'direct', 'private_task', host, { all: [{ publicFact: 'main1Completed' }, { roleFact: 'rapportCount2' }, { entryOpened: 'files.mainline' }] }, [
     'ECHO：請你幫忙整理索引。這只是本地整理，不會改變共同檔案。'
   ], { mainlineFallbackOperationIds: ['continue_file_index'], debriefFactIds: ['aArchivedIndex', 'a1DeclinedIndex', 'a1Skipped'] }),

@@ -6,3 +6,9 @@
 - Keep urgent blocking decisions and tightly coupled integration work in the primary thread. Give the subagent concrete scope, expected output, and file ownership.
 - If an exact requested model is unavailable, state the fallback clearly and use the closest available configuration.
 - Preserve the author's direct, approachable coding style while improving file boundaries, naming, and testability.
+
+## Story canon
+
+- The canonical source for the ORPHEUS／ECHO world, characters, experiment rules, identity reveal, timeline, and endings is `docs/superpowers/specs/2026-09-17-orpheus-echo-story-bible.md`.
+- Read and follow that Story Bible before changing narrative files, game story content, dialogue, missions, endings, or the novel.
+- If another background note or an earlier draft conflicts with the Story Bible, the Story Bible takes precedence. Do not infer a new premise from individual FILE documents.

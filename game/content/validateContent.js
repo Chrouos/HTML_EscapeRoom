@@ -1,5 +1,6 @@
 const { validateAudience } = require('../audience');
 const { content: defaultContent, AUDIENCE_KINDS, CHANNELS, INTENTS, OPERATION_KINDS, PREDICATES } = require('./contentSchema');
+const { defaultContentLoader } = require('./fileLoader');
 
 const DELIVERY_LABEL_RE = /AI_BROADCAST|AI_DIRECT|\bbroadcast\b|\bdirect\b|公開頻道|私人頻道/i;
 const REQUIRED_ENTRY_KEYS = ['id', 'sourceEntryId', 'sourceGroup', 'audience', 'unlockWhen', 'verificationEntries', 'requiresPrivateFacts', 'mainlineFallbackOperationIds', 'debriefFactIds'];
@@ -147,6 +148,18 @@ function validateContent(bundle = defaultContent) {
   const reach = operationReachability(operations);
   for (const entry of terminalEntries) {
     for (const key of REQUIRED_ENTRY_KEYS) if (!(key in entry)) errors.push(`entry ${entry.id || '?'} missing ${key}`);
+    let entryText = '';
+    if (entry.contentFile !== undefined) {
+      if (typeof entry.contentFile !== 'string' || !entry.contentFile.trim()) {
+        errors.push(`entry ${entry.id} has invalid content file`);
+      } else {
+        const fileStatus = defaultContentLoader.validate(entry.contentFile);
+        if (!fileStatus.ok) errors.push(`entry ${entry.id} content file ${fileStatus.path}: ${fileStatus.error}`);
+        else entryText = entry.text;
+      }
+    } else {
+      entryText = entry.text || '';
+    }
     try { validateAudience(entry.audience); } catch { errors.push(`entry ${entry.id} has invalid audience`); }
     predicateErrors(entry.unlockWhen, `entry ${entry.id}.unlockWhen`, errors);
     if (!entryIds.has(entry.sourceEntryId)) errors.push(`entry ${entry.id} references missing source entry ${entry.sourceEntryId}`);
@@ -159,7 +172,7 @@ function validateContent(bundle = defaultContent) {
     }
     for (const fallback of entry.mainlineFallbackOperationIds || []) if (!operationIds.has(fallback)) errors.push(`entry ${entry.id} fallback ${fallback} missing`);
     for (const factId of entry.debriefFactIds || []) if (!debrief.some(item => item.factId === factId)) errors.push(`entry ${entry.id} references missing debrief fact ${factId}`);
-    for (const { value, path } of allStrings(entry.text || '', `entry ${entry.id}.text`)) if (DELIVERY_LABEL_RE.test(value)) errors.push(`entry ${entry.id} visible copy contains delivery label`);
+    for (const { value } of allStrings(entryText, `entry ${entry.id}.text`)) if (DELIVERY_LABEL_RE.test(value)) errors.push(`entry ${entry.id} visible copy contains delivery label`);
   }
   for (const item of dialogue) {
     try { validateAudience(item.audience); } catch { errors.push(`dialogue ${item.id} has invalid audience`); }

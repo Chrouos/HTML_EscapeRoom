@@ -77,4 +77,25 @@ function createFileLoader({ rootDir } = {}) {
   });
 }
 
-module.exports = { createFileLoader, normalizeRelativePath };
+const defaultContentLoader = createFileLoader({ rootDir: path.join(__dirname, 'files') });
+
+function attachFileContent(entry, contentFile, loader = defaultContentLoader) {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new TypeError('entry is required');
+  const normalized = normalizeRelativePath(contentFile);
+  Object.defineProperty(entry, 'contentFile', {
+    configurable: true,
+    enumerable: true,
+    value: normalized,
+    writable: false
+  });
+  Object.defineProperty(entry, 'text', {
+    configurable: true,
+    enumerable: true,
+    get() {
+      return loader.read(normalized);
+    }
+  });
+  return entry;
+}
+
+module.exports = { attachFileContent, createFileLoader, defaultContentLoader, normalizeRelativePath };

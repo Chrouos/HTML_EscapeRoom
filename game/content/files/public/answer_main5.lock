@@ -1,0 +1,14 @@
+DOCUMENT TYPE: MAINLINE SEAL / ARCHIVE RECOVERY
+CREATED: 2038-04-17 02:34:00
+LAST MODIFIED: 2038-04-17 02:34:00
+AUTHOR: HUMAN ARCHIVE TEAM
+SOURCE: ORPHEUS UNIT 17 / MAIN PROCEDURE 05
+STATUS: OFFICIAL LOCKED RECORD
+
+【檔案庫復原封存】
+封存時間：02:34:00
+封存人員：檔案管理組
+
+復原時必須保留原始版本、鏡像版本與最後一次校驗結果。檔案顯示「未經修改」不等於它的頁尾沒有被重新簽署；校驗時間、簽署者與內容版本必須分開記錄。
+
+若兩端取得的碎片無法拼成同一份紀錄，先保留兩份，不要用較新的版本覆蓋較早的版本。檔案庫只接受能說明來源與順序的復原結果。

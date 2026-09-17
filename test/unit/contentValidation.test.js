@@ -19,6 +19,13 @@ test('default narrative manifests satisfy the content contract', () => {
   assert.deepEqual(validateContent(content), []);
 });
 
+test('rejects a file-backed entry when its authored content file is missing', () => {
+  const terminalEntries = content.terminalEntries.map(item => ({ ...item }));
+  terminalEntries[0].contentFile = 'missing/not-authored.md';
+
+  assert.match(errorsFor({ terminalEntries }).join('\n'), /content file|missing|not-authored/i);
+});
+
 test('Files narrative entries use readable filenames and carry the story trail', () => {
   const entries = new Map(content.terminalEntries.map(entry => [entry.id, entry]));
   const narrativeIds = [

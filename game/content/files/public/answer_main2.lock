@@ -1,0 +1,14 @@
+DOCUMENT TYPE: MAINLINE SEAL / POWER RECOVERY
+CREATED: 2038-04-17 02:19:00
+LAST MODIFIED: 2038-04-17 02:19:00
+AUTHOR: HUMAN FACILITY OPERATIONS
+SOURCE: ORPHEUS UNIT 17 / MAIN PROCEDURE 02
+STATUS: OFFICIAL LOCKED RECORD
+
+【設備維護封存】
+封存時間：02:19:00
+封存人員：設施運轉組
+
+02:17 後，控制室主電源與備援電池的交接紀錄不完整。主電源、備援路由與兩個終端的回報時間沒有被寫入同一份表格，因此不能用檔案排列順序代替事件順序。
+
+恢復程序要求先確認電力來源，再確認資料路由，最後才接受「設備已恢復」的回報。若兩端看到的恢復狀態不同，維持現況並重新比對。

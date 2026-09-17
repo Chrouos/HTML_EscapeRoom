@@ -1,9 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const { createRoomState } = require('../../game/createRoomState');
 const { terminalEntries } = require('../../game/content/terminalEntries');
-const { openEntry, executeOperation, projectWorkstation, refreshWorkstation, audienceAllows, executeTerminalCommand } = require('../../game/terminalEngine');
+const { openEntry, executeOperation, projectWorkstation, refreshWorkstation, audienceAllows, executeTerminalCommand, parseTerminalCommand } = require('../../game/terminalEngine');
 
 function readyRoom() {
   const room = createRoomState('ROOM42', 0);
@@ -23,11 +25,41 @@ test('content declares all nine deception groups and exact verification links', 
   const byId = new Map(terminalEntries.map(item => [item.id, item]));
   const deception = new Map(terminalEntries.filter(item => item.isDeception).map(item => [item.deceptionId, item]));
   assert.deepEqual([...deception.keys()].sort(), ['A-1', 'A-2', 'A-3', 'B-1', 'B-2', 'B-3', 'D-1', 'D-2', 'L-1']);
-  assert.equal(byId.get('doc.a_incident_report').verificationEntries[0].entryId, 'audio.original_incident_timestamp');
+  assert.equal(byId.get('doc.a_incident_report').verificationEntries[0].entryId, 'archive.incident.raw_notes');
   assert.equal(byId.get('ai.a2.cleanup_request').verificationEntries[1].entryId, 'log.mirror_backup');
   assert.equal(byId.get('ai.b2.pause_request').verificationEntries[0].entryId, 'log.token_reissue');
   assert.equal(byId.get('doc.a_solo_protocol').verificationEntries[0].entryId, 'doc.protocol_signature_template');
   assert.equal(byId.get('log.a_partner_unknown_access').verificationEntries[0].entryId, 'log.audit_checksum');
+});
+
+test('authored FILE records use local content files without exposing source paths to players', () => {
+  const fileRecords = terminalEntries.filter(item => item.kind !== 'folder'
+    && !item.id.startsWith('ai.')
+    && !item.id.startsWith('log.')
+    && !item.id.startsWith('audio.'));
+  assert.ok(fileRecords.length > 0);
+  assert.ok(fileRecords.every(item => typeof item.contentFile === 'string' && item.contentFile.length > 0));
+
+  const room = readyRoom();
+  const projected = projectWorkstation(room, { role: 'A', playerId: 'player-a' });
+  assert.doesNotMatch(JSON.stringify(projected), /contentFile|game[\\/]content[\\/]files/);
+});
+
+test('protocol revision archive records each experiment update and addition', () => {
+  const revisionLog = terminalEntries.find(item => item.id === 'archive.protocol_versions');
+  assert.ok(revisionLog);
+  assert.match(revisionLog.text, /VERSION 0\.1[\s\S]*更新[：:][\s\S]*新增紀錄[：:][\s\S]*觀察[：:]/);
+  assert.match(revisionLog.text, /VERSION 0\.7[\s\S]*雙實例協作/);
+  assert.match(revisionLog.text, /VERSION 1\.2[\s\S]*鏡像備份/);
+  assert.match(revisionLog.text, /VERSION 1\.4[\s\S]*共同校驗/);
+});
+
+test('mirror backup archive contains concrete timestamps and source differences', () => {
+  const mirrorArchive = terminalEntries.find(item => item.id === 'archive.mirror_backup');
+  assert.match(mirrorArchive.text, /09:12[\s\S]*09:14[\s\S]*09:16[\s\S]*09:18/);
+  assert.match(mirrorArchive.text, /主檔案[\s\S]*鏡像備份/);
+  assert.match(mirrorArchive.text, /權限標記[\s\S]*較高/);
+  assert.match(mirrorArchive.text, /A／B 原始欄位/);
 });
 
 test('A and B receive conflicting incident and solo protocol projections while raw evidence is shared', () => {
@@ -221,6 +253,12 @@ test('terminal commands return safe output and only expose visible records', () 
   assert.match(scan.output, /02:11/);
 });
 
+test('UNZIP accepts an optional password without treating it as a path argument', () => {
+  assert.deepEqual(parseTerminalCommand('UNZIP case_bundle.zip 17'), {
+    command: 'UNZIP', argument: 'case_bundle.zip', password: '17'
+  });
+});
+
 test('HINT and SEND produce public ORPHEUS events without audience labels', () => {
   const room = readyRoom();
   const hint = executeTerminalCommand(room, { role: 'A', playerId: 'player-a' }, 'HINT');
@@ -325,4 +363,18 @@ test('archive metadata remains closed until authored UNZIP and child files are r
   const after = projectWorkstation(room, { role: 'A', playerId: 'player-a' });
   assert.ok(after.files.entries.some(item => item.id === 'archive.case_bundle.index'));
   assert.equal(after.files.entries.find(item => item.archive?.id === 'case_bundle.zip').archive.expanded, true);
+});
+
+test('archive FILE content reloads from the local story file without restarting the engine', () => {
+  const contentPath = path.join(__dirname, '../../game/content/files/archives/case_history_index.md');
+  const original = fs.readFileSync(contentPath, 'utf8');
+  try {
+    fs.writeFileSync(contentPath, `${original}\nLIVE_ARCHIVE_EDIT\n`, 'utf8');
+    const room = readyRoom();
+    executeTerminalCommand(room, { role: 'A', playerId: 'player-a' }, 'UNZIP case_bundle.zip');
+    const scan = executeTerminalCommand(room, { role: 'A', playerId: 'player-a' }, 'SCAN archive.case_bundle.index');
+    assert.match(scan.output, /LIVE_ARCHIVE_EDIT/);
+  } finally {
+    fs.writeFileSync(contentPath, original, 'utf8');
+  }
 });

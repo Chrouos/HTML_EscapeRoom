@@ -320,6 +320,9 @@ function triggerDialogue(room, trigger = {}, pendingEvents = []) {
   if (role && entryOpened && (entryOpened === 'files.mainline' || entryOpened === 'files.experiment_roster')) {
     emitDirect(room, role, 'rapport', pendingEvents);
   }
+  if (role && entryOpened === 'archive.protocol_versions') {
+    emitDirect(room, role, 'observation', pendingEvents);
+  }
   if (role && operationId === 'verify_incident_timestamp') {
     // Give the player space to breathe before another pressure instruction.
     emitDirect(room, role, 'rapport', pendingEvents);

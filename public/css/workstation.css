@@ -1284,8 +1284,8 @@
   opacity: .55;
 }
 
-/* Files behaves like a real two-pane file manager: the tree stays visible
-   while the selected directory or document occupies the reading pane. */
+/* Files keeps the familiar directory/document model while the active pane is
+   styled as an icon-first file manager. */
 .workstation-files-layout {
   display: grid;
   grid-template-columns: minmax(132px, .42fr) minmax(0, 1fr);
@@ -1433,6 +1433,10 @@
   color: #8fb2b2;
 }
 
+.workstation-entry-icon.is-archive {
+  color: #d5b772;
+}
+
 .workstation-entry-icon.is-locked {
   color: #b98f65;
 }
@@ -1472,6 +1476,23 @@
   border-bottom: 1px solid #234447;
   color: var(--phosphor);
   font: 11px/1.5 var(--mono);
+}
+
+.workstation-document h4 [data-workstation-back] {
+  min-height: 28px;
+  margin-left: auto;
+  padding: 5px 9px;
+  border: 1px solid #46635f;
+  background: #11272a;
+  color: #a8c5bf;
+  font: 9px var(--mono);
+  white-space: nowrap;
+}
+
+.workstation-document h4 [data-workstation-back]:hover,
+.workstation-document h4 [data-workstation-back]:focus-visible {
+  border-color: var(--phosphor-dim);
+  color: var(--phosphor);
 }
 
 .workstation-document [data-workstation-entry-content] {
@@ -1518,5 +1539,108 @@
 
   .workstation-folder-tree {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* The Files pane is intentionally a single, icon-first surface. Folders are
+   entered like Explorer directories; documents remain one click away. */
+.workstation-files-layout {
+  display: block;
+  height: 100%;
+  min-height: 100%;
+}
+
+.workstation-directory {
+  height: 100%;
+  min-height: 100%;
+  max-height: 360px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.workstation-file-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 12px 10px;
+  align-items: start;
+  padding: 8px 2px 18px;
+}
+
+.workstation-file-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-height: 94px;
+  padding: 10px 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: #a7bfc0;
+  font: 10px/1.4 var(--mono);
+  text-align: center;
+  transition: border-color .18s ease, background .18s ease, color .18s ease;
+}
+
+.workstation-file-card:hover:not(:disabled),
+.workstation-file-card:focus-visible {
+  border-color: #47756e;
+  background: #123237;
+  color: var(--phosphor);
+}
+
+.workstation-file-card[data-entry-kind="folder"] {
+  color: #d5b772;
+}
+
+.workstation-file-card[data-entry-kind="folder"] .workstation-entry-icon {
+  color: #d5b772;
+  fill: currentColor;
+  stroke: #f3ca72;
+}
+
+.workstation-file-card[data-entry-kind="archive"] {
+  color: #d5b772;
+}
+
+.workstation-file-card[data-entry-kind="archive"] .workstation-entry-icon {
+  color: #d5b772;
+  stroke: #f3ca72;
+}
+
+.workstation-file-card[data-entry-kind="file"] .workstation-entry-icon {
+  color: #a8c4c1;
+}
+
+.workstation-file-card .workstation-entry-icon {
+  width: 46px;
+  height: 38px;
+  flex: 0 0 38px;
+  stroke-width: 1.15;
+}
+
+.workstation-file-card .workstation-entry-name {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workstation-file-card:disabled {
+  cursor: not-allowed;
+  opacity: .52;
+}
+
+@media (max-width: 759px) {
+  .workstation-file-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px 6px;
+  }
+
+  .workstation-file-card {
+    min-height: 84px;
+    padding-inline: 3px;
   }
 }
