@@ -1,178 +1,46 @@
-// 套件區
-var http = require("http");
-var path = require("path");
-var express = require("express");
-var logger = require("morgan");
-var bodyParser = require("body-parser");
+const path = require('node:path');
+const express = require('express');
+const logger = require('morgan');
 
-var app = express();
+const { createApiRoutes } = require('./routes/apiRoutes');
+const { createRoomStore } = require('./game/roomStore');
+const { createRoomRoutes } = require('./routes/roomRoutes');
+const pageRoutes = require('./routes/pageRoutes');
+const errorHandler = require('./middleware/errorHandler');
+const { createLiveHub } = require('./realtime/liveHub');
 
-// 設定位置
-app.use('/css', express.static(__dirname + '/public/css'))
-app.use('/public', express.static(__dirname + '/public'))
+const app = express();
+const roomStore = createRoomStore();
 
-app.set("views", path.resolve(__dirname, "views"));
-app.set("view engine", "ejs");   
-
-// --------------------------- //
-
-// 準備儲存的空間
-var entries = [{roomNo:1234, user: "上天大人", chatContent: "你們被不小心困在這裡了，請同心協力一起離開！這裡是留言板，好好溝通吧！⁽⁽٩(๑˃̶͈̀ ᗨ ˂̶͈́)۶⁾⁾"},{roomNo:5678, user: "上天大人", chatContent: "這是上天大人的秘密小房間，呵呵"}]
-
-app.locals.entries = entries;
-app.use(logger("dev"));
-app.use(bodyParser.urlencoded({ extended: false }));
-
-// --------------------------- //
-
-// 根目錄為 index 網頁顯示
-app.get("/", function(request, response) {
-  response.render("index" , { info: 'This is lobby'});
+app.locals.roomStore = roomStore;
+app.attachLiveHub = (server, allowedOrigins) => createLiveHub({
+  server,
+  roomStore,
+  allowedOrigins
 });
 
-// 輸入房號
-app.get("/inputRoomNo", function(request, response) {
-  response.render("inputRoomNo" , { info: 'This is inputRoomNo'});
+app.set('views', path.resolve(__dirname, 'views'));
+app.set('view engine', 'ejs');
 
-});
+app.use('/css', express.static(path.join(__dirname, 'public', 'css')));
+app.use('/public', express.static(path.join(__dirname, 'public')));
+app.use(logger('dev', {
+  skip: (request) => request.app.get('env') === 'test'
+}));
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
-// 創建房間
-app.get("/createRoom", function(request, response) {
-  response.render("createRoom2" , { info: 'This is createRoom'});
-});
-app.post('/PostcreateRoom', function (request, response) {
-    //接收資料
-  entries.push({
-    roomNo: request.body.roomNo,
-    user: "上天大人", 
-    chatContent: "又有一個人進來了呢，你們被困在這裡了，請好好加油逃脫吧"
-	});
+app.use('/', createRoomRoutes(roomStore));
+app.use('/api', createApiRoutes(roomStore));
+app.use('/', pageRoutes);
 
-  var path = '/v2/'+ request.body.roomNo
+app.use('/api', errorHandler.apiNotFoundHandler);
+app.use(errorHandler.notFoundHandler);
+app.use(errorHandler);
 
-  response.redirect(path)
-  response.render(path)
-  // res.render('createRoom')
-})
+if (require.main === module) {
+  const { startServer } = require('./server');
+  startServer(app);
+}
 
-
-app.post('/PostEnterRoom2', function (request, response) {
-
-    //接收資料
-  entries.push({
-    roomNo: request.body.roomNo,
-    user: "公共場合使用者",
-    chatContent: request.body.chatContent
-	});
-
-    var path = 'v2/' + request.body.roomNo;
-    response.redirect(path)
-    response.render(path)
-  
-
-})
-
-// app.post('/PostEnterRoomA', function (request, response) {
-
-//    //接收資料
-//   entries.push({
-//     roomNo: request.body.roomNo,
-//     user: "A",  
-//     chatContent: request.body.chatContent
-// 	});
-
-//     var path = 'v2/' + request.body.roomNo + '/A';
-//     response.redirect(path)
-//     response.render(path)
-  
-// })
-
-app.post('/PostEnterRoomB', function (request, response) {
-   //接收資料
-  entries.push({
-    roomNo: request.body.roomNo,
-    user: "B",
-    chatContent: request.body.chatContent
-	});
-
-    var path = 'v2/' + request.body.roomNo + '/B';
-    response.redirect(path)
-    response.render(path)
-})
-
-
-// 進入房間
-app.get("/enterRoom", function(request, response) {
-  response.render("enterRoom" , { info: 'This is inside the Room'});
-});
-app.post("/PostenterRoom", function(request, response) {
-   //接收資料
-  entries.push({
-    chatContent: request.body.chatContent
-	});
-
-  response.redirect('enterRoom')
-  response.render('enterRoom')
-  // res.render('createRoom')
-});
-
-
-// test
-app.get('/test', function (req, res) {
-    res.render('test')
-    console.log(req.body) 
-})
-app.post('/searchResult', function (req, res) {
-    //接收資料
-  entries.push({
-    // searchText: req.body.searchText.value,
-    searchNumber: req.body.searchNumber
-	});
-
-  res.redirect('test')
-  res.render('test')
-})
-
-// API
-var api = require('./apiroutes'); 
-app.use('/api', api);
-
-var v2 = require('./v2routes'); 
-app.use('/v2', v2);
-
-// 當不知道什麼網頁的時候
-app.use(function(request, response) {
-  response.status(404).render("404");
-});
-
-// 設定 port 為 3000
-http.createServer(app).listen(3000, function() {
-  console.log("ESCAPE ROOM started on port 3000.");
-  console.log("http://localhost:3000/")
-});
-
-// 取得本機 IP 等...
-var os = require('os');
-var ifaces = os.networkInterfaces();
-Object.keys(ifaces).forEach(function (ifname) {
-  var alias = 0;
-
-  ifaces[ifname].forEach(function (iface) {
-    if ('IPv4' !== iface.family || iface.internal !== false) {
-      // skip over internal (i.e. 127.0.0.1) and non-ipv4 addresses
-      return;
-    }
-
-    if (alias >= 1) {
-      // this single interface has multiple ipv4 addresses
-      // console.log(ifname + ':' + alias, iface.address);
-    } else {
-      // this interface has only one ipv4 adress
-      console.log(ifname, iface.address);
-    }
-    ++alias;
-  });
-});
-
-// en0 192.168.1.101
-// eth0 10.0.0.101
+module.exports = app;

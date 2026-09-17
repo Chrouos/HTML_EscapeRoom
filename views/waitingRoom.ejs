@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-Hant">
+<%- include('partials/head', { title: '房間 ' + roomCode + '｜ORPHEUS' }) %>
+<body class="terminal-body">
+  <header class="site-header shell-width <%= state && state.role ? 'game-site-header' : '' %>">
+    <a class="wordmark" href="/"><span class="wordmark-main">ORPHEUS</span><span class="wordmark-sub">SUBJECT LINK / 02</span></a>
+    <span class="header-readout">研究連線 / <%= roomCode %></span>
+  </header>
+  <main class="shell-width room-shell <%= state && state.role ? 'game-room-shell' : '' %>">
+    <% if (error) { %>
+      <section class="terminal-panel error-panel" role="alert">
+        <p class="eyebrow">CONNECTION UNAVAILABLE</p>
+        <h1>無法恢復房間</h1>
+        <p><%= error.message %></p>
+        <p>房間會在伺服器重新啟動後清除，請建立新房間重新開始。</p>
+        <a class="button" href="/">回到大廳</a>
+      </section>
+    <% } else if (state && state.role) { %>
+      <%- include('game', { roomCode, state }) %>
+    <% } else { %>
+      <section class="terminal-panel waiting-panel">
+        <p class="eyebrow">AWAITING SECOND SUBJECT</p>
+        <h1>等待玩家加入</h1>
+        <p>另一端的螢幕已亮起。你是最後一位受試者。</p>
+        <p class="room-number"><%= roomCode %></p>
+        <p>目前 <%= state.occupancy.count %> / <%= state.occupancy.capacity %> 位玩家已加入。</p>
+        <% if (canJoin) { %>
+          <form method="post" action="/rooms/join">
+            <input type="hidden" name="roomCode" value="<%= roomCode %>">
+            <button class="button button-primary" type="submit">加入房間（玩家 B）</button>
+          </form>
+        <% } else { %>
+          <p>兩個終端都已有人使用。請用原本加入房間的瀏覽器開啟。</p>
+        <% } %>
+        <a href="/">回到大廳</a>
+      </section>
+    <% } %>
+  </main>
+  <%- include('partials/footer') %>
+</body>
+</html>

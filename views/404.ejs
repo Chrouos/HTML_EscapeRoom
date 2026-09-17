@@ -1,3 +1,10 @@
-<%- include('header'); -%>
-<h2>404! 你可能哪裡輸入錯誤了哦!!!!!</h2>
-<%- include('footer'); -%>
+<!doctype html>
+<html lang="zh-Hant">
+<%- include('partials/head', { title: '找不到頁面｜ORPHEUS' }) %>
+<body class="terminal-body">
+  <main class="shell-width room-shell"><section class="terminal-panel error-panel">
+    <p class="eyebrow">404 / SIGNAL LOST</p><h1>找不到這個頁面</h1>
+    <p>房間可能不存在、已過期，或網址輸入錯誤。</p><a class="button button-primary" href="/">回到大廳</a>
+  </section></main>
+</body>
+</html>

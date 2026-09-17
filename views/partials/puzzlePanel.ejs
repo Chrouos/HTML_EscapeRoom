@@ -1,0 +1,12 @@
+<section class="terminal-panel puzzle-panel" aria-labelledby="puzzle-heading">
+  <div class="panel-heading"><h2 id="puzzle-heading">你的線索</h2></div>
+  <pre data-clues class="clue-record"></pre>
+  <div data-audio></div>
+  <form data-action-form>
+    <p data-prompt class="puzzle-prompt"></p>
+    <label for="value">提交答案</label>
+    <input id="value" name="value" maxlength="1000" required autocomplete="off" placeholder="和另一位玩家比對後送出">
+    <button class="button button-primary" type="submit" disabled>送出</button>
+    <p data-feedback class="feedback" role="status"></p>
+  </form>
+</section>

@@ -1,0 +1,1556 @@
+@charset "UTF-8";
+
+:root {
+  --phosphor: #9debd3;
+  --phosphor-dim: #4e887b;
+  --casing: #20292d;
+  --casing-edge: #435157;
+  --bezel: #070d10;
+  --screen: #081519;
+  --screen-grid: #9debd30a;
+  --screen-glow: #78e4c426;
+  --status-ready: #7ee3bd;
+  --status-attention: #e0b66d;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.full-shell-layer {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+}
+
+/* The live console is the room: on desktop let it use the viewport instead
+   of being constrained by the marketing shell's 1280px cap. */
+.game-room-shell {
+  width: calc(100% - 48px);
+  max-width: none;
+  min-height: calc(100vh - 190px);
+  display: flex;
+  flex-direction: column;
+}
+
+.game-room-shell > .game-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.monitor-tabs {
+  display: none;
+}
+
+/* Keep the desktop console inside the viewport. The selector and its grid
+   need an explicit shrinkable block size so intrinsic panel content cannot
+   force both monitors taller than the screen. */
+.monitor-selector {
+  min-height: 0;
+  height: calc(100vh - 340px);
+}
+
+.game-room-shell .monitor-selector {
+  flex: 1 1 auto;
+  height: 0;
+  overflow: hidden;
+}
+
+.workstation-shell {
+  display: grid;
+  grid-template-columns: minmax(220px, .72fr) minmax(0, 1.28fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: clamp(16px, 2vw, 28px);
+  align-items: stretch;
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+}
+
+.monitor-frame {
+  min-width: 0;
+  min-height: 0;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: var(--phosphor);
+  filter: drop-shadow(0 16px 28px #0008);
+  animation: crt-boot-pulse 1.2s ease-out both;
+}
+
+.monitor-casing {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+  border: 1px solid var(--casing-edge);
+  border-radius: 9px;
+  background: linear-gradient(145deg, #2a3438, var(--casing) 55%, #151c20);
+  box-shadow: inset 0 1px #ffffff12, inset 0 -2px #0008;
+}
+
+.monitor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 38px;
+  padding: 0 4px 10px;
+  font-family: var(--mono);
+  text-transform: uppercase;
+}
+
+.monitor-header h2 {
+  color: var(--phosphor);
+  font-size: 11px;
+  letter-spacing: .13em;
+}
+
+.monitor-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #9eafb3;
+  font-size: 8px;
+  letter-spacing: .09em;
+  white-space: nowrap;
+}
+
+.status-light {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--status-ready);
+  box-shadow: 0 0 10px var(--status-ready);
+}
+
+.status-light-amber {
+  background: var(--status-attention);
+  box-shadow: 0 0 10px var(--status-attention);
+}
+
+.monitor-bezel {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  border: 1px solid #354247;
+  border-radius: 6px;
+  background: var(--bezel);
+  box-shadow: inset 0 0 0 2px #000;
+}
+
+.monitor-screen {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  /* The bezel is a viewport; only the active monitor content should scroll. */
+  overflow: hidden;
+  border: 1px solid var(--phosphor-dim);
+  border-radius: 10px / 5px;
+  background-color: var(--screen);
+  background-image:
+    linear-gradient(var(--screen-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--screen-grid) 1px, transparent 1px),
+    radial-gradient(circle at 50% 35%, var(--screen-glow), transparent 68%);
+  background-size: 20px 20px, 20px 20px, auto;
+  box-shadow: inset 0 0 38px #000c, 0 0 18px var(--screen-glow);
+  animation: crt-phosphor-bloom 5.4s ease-in-out infinite;
+}
+
+.monitor-screen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: .12;
+  background: repeating-linear-gradient(0deg, transparent 0 3px, #9debd31f 3px 4px);
+  mix-blend-mode: screen;
+  animation: crt-scan-sweep 8s linear infinite;
+}
+
+.monitor-screen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: .08;
+  background-image:
+    radial-gradient(circle at 15% 25%, #9debd34d 0 1px, transparent 1px),
+    radial-gradient(circle at 75% 65%, #9debd326 0 1px, transparent 1px),
+    linear-gradient(90deg, transparent 0 48%, #9debd314 50%, transparent 52%);
+  background-size: 7px 7px, 11px 11px, 100% 100%;
+  mix-blend-mode: screen;
+  animation: crt-signal-noise 2.4s steps(2, end) infinite;
+}
+
+.monitor-screen .terminal-panel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.monitor-screen .chat-panel {
+  position: static;
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 22px;
+}
+
+.monitor-screen .chat-log {
+  min-height: 0;
+  flex: 1 1 auto;
+  height: auto;
+}
+
+.operations-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  grid-auto-rows: auto;
+  gap: 1px;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  position: relative;
+  overflow: hidden;
+  padding-bottom: 0;
+  background: transparent;
+}
+
+.operations-workspace:has(> [data-puzzle-gate]:not([hidden]), > .evidence-panel:not([hidden]), > .side-panel:not([hidden])) {
+  grid-template-columns: minmax(0, 1.25fr) minmax(220px, .75fr);
+}
+
+.operations-workspace > [data-workstation] {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  grid-column: 1;
+  grid-row: 1 / span 3;
+  height: 100%;
+  overflow: hidden;
+}
+
+.operations-workspace > .evidence-panel,
+.operations-workspace > .side-panel,
+.operations-workspace > [data-puzzle-gate] {
+  grid-column: 2;
+}
+
+.operations-workspace > [data-workstation] .workstation-ui {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+
+.operations-workspace > .terminal-panel {
+  min-height: 0;
+  padding: 22px;
+  background: #09191de8;
+}
+
+.message {
+  animation: crt-message-reveal .42s ease-out both;
+}
+
+.monitor-status .status-light {
+  animation: crt-status-breathe 3.6s ease-in-out infinite;
+}
+
+@keyframes crt-boot-pulse {
+  0% { filter: drop-shadow(0 16px 28px #0008) drop-shadow(0 0 0 #9debd300); }
+  55% { filter: drop-shadow(0 16px 28px #0008) drop-shadow(0 0 14px #9debd34d); }
+  100% { filter: drop-shadow(0 16px 28px #0008) drop-shadow(0 0 0 #9debd300); }
+}
+
+@keyframes crt-phosphor-bloom {
+  0%, 100% { box-shadow: inset 0 0 38px #000c, 0 0 18px var(--screen-glow); }
+  50% { box-shadow: inset 0 0 38px #000c, 0 0 25px #78e4c436; }
+}
+
+@keyframes crt-scan-sweep {
+  0% { background-position: 0 -16px; }
+  100% { background-position: 0 16px; }
+}
+
+@keyframes crt-signal-noise {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(1px, -1px, 0); }
+}
+
+@keyframes crt-message-reveal {
+  from { opacity: .86; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes crt-status-breathe {
+  0%, 100% { opacity: .82; }
+  50% { opacity: 1; }
+}
+
+@media (max-width: 759px) {
+  .monitor-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .monitor-tab-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .monitor-tab {
+    margin: 0;
+    padding: 11px 8px;
+    border: 1px solid var(--casing-edge);
+    background: #111e24;
+    color: #91a3a9;
+    font: 10px/1.4 var(--mono);
+    letter-spacing: .1em;
+    text-align: center;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .monitor-tab-input:checked + .monitor-tab {
+    border-color: var(--phosphor-dim);
+    background: #18302f;
+    color: var(--phosphor);
+  }
+
+  .monitor-tab-input:focus-visible + .monitor-tab {
+    outline: 3px solid var(--amber);
+    outline-offset: 3px;
+  }
+
+  .workstation-shell {
+    display: block;
+    height: auto;
+    max-height: none;
+  }
+
+  .monitor-selector {
+    height: auto;
+  }
+
+  .game-room-shell .monitor-selector {
+    height: auto;
+    flex: none;
+    overflow: visible;
+  }
+
+  .monitor-selector:has(#monitor-intercom:checked) .operations-monitor,
+  .monitor-selector:has(#monitor-operations:checked) .intercom-monitor {
+    display: none;
+  }
+
+  .monitor-casing {
+    display: block;
+    max-height: none;
+    padding: 8px;
+  }
+
+  .monitor-frame {
+    display: block;
+    max-height: none;
+  }
+
+  .monitor-header {
+    gap: 8px;
+  }
+
+  .monitor-header h2 {
+    font-size: 9px;
+    letter-spacing: .08em;
+  }
+
+  .monitor-status {
+    font-size: 7px;
+  }
+
+  .monitor-bezel {
+    display: block;
+    padding: 6px;
+  }
+
+  .monitor-screen {
+    display: block;
+    min-height: 0;
+  }
+
+  .operations-workspace {
+    display: block;
+    overflow: visible;
+  }
+
+  .workstation-ui {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .workstation-content {
+    overflow: visible;
+  }
+
+  .operations-workspace > [data-workstation] {
+    display: block;
+    height: auto;
+  }
+
+  .monitor-screen .chat-panel,
+  .operations-workspace > .terminal-panel {
+    padding: 16px;
+  }
+
+  .monitor-screen .chat-log {
+    height: 320px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .monitor-frame,
+  .monitor-screen,
+  .monitor-screen::before,
+  .monitor-screen::after,
+  .message,
+  .monitor-status .status-light {
+    animation: none !important;
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+    transition: none !important;
+    transition-duration: 0s !important;
+    transform: none !important;
+  }
+
+  .message {
+    opacity: 1 !important;
+  }
+}
+
+/* Keep the monitor grid tall after the room header is compacted. This rule
+   lives after the workstation sizing rules so the flex viewport can grow. */
+@media (min-width: 760px) {
+  .game-room-shell {
+    min-height: calc(100vh - 130px);
+  }
+}
+
+/* Visual draft translation: the two consoles read as one linked instrument. */
+@media (min-width: 760px) {
+  .workstation-shell {
+    position: relative;
+    background-image: none;
+  }
+
+  .operations-screen::before {
+    content: "LINK / A  ◇  B";
+    position: absolute;
+    z-index: 2;
+    top: 7px;
+    right: 10px;
+    left: auto;
+    transform: none;
+    padding: 2px 0;
+    border: 0;
+    background: transparent;
+    color: #9debd3;
+    font: 8px/1.4 var(--mono);
+    letter-spacing: .14em;
+    white-space: nowrap;
+    opacity: .5;
+    pointer-events: none;
+  }
+
+  .operations-workspace {
+    padding-bottom: 0;
+  }
+
+  .operations-workspace > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .operations-monitor .monitor-casing {
+    background: linear-gradient(145deg, #2d383b, #182327 58%, #10181b);
+  }
+
+  .operations-monitor .workstation-panel {
+    border-right: 0;
+    box-shadow: none;
+    align-self: start;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .puzzle-panel {
+    border-color: #6c6349;
+    background: linear-gradient(145deg, #202826, #151f23 64%, #17212a);
+  }
+}
+
+/* At tablet widths the operations monitor is too narrow for a side-by-side
+   workspace. Stack its panels so the first FILES view keeps usable width. */
+@media (min-width: 760px) and (max-width: 959px) {
+  .operations-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .operations-workspace > [data-workstation],
+  .operations-workspace > .evidence-panel,
+  .operations-workspace > .side-panel,
+  .operations-workspace > [data-puzzle-gate] {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .operations-workspace > .terminal-panel {
+    padding: 18px;
+  }
+}
+
+/* Diegetic transport readouts: technical recovery details stay out of the UI. */
+.connection-band[data-signal="lost"] {
+  color: var(--status-attention);
+}
+
+.connection-band[data-signal="reconnecting"] {
+  color: var(--status-attention);
+}
+
+.connection-band[data-signal="ready"] {
+  color: var(--phosphor);
+}
+
+.connection-band .readout-dot-lost {
+  background: var(--status-attention);
+  box-shadow: 0 0 10px var(--status-attention);
+}
+
+.connection-band .readout-dot-reconnecting {
+  background: var(--status-attention);
+  box-shadow: 0 0 10px var(--status-attention);
+}
+
+@media (max-width: 759px) {
+  .monitor-frame[aria-hidden="true"] {
+    display: none;
+  }
+}
+
+/* Workstation surfaces: keep the fictional console legible at a glance while
+   retaining the uneven, recovered-terminal feel. */
+.workstation-ui {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--phosphor);
+}
+
+.workstation-apps {
+  display: flex;
+  gap: 6px;
+  padding: 0 0 14px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: linear-gradient(#09191d 78%, transparent);
+}
+
+.workstation-apps button {
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 1px solid #2d494b;
+  border-radius: 2px;
+  background: #10252a;
+  color: #75908f;
+  font: 10px/1.4 var(--mono);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  transition: color .18s ease, background .18s ease, border-color .18s ease;
+}
+
+.workstation-apps button:hover,
+.workstation-apps button:focus-visible {
+  border-color: var(--phosphor-dim);
+  color: var(--phosphor);
+  background: #173538;
+}
+
+.workstation-apps button[aria-pressed="true"] {
+  border-color: var(--phosphor);
+  color: #071715;
+  background: var(--phosphor);
+  box-shadow: 0 0 14px #9debd32e, inset 0 0 0 1px #d5fff21f;
+}
+
+.workstation-content {
+  min-height: 0;
+  padding-top: 14px;
+  overflow: hidden;
+}
+
+.workstation-scroll,
+.workstation-terminal,
+.workstation-logs {
+  min-height: 0;
+  scrollbar-color: #46716c transparent;
+  scrollbar-width: thin;
+}
+
+.workstation-terminal {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  color: #b9dfd5;
+  font-family: var(--mono);
+}
+
+.terminal-readout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  padding: 0 2px 8px;
+  color: #668d88;
+  font: 9px/1.4 var(--mono);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.terminal-readout-led {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--status-ready);
+  box-shadow: 0 0 8px var(--status-ready);
+}
+
+.terminal-readout-path {
+  margin-left: auto;
+  color: #466d69;
+}
+
+.workstation-scroll {
+  max-height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 2px 8px 18px 2px;
+  scrollbar-gutter: stable;
+}
+
+.workstation-scroll h3,
+.workstation-terminal h3,
+.workstation-logs h3 {
+  color: var(--phosphor);
+  font: 12px/1.5 var(--mono);
+  letter-spacing: .13em;
+  margin: 0 0 12px;
+}
+
+.workstation-scroll > button {
+  margin-bottom: 12px;
+  min-height: 32px;
+  padding: 5px 10px;
+  border-color: #46635f;
+  color: #a8c5bf;
+  background: #11272a;
+  font: 10px var(--mono);
+}
+
+.workstation-entries {
+  display: grid;
+  gap: 7px;
+}
+
+.workstation-entries button,
+.workstation-terminal button {
+  width: 100%;
+  justify-content: flex-start;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid #254347;
+  background: #0b2025;
+  color: #b5d8d0;
+  font: 11px/1.5 var(--mono);
+  letter-spacing: .02em;
+  text-align: left;
+}
+
+.workstation-entries button::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 9px;
+  color: var(--phosphor-dim);
+}
+
+.workstation-entries button:hover:not(:disabled),
+.workstation-entries button:focus-visible,
+.workstation-terminal button:hover:not(:disabled),
+.workstation-terminal button:focus-visible {
+  border-color: var(--phosphor);
+  background: #123237;
+  color: var(--phosphor);
+}
+
+.workstation-entries button:disabled {
+  opacity: .68;
+  border-style: dashed;
+  color: #718887;
+  background: #0b1a1e;
+}
+
+.workstation-entries button:disabled::before {
+  content: "";
+  margin-right: 0;
+}
+
+[data-workstation-entry-content] {
+  margin: 16px 0 4px;
+  padding: 15px;
+  border: 1px solid #315b57;
+  border-left: 3px solid var(--phosphor);
+  background: #07161a;
+  color: #c6e8de;
+  font: 11px/1.8 var(--mono);
+  box-shadow: inset 0 0 20px #0008;
+}
+
+.workstation-terminal form {
+  display: grid;
+  gap: 8px;
+}
+
+.terminal-history {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+  margin: 0 0 12px;
+  padding: 12px;
+  border: 1px solid #1f3d40;
+  background: #061316;
+  color: #b9dfd5;
+  font: 11px/1.7 var(--mono);
+  scrollbar-color: #46716c transparent;
+  scrollbar-gutter: stable;
+}
+
+.terminal-history:empty::before {
+  content: "CONSOLE READY // TYPE HELP FOR COMMANDS";
+  color: #5b827e;
+}
+
+.terminal-history-entry + .terminal-history-entry {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed #1f3d40;
+}
+
+.terminal-echo {
+  color: var(--phosphor);
+  white-space: pre-wrap;
+}
+
+.terminal-echo::after {
+  content: "▋";
+  margin-left: 4px;
+  color: var(--phosphor);
+  animation: terminal-cursor 1.1s steps(2, jump-none) infinite;
+}
+
+.terminal-history-entry pre {
+  margin: 4px 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #9fc1bb;
+  font: inherit;
+}
+
+.terminal-command-form {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid #2f5754;
+  background: #061316;
+  box-shadow: inset 0 0 16px #0008;
+}
+
+.terminal-prompt {
+  color: var(--phosphor);
+  font: 12px/1.4 var(--mono);
+  white-space: nowrap;
+}
+
+.workstation-terminal input {
+  min-width: 0;
+  min-height: 30px;
+  padding: 4px 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--phosphor);
+  font: 12px var(--mono);
+  text-transform: uppercase;
+}
+
+.workstation-terminal input:focus {
+  box-shadow: none;
+}
+
+.workstation-terminal input:focus-visible {
+  outline: 1px solid var(--phosphor);
+  outline-offset: 2px;
+  border-radius: 1px;
+  box-shadow: 0 0 8px #9debd344;
+}
+
+.workstation-terminal form > button[type="submit"] {
+  width: 32px;
+  min-height: 30px;
+  padding: 0;
+  justify-content: center;
+  border: 1px solid #47766e;
+  color: var(--phosphor);
+  background: #112a2d;
+  font: 15px/1 var(--mono);
+}
+
+.terminal-output-error {
+  color: #e0b66d !important;
+}
+
+.terminal-shortcuts {
+  flex: 0 0 auto;
+  margin-top: 8px;
+  border-top: 1px dashed #1f3d40;
+  color: #719792;
+  font: 9px/1.5 var(--mono);
+}
+
+.terminal-shortcuts summary {
+  padding: 7px 2px;
+  cursor: pointer;
+  letter-spacing: .08em;
+}
+
+.terminal-shortcut-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 6px;
+  padding: 0 0 6px;
+}
+
+.workstation-terminal .terminal-shortcut-list button {
+  width: auto;
+  min-height: 30px;
+  padding: 6px 8px;
+  font-size: 9px;
+}
+
+.terminal-suggestions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 8px;
+  border: 1px solid #26484a;
+  background: #081a1d;
+}
+
+.terminal-suggestions[hidden] {
+  display: none;
+}
+
+.workstation-terminal .terminal-suggestions button {
+  width: auto;
+  min-height: 30px;
+  padding: 6px 8px;
+  border-color: #315b57;
+  color: #8eb5ac;
+  font-size: 9px;
+}
+
+.workstation-terminal .terminal-suggestions button:hover,
+.workstation-terminal .terminal-suggestions button:focus-visible {
+  border-color: var(--phosphor);
+  color: var(--phosphor);
+  background: #123237;
+}
+
+.workstation-request {
+  min-height: 100%;
+  padding: 14px 2px 24px;
+  color: #b9dfd5;
+}
+
+.workstation-request h3 {
+  margin: 0 0 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #31524f;
+  color: var(--phosphor);
+  font: 12px/1.5 var(--mono);
+  letter-spacing: .13em;
+}
+
+.workstation-request-prompt,
+.workstation-request-format,
+.workstation-request-standby,
+.workstation-request-feedback {
+  color: #8fb2ae;
+  font: 11px/1.7 var(--mono);
+}
+
+.workstation-request-format {
+  padding: 10px 12px;
+  border-left: 2px solid #b98f65;
+  background: #171a18;
+  color: #c4aa7a;
+}
+
+.workstation-request form {
+  display: grid;
+  gap: 8px;
+  max-width: 620px;
+  margin-top: 20px;
+  padding: 14px;
+  border: 1px solid #315b57;
+  border-left: 3px solid var(--phosphor);
+  background: #07161a;
+}
+
+.workstation-request form label {
+  color: var(--phosphor);
+  font: 10px/1.5 var(--mono);
+  letter-spacing: .08em;
+}
+
+.workstation-request form button {
+  justify-self: start;
+  border-color: #47766e;
+  color: var(--phosphor);
+}
+
+.workstation-request-dot {
+  width: 6px;
+  height: 6px;
+  margin-left: 2px;
+  border-radius: 50%;
+  background: #536b69;
+}
+
+.workstation-apps button[data-workstation-request-state="ready"] {
+  border-color: #b98f65;
+  color: #e4b260;
+}
+
+.workstation-apps button[data-workstation-request-state="ready"] .workstation-request-dot {
+  background: #e4b260;
+  box-shadow: 0 0 8px #e4b260;
+}
+
+.workstation-apps button[data-workstation-request-state="standby"] {
+  color: #5d7774;
+}
+
+@keyframes terminal-cursor {
+  50% { opacity: 0; }
+}
+
+.workstation-logs {
+  max-height: 100%;
+  overflow: auto;
+  padding: 2px 8px 18px 2px;
+  scrollbar-gutter: stable;
+}
+
+@media (min-width: 760px) {
+  .game-room-shell .monitor-selector,
+  .game-room-shell .workstation-shell {
+    min-height: 0;
+  }
+}
+
+.workstation-logs article {
+  position: relative;
+  padding: 12px 13px 12px 15px;
+  border: 1px solid #203b3f;
+  border-left: 2px solid #527975;
+  background: #0b1d21;
+}
+
+.workstation-logs article + article {
+  margin-top: 8px;
+}
+
+.workstation-logs h4 {
+  margin: 0 0 5px;
+  color: var(--status-attention);
+  font: 10px/1.5 var(--mono);
+  letter-spacing: .06em;
+}
+
+.workstation-logs p {
+  margin: 0;
+  color: #9eb8b5;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+@media (max-width: 759px) {
+  .game-room-shell {
+    width: calc(100% - 32px);
+    min-height: 0;
+  }
+
+  .workstation-apps {
+    gap: 5px;
+    padding-bottom: 10px;
+  }
+
+  .workstation-apps button {
+    flex: 1;
+    min-height: 36px;
+    padding-inline: 6px;
+    font-size: 9px;
+  }
+
+  .workstation-content {
+    padding-top: 10px;
+  }
+
+  .workstation-scroll,
+  .workstation-logs {
+    padding-right: 4px;
+  }
+
+  .workstation-entries button,
+  .workstation-terminal button {
+    min-height: 44px;
+  }
+
+  .terminal-command-form {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 5px;
+    padding-inline: 7px;
+  }
+
+  .terminal-prompt,
+  .workstation-terminal input {
+    font-size: 11px;
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workstation-apps button {
+    transition: none;
+  }
+
+  .terminal-echo::after {
+    animation: none;
+  }
+}
+
+/* At tablet widths each monitor gets the full reading width; the existing
+   radio tabs stay reserved for the mobile breakpoint driven by game.js. */
+@media (min-width: 760px) and (max-width: 999px) {
+  .game-room-shell .monitor-selector {
+    height: auto;
+    flex: none;
+    overflow: visible;
+  }
+
+  .workstation-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    height: auto;
+    max-height: none;
+    gap: 16px;
+    background-image: none;
+  }
+
+  .monitor-frame {
+    max-height: none;
+  }
+}
+
+@media (min-width: 760px) and (max-width: 980px) {
+  .monitor-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .monitor-tab-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .monitor-tab {
+    margin: 0;
+    padding: 11px 8px;
+    border: 1px solid var(--casing-edge);
+    background: #111e24;
+    color: #91a3a9;
+    font: 10px/1.4 var(--mono);
+    letter-spacing: .1em;
+    text-align: center;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .monitor-tab-input:checked + .monitor-tab {
+    border-color: var(--phosphor-dim);
+    background: #18302f;
+    color: var(--phosphor);
+  }
+
+  .monitor-tab-input:focus-visible + .monitor-tab {
+    outline: 3px solid var(--amber);
+    outline-offset: 3px;
+  }
+
+  .workstation-shell {
+    display: block;
+    height: auto;
+    max-height: none;
+  }
+
+  .game-room-shell .monitor-selector {
+    height: auto;
+    flex: none;
+    overflow: visible;
+  }
+
+  .monitor-selector:has(#monitor-intercom:checked) .operations-monitor,
+  .monitor-selector:has(#monitor-operations:checked) .intercom-monitor {
+    display: none;
+  }
+
+  .monitor-casing,
+  .monitor-frame {
+    max-height: none;
+  }
+
+  .monitor-bezel,
+  .monitor-screen {
+    min-height: 0;
+  }
+
+  .operations-workspace {
+    display: block;
+    overflow: visible;
+  }
+
+  .workstation-ui {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .workstation-content {
+    overflow: visible;
+  }
+
+  /* At tablet width a hidden puzzle should not reserve a fake second column
+     beside FILES. Desktop keeps the original scrollable two-column console. */
+  .operations-workspace > [data-workstation],
+  .operations-workspace:has(> [data-puzzle-gate]:not([hidden])) > [data-workstation] {
+    grid-column: 1 / -1;
+    align-self: stretch;
+    height: auto;
+    min-height: 0;
+  }
+
+  .operations-screen::before {
+    display: none;
+  }
+
+  .operations-workspace > [data-workstation],
+  .operations-workspace > .terminal-panel {
+    width: 100%;
+  }
+}
+
+.room-awaiting-partner .chat-form {
+  opacity: .55;
+}
+
+/* Files behaves like a real two-pane file manager: the tree stays visible
+   while the selected directory or document occupies the reading pane. */
+.workstation-files-layout {
+  display: grid;
+  grid-template-columns: minmax(132px, .42fr) minmax(0, 1fr);
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+}
+
+.workstation-files-layout.is-reader-focused {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.workstation-files-layout.is-reader-focused [data-workstation-tree] {
+  display: none;
+}
+
+.workstation-files-layout.is-reader-focused .workstation-directory {
+  min-height: 0;
+  height: 100%;
+}
+
+.workstation-file-tree,
+.workstation-directory {
+  min-width: 0;
+  border: 1px solid #234447;
+  background: linear-gradient(145deg, #0b2024, #071519);
+}
+
+.workstation-file-tree {
+  min-height: 0;
+  max-height: 100%;
+  max-height: 360px;
+  overflow: auto;
+  padding: 10px 6px;
+  scrollbar-color: #46716c transparent;
+  scrollbar-width: thin;
+}
+
+.workstation-file-tree h3,
+.workstation-directory h3 {
+  padding-inline: 8px;
+}
+
+.workstation-folder-tree {
+  display: grid;
+  gap: 2px;
+}
+
+.workstation-tree-entry {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 5px 6px;
+  padding-inline-start: calc(6px + (var(--folder-depth, 0) * 14px));
+  border: 0;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: #8eb5ac;
+  font: 10px/1.4 var(--mono);
+  text-align: left;
+}
+
+.workstation-entry-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workstation-tree-entry:hover:not(:disabled),
+.workstation-tree-entry:focus-visible,
+.workstation-tree-entry[aria-selected="true"] {
+  border-left-color: var(--phosphor);
+  background: #123237;
+  color: var(--phosphor);
+}
+
+.workstation-tree-entry.is-file {
+  color: #a7bfc0;
+}
+
+.workstation-tree-entry:disabled {
+  cursor: not-allowed;
+  opacity: .56;
+}
+
+.workstation-tree-twisty {
+  width: 10px;
+  flex: 0 0 10px;
+  color: #6faaa0;
+  text-align: center;
+}
+
+.workstation-tree-twisty.is-hidden {
+  visibility: hidden;
+}
+
+.workstation-folder-button {
+  width: 100%;
+  min-height: 32px;
+  justify-content: flex-start;
+  gap: 7px;
+  padding: 5px 6px;
+  padding-inline-start: calc(6px + (var(--folder-depth, 0) * 14px));
+  border: 0;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: #8eb5ac;
+  font: 10px/1.4 var(--mono);
+  text-align: left;
+}
+
+.workstation-folder-button:hover,
+.workstation-folder-button:focus-visible,
+.workstation-folder-button[aria-selected="true"] {
+  border-left-color: var(--phosphor);
+  background: #123237;
+  color: var(--phosphor);
+}
+
+.workstation-directory {
+  overflow: auto;
+  padding: 10px;
+  scrollbar-color: #46716c transparent;
+  scrollbar-width: thin;
+}
+
+.workstation-directory > h3 {
+  font-size: 17px;
+  line-height: 1.45;
+}
+
+.workstation-breadcrumb {
+  overflow: hidden;
+  margin: 0 8px 8px;
+  color: #5e8983;
+  font: 9px/1.5 var(--mono);
+  letter-spacing: .06em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workstation-entry-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.45;
+}
+
+.workstation-entry-icon.is-folder {
+  color: #9debd3;
+}
+
+.workstation-entry-icon.is-file {
+  color: #8fb2b2;
+}
+
+.workstation-entry-icon.is-locked {
+  color: #b98f65;
+}
+
+.workstation-directory-list {
+  gap: 5px;
+}
+
+.workstation-directory-list button {
+  gap: 9px;
+}
+
+.workstation-directory-list button::before {
+  display: none;
+}
+
+.workstation-directory-empty {
+  margin: 20px 8px;
+  color: #6f9290;
+  font: 10px/1.7 var(--mono);
+}
+
+.workstation-document {
+  display: flex;
+  flex-direction: column;
+  height: calc(100% - 8px);
+  min-height: 190px;
+  border: 1px solid #315b57;
+  border-left: 3px solid var(--phosphor);
+  background: #07161a;
+  box-shadow: inset 0 0 20px #0008;
+}
+
+.workstation-document h4 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  padding: 12px 14px;
+  border-bottom: 1px solid #234447;
+  color: var(--phosphor);
+  font: 13px/1.5 var(--mono);
+}
+
+.workstation-document h4 [data-workstation-back] {
+  flex: 0 0 auto;
+  min-width: 32px;
+  min-height: 30px;
+  padding: 3px 8px;
+  border: 1px solid #315b57;
+  background: #0b2024;
+  color: #a7c7c1;
+  font: 14px/1 var(--mono);
+}
+
+.workstation-document-media {
+  margin: 0;
+  padding: 12px 14px 0;
+}
+
+.workstation-document-media img {
+  display: block;
+  width: min(100%, 560px);
+  max-height: 260px;
+  object-fit: cover;
+  border: 1px solid #315b57;
+  filter: saturate(.72) contrast(1.05);
+  opacity: .9;
+}
+
+.workstation-document-media.is-atmosphere img {
+  max-height: 190px;
+  opacity: .72;
+}
+
+.workstation-document-media figcaption {
+  max-width: 560px;
+  padding-top: 6px;
+  color: #789a98;
+  font: 10px/1.55 var(--mono);
+}
+
+.workstation-document [data-workstation-entry-content] {
+  min-height: 0;
+  overflow: auto;
+  padding-block: 18px;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font: 15px/1.95 var(--sans);
+  letter-spacing: .01em;
+}
+
+.workstation-document form {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px 14px;
+  border-top: 1px dashed #31524f;
+}
+
+[data-workstation-answer-form] {
+  margin-top: 18px;
+  border: 1px solid #9f7a45;
+  border-left: 3px solid #e4b260;
+  background: #1a1710;
+}
+
+[data-workstation-answer-form] label {
+  color: #e4b260;
+  font: 10px/1.5 var(--mono);
+  letter-spacing: .08em;
+}
+
+[data-workstation-answer-form] button {
+  justify-self: start;
+  border-color: #9f7a45;
+  color: #f4c77c;
+}
+
+@media (min-width: 1000px) {
+  .intercom-monitor {
+    width: 100%;
+    max-width: min(34vw, 460px);
+    justify-self: start;
+  }
+
+  .intercom-monitor .monitor-screen .chat-panel {
+    padding: 14px;
+  }
+
+  .intercom-monitor .panel-heading {
+    gap: 6px 10px;
+    padding-bottom: 12px;
+    margin-bottom: 14px;
+  }
+
+  .intercom-monitor .chat-log {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 759px) {
+  .operations-workspace {
+    overflow: visible;
+  }
+
+  .workstation-ui {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .workstation-content {
+    overflow: visible;
+  }
+
+  .workstation-files-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .workstation-file-tree {
+    max-height: 152px;
+  }
+
+  .workstation-folder-tree {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

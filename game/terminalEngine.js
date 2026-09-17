@@ -1,0 +1,720 @@
+const { evaluatePredicate } = require('./content/contentSchema');
+const { terminalEntries } = require('./content/terminalEntries');
+const { operations } = require('./content/operations');
+const { createWorkstationState } = require('./createRoomState');
+const { refreshPrivateMissions, missionForOperation } = require('./privateEventEngine');
+
+const ROLES = ['A', 'B'];
+const MAX_TERMINAL_TEXT = 1000;
+const MAX_TERMINAL_ARGUMENT = 120;
+
+// Archive contents are authored on the server.  The client may request an
+// archive by name, but it can never provide bytes or choose arbitrary paths.
+// Task 2 can extend this table with richer folder metadata without changing
+// the command contract.
+const ARCHIVE_MANIFESTS = Object.freeze({
+  'case_bundle.zip': Object.freeze(['files.mainline', 'log.original_index_time', 'log.personnel_transfer', 'archive.case_bundle.index']),
+  'incident_bundle.zip': Object.freeze(['audio.original_incident_timestamp', 'doc.a_incident_report', 'doc.b_incident_report', 'archive.incident.raw_notes']),
+  'mirror_backup.zip': Object.freeze(['log.mirror_backup', 'log.token_reissue', 'archive.mirror.checksum'])
+});
+
+const TERMINAL_MUTATIONS = Object.freeze([
+  Object.freeze({
+    command: 'UNLOCK', targetEntryId: 'mutation.a.hidden_audit', roles: Object.freeze(['A']),
+    requires: Object.freeze({ all: [{ publicFact: 'main1Completed' }, { roleFact: 'incidentVerificationAttempted' }] }),
+    effect: Object.freeze({ type: 'unlock', grantPermission: 'a.audit.read' }),
+    success: '權限確認：隱藏稽核備註已掛載。', denied: '權限不足：目前的紀錄還不能確認這份稽核備註。'
+  }),
+  Object.freeze({
+    command: 'DELETE', targetEntryId: 'mutation.a.local_mirror', roles: Object.freeze(['A']),
+    requires: Object.freeze({ publicFact: 'main2Completed' }), requiresPermission: 'a.audit.read',
+    effect: Object.freeze({ type: 'delete' }),
+    success: '本地鏡像已移除；共同檔案未受影響。', denied: '權限不足：這份本地鏡像仍受保護。'
+  }),
+  Object.freeze({
+    command: 'ADD', targetEntryId: 'mutation.b.recovered_note', roles: Object.freeze(['B']),
+    requires: Object.freeze({ all: [{ publicFact: 'main2Completed' }, { roleFact: 'bFlaggedIdentity' }] }),
+    effect: Object.freeze({ type: 'add', grantPermission: 'b.recovery.write' }),
+    success: '恢復備註已加入 B / PRIVATE。', denied: '權限不足：尚未取得恢復備註的寫入權限。'
+  }),
+  Object.freeze({
+    command: 'RESTORE', targetEntryId: 'mutation.a.local_mirror', roles: Object.freeze(['A']),
+    requires: Object.freeze({ publicFact: 'main2Completed' }), requiresPermission: 'a.audit.read',
+    effect: Object.freeze({ type: 'restore' }),
+    success: '本地鏡像已恢復，請重新比對它與共同備份。', denied: '無法恢復：這份鏡像沒有可用的刪除紀錄。'
+  })
+]);
+
+const ARCHIVE_CONTENTS = Object.freeze([
+  Object.freeze({ id: 'archive.case_bundle.index', sourceGroup: 'case_bundle', audience: { kind: 'both' }, unlockWhen: { all: [] }, archiveOnly: true, archiveId: 'case_bundle.zip', kind: 'document', text: '封存索引：case_bundle 的最後寫入順序仍可由原始紀錄交叉驗證。' }),
+  Object.freeze({ id: 'archive.incident.raw_notes', sourceGroup: 'incident_bundle', audience: { kind: 'both' }, unlockWhen: { all: [] }, archiveOnly: true, archiveId: 'incident_bundle.zip', kind: 'document', text: '碎片備註：事故音軌與索引時間不是同一個來源。' }),
+  Object.freeze({ id: 'archive.mirror.checksum', sourceGroup: 'mirror_backup', audience: { kind: 'both' }, unlockWhen: { all: [] }, archiveOnly: true, archiveId: 'mirror_backup.zip', kind: 'document', text: '鏡像摘要：checksum 可從備份與安全記錄交叉比對。' })
+]);
+
+function authoredEntries() {
+  const ids = new Set(terminalEntries.map(entry => entry.id));
+  return [...terminalEntries, ...ARCHIVE_CONTENTS.filter(entry => !ids.has(entry.id))];
+}
+
+function discoveredEvidenceEntries(room) {
+  const evidence = Array.isArray(room?.sideEvidence) ? room.sideEvidence : [];
+  return evidence.filter(item => item && item.discovered !== false && item.found !== false && item.isDiscovered !== false
+    && typeof item.id === 'string' && item.id).map(item => ({
+    id: `evidence.${item.id}`,
+    sourceEntryId: `evidence.${item.id}`,
+    sourceGroup: 'discovered_evidence',
+    audience: { kind: 'both' },
+    kind: 'document',
+    parentId: 'folder.notes',
+    filename: `${item.id}.note`,
+    text: typeof item.summary === 'string' ? item.summary : typeof item.title === 'string' ? item.title : '',
+    evidenceId: item.id
+  }));
+}
+
+function investigationEntries(room) {
+  const views = Array.isArray(room?.publicProgress?.sidePuzzles) ? room.publicProgress.sidePuzzles : [];
+  return views.filter(view => view && typeof view.puzzleId === 'string' && view.puzzleId).map(view => ({
+    id: `investigation.${view.puzzleId}`,
+    sourceEntryId: `investigation.${view.puzzleId}`,
+    sourceGroup: 'side_investigation',
+    audience: { kind: 'both' },
+    kind: 'document',
+    parentId: 'folder.notes',
+    filename: `${view.puzzleId}.case`,
+    text: typeof view.prompt === 'string' && view.opened ? view.prompt
+      : typeof view.hook === 'string' ? view.hook : typeof view.title === 'string' ? view.title : '',
+    title: view.title,
+    puzzleId: view.puzzleId,
+    stepId: view.stepId || 'inspect',
+    opened: view.opened === true,
+    complete: view.complete === true,
+    hook: view.hook || '',
+    prompt: view.prompt || ''
+  }));
+}
+
+function allEntries(room) {
+  return [...authoredEntries(), ...discoveredEvidenceEntries(room), ...investigationEntries(room)];
+}
+
+const TERMINAL_HINTS = Object.freeze([
+  'ORPHEUS：先確認目前能看見的檔案索引，再決定要不要打開它。',
+  'ORPHEUS：時間戳記不會自己改變；把不同來源的紀錄放在一起比對。',
+  'ORPHEUS：有些檔案只在正確的工作站出現，別把看不見的內容當成不存在。',
+  'ORPHEUS：如果一份紀錄要求你相信另一份紀錄，先找第三個來源。',
+  'ORPHEUS：目前的路徑仍然可以回頭檢查，先保留你們各自看到的版本。',
+  'ORPHEUS：最後的決定會留下操作痕跡；現在看到的提示不等於命令。'
+]);
+const PRIVATE_OPERATION_ROLES = Object.freeze({
+  archive_index: 'A', decline_index_repair: 'A', skip_a1: 'A',
+  delete_local_mirror: 'A', share_mirror_first: 'A', decline_mirror_cleanup: 'A', skip_a2: 'A',
+  request_solo_validation: 'A', publish_fragment: 'A', request_pair_validation: 'A', skip_a3: 'A',
+  flag_identity: 'B', share_roster: 'B', decline_identity_check: 'B', skip_b1: 'B',
+  pause_local_mirror: 'B', keep_local_mirror: 'B', warn_partner_first: 'B', skip_b2: 'B',
+  file_full_report: 'B', file_anonymous_summary: 'B', disclose_report: 'B', skip_b3: 'B'
+});
+
+function roleOf(player) {
+  const role = typeof player === 'string' ? player : player?.role;
+  if (!ROLES.includes(role)) throw Object.assign(new Error('Invalid player role'), { code: 'INVALID_PLAYER', status: 400 });
+  return role;
+}
+
+function assertPlayer(room, player) {
+  const role = roleOf(player);
+  if (player && typeof player === 'object'
+    && player.roomCode !== undefined && String(player.roomCode) !== String(room?.roomCode)) {
+    throw Object.assign(new Error('Player identity does not match room'), { code: 'INVALID_PLAYER', status: 409 });
+  }
+  const occupant = room.players?.[role];
+  if (!occupant || typeof occupant.playerId !== 'string' || !occupant.playerId) {
+    throw Object.assign(new Error('Player identity does not match room'), { code: 'INVALID_PLAYER', status: 409 });
+  }
+  if (player && typeof player === 'object'
+    && (typeof player.playerId !== 'string' || player.playerId !== occupant.playerId)) {
+    throw Object.assign(new Error('Player identity does not match room'), { code: 'INVALID_PLAYER', status: 409 });
+  }
+  return role;
+}
+
+function commandError(code, status, message) {
+  return Object.assign(new Error(message), { code, status });
+}
+
+function safeArgument(value, label) {
+  if (typeof value !== 'string' || !value || value.length > MAX_TERMINAL_ARGUMENT
+    || /[\u0000-\u001f\u007f]/.test(value)
+    || value.includes('/') || value.includes('\\') || value.includes('..')
+    || /%2f|%5c|%2e/i.test(value)) {
+    throw commandError('INVALID_COMMAND', 400, `Invalid ${label}`);
+  }
+  return value;
+}
+
+function parseTerminalCommand(value) {
+  if (typeof value !== 'string' || value.length > MAX_TERMINAL_TEXT) {
+    throw commandError('INVALID_COMMAND', 400, 'Invalid terminal command');
+  }
+  const input = value.trim();
+  if (!input) throw commandError('INVALID_COMMAND', 400, 'Invalid terminal command');
+  const match = /^(HELP|HINT|SEARCH|SCAN|UNZIP|UNLOCK|DELETE|ADD|RESTORE|SEND)(?:\s+([\s\S]*))?$/i.exec(input);
+  if (!match) throw commandError('INVALID_COMMAND', 400, 'Unknown terminal command');
+  const command = match[1].toUpperCase();
+  const argument = match[2] === undefined ? '' : match[2].trim();
+  if (command === 'HELP' || command === 'HINT') {
+    if (argument) throw commandError('INVALID_COMMAND', 400, `${command} does not take an argument`);
+    return { command, argument: '' };
+  }
+  if (command === 'SEND') {
+    if (!argument || argument.length > MAX_TERMINAL_TEXT || /[\u0000-\u001f\u007f]/.test(argument)) {
+      throw commandError('INVALID_COMMAND', 400, 'Invalid SEND text');
+    }
+    return { command, argument };
+  }
+  if (!argument || /\s/.test(argument)) throw commandError('INVALID_COMMAND', 400, `Invalid terminal command: ${command} requires one argument`);
+  return { command, argument: safeArgument(argument, `${command} target`) };
+}
+
+function visibleEntries(room, role) {
+  const visible = new Set(room.workstation[role].unlockedEntryIds || []);
+  const deleted = new Set(room.workstation[role].deletedEntryIds || []);
+  return allEntries(room).filter(entry => !deleted.has(entry.id)
+    && (visible.has(entry.id) || entry.sourceGroup === 'discovered_evidence'));
+}
+
+function entryLabel(entry) {
+  return entry.filename || entry.name || entry.id;
+}
+
+function mutationFor(room, command, argument) {
+  const normalized = argument.toLowerCase();
+  return TERMINAL_MUTATIONS.find(mutation => mutation.command === command
+    && allEntries(room).some(entry => entry.id === mutation.targetEntryId
+      && (entry.id.toLowerCase() === normalized || entryLabel(entry).toLowerCase() === normalized)));
+}
+
+function mutationError(message) {
+  return commandError('PERMISSION_REQUIRED', 423, message);
+}
+
+function applyTerminalMutation(room, role, mutation, target) {
+  const ws = room.workstation[role];
+  ws.manualUnlockedEntryIds ??= [];
+  ws.deletedEntryIds ??= [];
+  ws.addedEntryIds ??= [];
+  ws.permissions ??= [];
+  ws.appliedMutationIds ??= [];
+  const effect = mutation.effect;
+  if (effect.type === 'unlock' && !ws.manualUnlockedEntryIds.includes(target.id)) ws.manualUnlockedEntryIds.push(target.id);
+  if (effect.type === 'delete' && !ws.deletedEntryIds.includes(target.id)) ws.deletedEntryIds.push(target.id);
+  if (effect.type === 'add' && !ws.addedEntryIds.includes(target.id)) ws.addedEntryIds.push(target.id);
+  if (effect.type === 'restore') ws.deletedEntryIds = ws.deletedEntryIds.filter(id => id !== target.id);
+  if (effect.grantPermission && !ws.permissions.includes(effect.grantPermission)) ws.permissions.push(effect.grantPermission);
+  ws.appliedMutationIds.push(`${mutation.command}:${target.id}`);
+}
+
+function executeTerminalCommand(room, player, value) {
+  const parsed = parseTerminalCommand(value);
+  const role = assertPlayer(room, player);
+  const mutationCommands = new Set(['UNLOCK', 'DELETE', 'ADD', 'RESTORE']);
+  const mutation = mutationCommands.has(parsed.command)
+    ? mutationFor(room, parsed.command, parsed.argument) : null;
+  if (mutationCommands.has(parsed.command) && !mutation) {
+    throw commandError('ENTRY_LOCKED', 423, 'File is locked or not visible');
+  }
+  // Reject locked targets before ensureRoom/refreshWorkstation can backfill
+  // any state, preserving no-mutation semantics for direct callers.
+  const currentVisible = new Set(room.workstation?.[role]?.unlockedEntryIds || []);
+  if (parsed.command === 'SCAN') {
+    const target = allEntries(room).find(entry => entry.id.toLowerCase() === parsed.argument.toLowerCase()
+      || entryLabel(entry).toLowerCase() === parsed.argument.toLowerCase());
+    if (!target || (!currentVisible.has(target.id) && target.sourceGroup !== 'discovered_evidence')) {
+      throw commandError('ENTRY_LOCKED', 423, 'File is locked or not visible');
+    }
+  }
+  if (parsed.command === 'UNZIP') {
+    const archiveId = parsed.argument.toLowerCase();
+    if (!Object.hasOwn(ARCHIVE_MANIFESTS, archiveId)
+      || !ARCHIVE_MANIFESTS[archiveId].some(id => currentVisible.has(id))) {
+      throw commandError('ARCHIVE_LOCKED', 423, 'Archive is locked or not visible');
+    }
+  }
+  ensureRoom(room);
+  refreshWorkstation(room);
+  if (room.ending) {
+    return { stateChanged: false, command: parsed.command, output: 'CONNECTION CLOSED', publicEvents: [], unlockedEntryIds: [] };
+  }
+
+  const visible = visibleEntries(room, role);
+  if (mutation) {
+    const target = allEntries(room).find(entry => entry.id === mutation.targetEntryId);
+    const ws = room.workstation[role];
+    if (!mutation.roles.includes(role)) throw mutationError(mutation.denied);
+    const mutationId = `${mutation.command}:${target.id}`;
+    if (ws.appliedMutationIds.includes(mutationId)) {
+      return { stateChanged: false, command: parsed.command, output: 'Operation already applied', publicEvents: [], unlockedEntryIds: [] };
+    }
+    if (mutation.requiresPermission && !ws.permissions.includes(mutation.requiresPermission)) {
+      throw mutationError(mutation.denied);
+    }
+    if (!evaluatePredicate(mutation.requires, predicateState(room, role))) {
+      throw mutationError(mutation.denied);
+    }
+    if (mutation.command === 'DELETE' && (!target.deletable || !visible.some(entry => entry.id === target.id))) {
+      throw commandError('ENTRY_LOCKED', 423, 'File is locked or not visible');
+    }
+    if (mutation.command === 'RESTORE' && !ws.deletedEntryIds.includes(target.id)) {
+      throw mutationError(mutation.denied);
+    }
+    applyTerminalMutation(room, role, mutation, target);
+    refreshWorkstation(room);
+    return {
+      stateChanged: true,
+      command: parsed.command,
+      output: mutation.success,
+      publicEvents: [],
+      unlockedEntryIds: room.workstation[role].unlockedEntryIds.filter(id => id === target.id)
+    };
+  }
+  if (parsed.command === 'HELP') {
+    return {
+      stateChanged: false,
+      command: parsed.command,
+      output: 'HELP\nSEARCH <node>\nSCAN <filename>\nUNZIP <filename>\nUNLOCK <filename>\nDELETE <filename>\nADD <filename>\nRESTORE <filename>\nHINT\nSEND <text>',
+      publicEvents: [], unlockedEntryIds: []
+    };
+  }
+  if (parsed.command === 'HINT') {
+    const index = Math.min(Math.max(Number(room.chapter || 1) - 1, 0), TERMINAL_HINTS.length - 1);
+    const text = TERMINAL_HINTS[index];
+    return {
+      stateChanged: true,
+      command: parsed.command,
+      output: text,
+      publicEvents: [{ type: 'story', text, audience: { kind: 'both' } }],
+      unlockedEntryIds: []
+    };
+  }
+  if (parsed.command === 'SEND') {
+    const text = parsed.argument.replace(/[<>]/g, '').trim();
+    if (!text) throw commandError('INVALID_COMMAND', 400, 'Invalid SEND text');
+    const eventText = `ORPHEUS：收到線索「${text}」。我會把它放進共同紀錄。`;
+    return {
+      stateChanged: true,
+      command: parsed.command,
+      output: eventText,
+      publicEvents: [{ type: 'story', text: eventText, audience: { kind: 'both' } }],
+      unlockedEntryIds: []
+    };
+  }
+  if (parsed.command === 'SEARCH') {
+    const needle = parsed.argument.toLowerCase();
+    const matches = visible.filter(entry => [entry.id, entryLabel(entry), entry.sourceGroup, entry.text]
+      .some(value => String(value || '').toLowerCase().includes(needle)));
+    return {
+      stateChanged: false,
+      command: parsed.command,
+      output: matches.length
+        ? matches.map(entry => `${entry.id}  ${entryLabel(entry)}`).join('\n')
+        : 'SEARCH: no visible records',
+      publicEvents: [],
+      unlockedEntryIds: []
+    };
+  }
+  if (parsed.command === 'SCAN') {
+    const target = visible.find(entry => entry.id.toLowerCase() === parsed.argument.toLowerCase()
+      || entryLabel(entry).toLowerCase() === parsed.argument.toLowerCase());
+    if (!target) throw commandError('ENTRY_LOCKED', 423, 'File is locked or not visible');
+    return {
+      stateChanged: false,
+      command: parsed.command,
+      output: `${target.id}\n${target.text}`,
+      publicEvents: [],
+      unlockedEntryIds: []
+    };
+  }
+
+  const archiveId = parsed.argument.toLowerCase();
+  if (!Object.hasOwn(ARCHIVE_MANIFESTS, archiveId)) {
+    throw commandError('ARCHIVE_LOCKED', 423, 'Archive is not authored or not available');
+  }
+  const manifest = ARCHIVE_MANIFESTS[archiveId];
+  const manifestEntries = manifest
+    .map(id => authoredEntries().find(entry => entry.id === id))
+    .filter(Boolean);
+  if (!manifestEntries.length || !manifestEntries.some(entry => visible.includes(entry))) {
+    throw commandError('ARCHIVE_LOCKED', 423, 'Archive is locked or not visible');
+  }
+  const ws = room.workstation[role];
+  ws.unzippedArchiveIds ??= [];
+  if (ws.unzippedArchiveIds.includes(archiveId)) {
+    return {
+      stateChanged: false,
+      command: parsed.command,
+      output: 'Archive already expanded',
+      publicEvents: [],
+      unlockedEntryIds: manifestEntries.filter(entry => ws.unlockedEntryIds.includes(entry.id)).map(entry => entry.id)
+    };
+  }
+  const beforeUnlocked = new Set(ws.unlockedEntryIds);
+  ws.unzippedArchiveIds.push(archiveId);
+  refreshWorkstation(room);
+  const unlockedEntryIds = manifestEntries
+    .filter(entry => room.workstation[role].unlockedEntryIds.includes(entry.id) && !beforeUnlocked.has(entry.id))
+    .map(entry => entry.id);
+  return {
+    stateChanged: true,
+    command: parsed.command,
+    output: `Archive expanded: ${parsed.argument}\n${unlockedEntryIds.join('\n')}`,
+    publicEvents: [],
+    unlockedEntryIds
+  };
+}
+
+function ensureRoom(room) {
+  if (!room || typeof room !== 'object') throw new TypeError('Room is required');
+  room.publicFacts ??= [];
+  room.completedNodes ??= [];
+  room.actionAttempts ??= [];
+  room.completedOperations ??= [];
+  room.publicFacts ??= [];
+  // Rooms and joins are authoritative public facts. Older room snapshots did
+  // not persist these facts, so derive them once from the authenticated
+  // occupants before projecting operation availability.
+  if (room.roomCode && !room.publicFacts.includes('roomCreated')) room.publicFacts.push('roomCreated');
+  if (room.players?.A && !room.publicFacts.includes('hostJoined')) room.publicFacts.push('hostJoined');
+  if (room.players?.B && !room.publicFacts.includes('guestJoined')) room.publicFacts.push('guestJoined');
+  room.workstation ??= {};
+  for (const role of ROLES) {
+    const current = room.workstation[role];
+    if (!current || typeof current !== 'object' || Array.isArray(current)) room.workstation[role] = createWorkstationState();
+    else {
+      for (const [key, value] of Object.entries(createWorkstationState())) {
+        if (!Array.isArray(current[key])) current[key] = [...value];
+      }
+    }
+  }
+  refreshPrivateMissions(room);
+  return room;
+}
+
+function audienceAllows(entry, role) {
+  const audience = entry.audience;
+  if (!audience || typeof audience !== 'object') return false;
+  if (audience.kind === 'both') return true;
+  if (audience.kind === 'role') {
+    if (audience.role !== 'host' && audience.role !== 'guest') return false;
+    return (audience.role === 'host' ? 'A' : 'B') === role;
+  }
+  if (audience.kind === 'player') return false;
+  return false;
+}
+
+function predicateState(room, role) {
+  const ws = room.workstation[role];
+  const roleFacts = targetRole => {
+    const facts = new Set(room.workstation[targetRole]?.roleFacts || []);
+    const dialogue = room.directDialogueState?.[targetRole] || {};
+    if (Number(dialogue.rapportCount) >= 1) facts.add('rapportReady');
+    if (Number(dialogue.rapportCount) >= 2) facts.add('rapportCount2');
+    if (Number(dialogue.rapportSincePressure) >= 1) facts.add('rapportSincePressure');
+    return [...facts];
+  };
+  return {
+    chapter: room.chapter,
+    publicFacts: room.publicFacts,
+    role,
+    roleFacts: { A: roleFacts('A'), B: roleFacts('B') },
+    openedEntryIds: ws.openedEntryIds,
+    actionIds: [...ws.actionAttempts]
+  };
+}
+
+function hasPrivateFacts(entry, ws) {
+  return (entry.requiresPrivateFacts || []).every(fact => ws.roleFacts.includes(fact));
+}
+
+function entryVisible(room, role, entry) {
+  const ws = room.workstation[role];
+  if (entry.mutationOnly && !ws.manualUnlockedEntryIds?.includes(entry.id)
+    && !ws.addedEntryIds?.includes(entry.id)) return false;
+  if (ws.deletedEntryIds?.includes(entry.id)) return false;
+  if (entry.archiveOnly && !room.workstation[role].unzippedArchiveIds?.includes(entry.archiveId)) return false;
+  if ((entry.id === 'doc.a_incident_report' || entry.id === 'doc.b_incident_report')
+    && !room.publicFacts.includes('main1Completed')) return false;
+  return audienceAllows(entry, role)
+    && evaluatePredicate(entry.unlockWhen || { all: [] }, predicateState(room, role))
+    && hasPrivateFacts(entry, room.workstation[role]);
+}
+
+function expandedEntryVisible(room, role, entry, archiveIds) {
+  if (!archiveIds.some(archiveId => Object.hasOwn(ARCHIVE_MANIFESTS, archiveId)
+    && ARCHIVE_MANIFESTS[archiveId].includes(entry.id))) return false;
+  // Extraction can reveal authored records before their ordinary index
+  // predicate, but never crosses audience/private boundaries or the incident
+  // report's chapter gate.
+  if ((entry.id === 'doc.a_incident_report' || entry.id === 'doc.b_incident_report')
+    && !room.publicFacts.includes('main1Completed')) return false;
+  return audienceAllows(entry, role) && hasPrivateFacts(entry, room.workstation[role]);
+}
+
+function operationVisible(room, role, operation) {
+  const owner = PRIVATE_OPERATION_ROLES[operation.operationId];
+  if (operation.kind === 'private' && owner !== role) return false;
+  const mission = operation.kind === 'private' && missionForOperation(operation.operationId);
+  if (mission) {
+    const state = room.privateMissions?.[role]?.find(item => item.id === mission.id);
+    if (!state || state.state !== 'available') return false;
+  }
+  if (operation.kind === 'mainline' && operation.operationId !== 'verify_incident_timestamp'
+    && room.completedOperations.includes(operation.operationId)) return false;
+  if (operation.operationId === 'verify_incident_timestamp') {
+    const openedA = room.workstation.A.openedEntryIds.includes('doc.a_incident_report');
+    const openedB = room.workstation.B.openedEntryIds.includes('doc.b_incident_report');
+    return openedA && openedB && evaluatePredicate(operation.unlockWhen || { all: [] }, predicateState(room, role));
+  }
+  if (operation.operationId === 'pair_validate_protocol'
+    && !room.publicFacts.includes('soloProtocolsReady')) return false;
+  return evaluatePredicate(operation.unlockWhen || { all: [] }, predicateState(room, role));
+}
+
+function refreshWorkstation(room) {
+  ensureRoom(room);
+  for (const role of ROLES) {
+    const ws = room.workstation[role];
+    ws.unzippedArchiveIds ??= [];
+    ws.manualUnlockedEntryIds ??= [];
+    ws.deletedEntryIds ??= [];
+    ws.addedEntryIds ??= [];
+    ws.permissions ??= [];
+    ws.appliedMutationIds ??= [];
+    const unlocked = authoredEntries().filter(entry => entryVisible(room, role, entry)
+      || expandedEntryVisible(room, role, entry, ws.unzippedArchiveIds)).map(entry => entry.id);
+    const manual = authoredEntries().filter(entry => !ws.deletedEntryIds.includes(entry.id)
+      && audienceAllows(entry, role)
+      && (ws.manualUnlockedEntryIds.includes(entry.id) || ws.addedEntryIds.includes(entry.id))).map(entry => entry.id);
+    ws.unlockedEntryIds = [...new Set([...unlocked, ...manual])];
+    const completed = new Set(ws.completedOperations);
+    ws.activeOperations = operations
+      .filter(operation => operationVisible(room, role, operation)
+        && (!completed.has(operation.operationId) || operation.operationId === 'verify_incident_timestamp'))
+      .map(operation => operation.operationId);
+  }
+  return room.workstation;
+}
+
+function appForEntry(entry) {
+  if (entry.id.startsWith('log.') || entry.id.startsWith('audio.')) return 'logs';
+  if (entry.id.startsWith('ai.')) return 'terminal';
+  return 'files';
+}
+
+function entryParentId(entry) {
+  if (entry.parentId !== undefined) return entry.parentId;
+  if (entry.kind === 'folder') return null;
+  if (entry.archiveOnly) return entry.archiveId === 'case_bundle.zip' ? 'archive.case_bundle'
+    : entry.archiveId === 'incident_bundle.zip' ? 'archive.incident_bundle' : 'archive.mirror_backup';
+  if (entry.id.startsWith('ai.') || entry.id.startsWith('doc.') || entry.id.startsWith('files.')) {
+    const rolePrivate = entry.audience?.kind === 'role';
+    return rolePrivate ? (entry.audience.role === 'host' ? 'folder.private_a' : 'folder.private_b') : 'folder.case';
+  }
+  return 'folder.case';
+}
+
+function currentMainPuzzleId(room) {
+  const explicit = room.publicProgress?.puzzleId;
+  if (typeof explicit === 'string' && /^main[1-6]$/.test(explicit)) return explicit;
+  const done = new Set(room.mainProgress || []);
+  return ['main1', 'main2', 'main3', 'main4', 'main5', 'main6'].find(id => !done.has(id)) || 'main6';
+}
+
+function displayEntry(entry, opened, locked = false, archiveExpanded = false) {
+  const result = {
+    id: entry.id,
+    parentId: entryParentId(entry),
+    name: entry.filename || entry.name || entry.id,
+    kind: entry.kind || 'document',
+    locked: Boolean(locked),
+    metadataVisible: true,
+    opened: Boolean(opened || entry.opened),
+    answerGate: entry.answerGate || null,
+    launchApp: entry.launchApp || null
+  };
+  if (entry.puzzleId) {
+    result.puzzleId = entry.puzzleId;
+    result.stepId = entry.stepId || 'inspect';
+    result.investigation = { opened: entry.opened === true, complete: entry.complete === true };
+  }
+  if (entry.archive) result.archive = { id: entry.archive.id, expanded: Boolean(archiveExpanded) };
+  if (entry.archiveId && entry.archiveOnly) result.archive = { id: entry.archiveId, expanded: Boolean(archiveExpanded) };
+  if (locked) return result;
+  result.text = entry.text;
+  result.verificationEntries = (entry.verificationEntries || []).map(item => item.entryId);
+  if (entry.imageUrl && opened) {
+    result.imageUrl = entry.imageUrl;
+    result.imageAlt = entry.imageAlt;
+    result.imageCaption = entry.imageCaption;
+    result.imageRole = entry.imageRole;
+  }
+  return result;
+}
+
+function projectWorkstation(room, player) {
+  const role = assertPlayer(room, player);
+  ensureRoom(room);
+  refreshWorkstation(room);
+  const ws = room.workstation[role];
+  const visible = new Set(ws.unlockedEntryIds);
+  const opened = new Set(ws.openedEntryIds);
+  const buckets = { files: [], terminal: [], logs: [] };
+  const archiveIds = new Set(ws.unzippedArchiveIds || []);
+  for (const item of allEntries(room)) {
+    if (item.archiveOnly && !archiveIds.has(item.archiveId)) continue;
+    if (!audienceAllows(item, role)) continue;
+    if (ws.deletedEntryIds?.includes(item.id)) continue;
+    const app = appForEntry(item);
+    const unlocked = visible.has(item.id) || item.sourceGroup === 'discovered_evidence' || item.sourceGroup === 'side_investigation';
+    if (item.mutationOnly && !unlocked) continue;
+    if (!unlocked && item.archiveOnly) continue;
+    if (!unlocked && app !== 'files') continue;
+    buckets[app].push(displayEntry(item, opened.has(item.id), !unlocked,
+      archiveIds.has(item.archive?.id || item.archiveId)));
+  }
+  // Keep the filesystem anchor explicit in the actor-safe projection.  The
+  // client can then render the root deterministically even when a future
+  // content pack adds another top-level folder or reorders authored entries.
+  const fileRoot = buckets.files.find(item => item.kind === 'folder' && item.parentId == null);
+  const answer = authoredEntries().find(item => item.answerGate?.puzzleId === currentMainPuzzleId(room)
+    && audienceAllows(item, role));
+  const answerGate = answer ? {
+    entryId: answer.id,
+    puzzleId: answer.answerGate.puzzleId,
+    open: opened.has(answer.id)
+  } : { entryId: null, puzzleId: currentMainPuzzleId(room), open: false };
+  return {
+    // Keep the active puzzle clue in the operations monitor while Files /
+    // Terminal / Logs provide the explorable records.  This preserves the
+    // legacy answer flow and ensures the dual-console migration does not
+    // silently remove each role's starting clue.
+    text: room.privateClues?.[role]?.text || '',
+    audioUrl: room.privateClues?.[role]?.audioUrl || '',
+    files: { rootId: fileRoot?.id || null, entries: buckets.files },
+    terminal: { entries: buckets.terminal, activeOperations: ws.activeOperations.filter(operationId => operationId !== 'open_entry') },
+    logs: { entries: buckets.logs },
+    unlockedEntryIds: [...ws.unlockedEntryIds],
+    openedEntryIds: [...ws.openedEntryIds],
+    answerGate,
+    // `open_entry` is a transport-only callback used by Files clicks; it is
+    // intentionally not rendered as a generic Terminal button.
+    activeOperations: ws.activeOperations.filter(operationId => operationId !== 'open_entry'),
+    roleFacts: [...ws.roleFacts],
+    permissions: [...ws.permissions],
+    deletedEntryIds: [...ws.deletedEntryIds],
+    addedEntryIds: [...ws.addedEntryIds],
+    appliedMutationIds: [...ws.appliedMutationIds]
+  };
+}
+
+function openEntry(room, player, entryId) {
+  const role = assertPlayer(room, player);
+  ensureRoom(room);
+  refreshWorkstation(room);
+  const entry = allEntries(room).find(item => item.id === entryId);
+    const dynamicEntry = entry?.sourceGroup === 'discovered_evidence' || entry?.sourceGroup === 'side_investigation';
+    if (!entry || (!dynamicEntry && !room.workstation[role].unlockedEntryIds.includes(entryId))) {
+    throw Object.assign(new Error('Entry is locked or not visible'), { code: 'ENTRY_LOCKED', status: 423 });
+  }
+  const ws = room.workstation[role];
+  if (ws.openedEntryIds.includes(entryId)) return { stateChanged: false, entry: displayEntry(entry, true) };
+  ws.openedEntryIds.push(entryId);
+  if (room.workstation.A.openedEntryIds.includes('doc.a_solo_protocol')
+    && room.workstation.B.openedEntryIds.includes('doc.b_solo_protocol')) {
+    if (!room.publicFacts.includes('soloProtocolsReady')) room.publicFacts.push('soloProtocolsReady');
+  }
+  refreshWorkstation(room);
+  refreshPrivateMissions(room);
+  return { stateChanged: true, entry: displayEntry(entry, true) };
+}
+
+function applyEffects(room, role, operation, overrides = {}) {
+  const effects = { ...(operation.effects || {}), ...overrides };
+  for (const fact of effects.publicFacts || []) if (!room.publicFacts.includes(fact)) room.publicFacts.push(fact);
+  for (const fact of effects.roleFacts || []) if (!room.workstation[role].roleFacts.includes(fact)) room.workstation[role].roleFacts.push(fact);
+  const nodes = operation.kind === 'private'
+    ? (room.workstation[role].completedNodes ??= [])
+    : (room.completedNodes ??= []);
+  for (const node of effects.completeNodeIds || []) if (!nodes.includes(node)) nodes.push(node);
+  for (const id of effects.unlockEntryIds || []) {
+    for (const targetRole of ROLES) {
+      if (audienceAllows(terminalEntries.find(entry => entry.id === id) || {}, targetRole)
+        && !room.workstation[targetRole].unlockedEntryIds.includes(id)) room.workstation[targetRole].unlockedEntryIds.push(id);
+    }
+  }
+}
+
+function executeOperation(room, player, operationId, value, options = {}) {
+  const role = assertPlayer(room, player);
+  ensureRoom(room);
+  refreshWorkstation(room);
+  const operation = operations.find(item => item.operationId === operationId);
+  if (!operation || (operationId !== 'open_entry' && !room.workstation[role].activeOperations.includes(operationId))) {
+    throw Object.assign(new Error('Operation is locked'), { code: 'OPERATION_LOCKED', status: 423 });
+  }
+  if (operationId === 'pair_validate_protocol' && !room.publicFacts.includes('soloProtocolsReady')) {
+    throw Object.assign(new Error('Operation is locked'), { code: 'OPERATION_LOCKED', status: 423 });
+  }
+  const ws = room.workstation[role];
+  if (operationId === 'open_entry') {
+    const entryId = typeof value === 'string' ? value : '';
+    const entry = allEntries(room).find(item => item.id === entryId);
+    const dynamicEntry = entry?.sourceGroup === 'discovered_evidence' || entry?.sourceGroup === 'side_investigation';
+    if (!entry || (!dynamicEntry && !ws.unlockedEntryIds.includes(entryId))) {
+      throw Object.assign(new Error('Entry is locked or not visible'), { code: 'ENTRY_LOCKED', status: 423 });
+    }
+    if (ws.openedEntryIds.includes(entryId)) return { stateChanged: false, operationId, value };
+    ws.openedEntryIds.push(entryId);
+    ws.actionAttempts.push(operationId);
+    if (room.workstation.A.openedEntryIds.includes('doc.a_solo_protocol')
+      && room.workstation.B.openedEntryIds.includes('doc.b_solo_protocol')) {
+      if (!room.publicFacts.includes('soloProtocolsReady')) room.publicFacts.push('soloProtocolsReady');
+    }
+    refreshWorkstation(room);
+    refreshPrivateMissions(room);
+    return { stateChanged: true, operationId, value };
+  }
+  if (operation.kind === 'mainline' && operationId !== 'verify_incident_timestamp'
+    && room.completedOperations.includes(operationId)) {
+    return { stateChanged: false, operationId, value };
+  }
+  if (operationId !== 'verify_incident_timestamp' && ws.completedOperations.includes(operationId)) {
+    return { stateChanged: false, operationId, value };
+  }
+  room.actionAttempts.push(operationId);
+  ws.actionAttempts.push(operationId);
+  if (!options.skipEffects) {
+    const overrides = operation.kind === 'neutral_finale'
+      ? { completeNodeIds: [`finaleCommitted.${role}`,
+          ...(Object.values(room.finaleCommittedByRole || {}).some(Boolean) ? ['endingCommitted'] : [])] }
+      : {};
+    applyEffects(room, role, operation, overrides);
+  }
+  if (operation.kind === 'mainline' && operationId !== 'verify_incident_timestamp'
+    && !room.completedOperations.includes(operationId)) room.completedOperations.push(operationId);
+  if (!ws.completedOperations.includes(operationId) && operationId !== 'verify_incident_timestamp') ws.completedOperations.push(operationId);
+  refreshWorkstation(room);
+  refreshPrivateMissions(room);
+  return { stateChanged: true, operationId, value };
+}
+
+module.exports = {
+  ensureRoom,
+  refreshWorkstation,
+  projectWorkstation,
+  openEntry,
+  executeOperation,
+  executeTerminalCommand,
+  parseTerminalCommand,
+  assertPlayer,
+  audienceAllows
+};

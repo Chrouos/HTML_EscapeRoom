@@ -1,26 +1,49 @@
-# HTML
-利用HTML 建立一個雙人密室逃脫，以下是此網頁運用到的方法
-+ express
-+ API route
-+ boostrap ( boostrap templete free download )
-+ Ajax
+# ORPHEUS｜雙人密室逃脫
 
+兩位受試者在不同終端醒來，只能透過聊天室交換線索。設施 AI 要你們修復系統；隨著紀錄逐漸對不上，你們得決定要相信誰。
 
-# 流程
-> 選擇進入遊戲房間方式
-> 1. 創建房間
->> 1. 隨機生成一個房號   
->> 2. 會直接跳轉到生成的房號網址
-> 2. 選擇房間
->> 1. 輸入已經生成好的房號    
->> 2. 跳轉到剛房號網址   
+保留原本 Express、EJS 與原生 JavaScript 的架構。新版包含六個主線謎題、十四個主線步驟、四個可選調查共八個步驟，以及三種結局。劇情是預先編寫的，不需要 AI API 或帳號。
 
-> 3.選擇角色 ( A / B )   
-> 4. 開始進行解密過程，過程必須交流才可能通關
+## 啟動
 
-![image](https://user-images.githubusercontent.com/56072039/150492558-17688cc1-b622-4358-b9b4-507ab687b616.png)
+需要 Node.js 20 以上。
 
-# Start
+```sh
+npm ci
+npm start
 ```
-node app.js
+
+開啟 http://localhost:3000。玩家 A 建立房間，再將六位數房號交給玩家 B。B 在另一個瀏覽器或獨立無痕工作階段加入；同一組 cookie 代表同一位玩家。
+
+兩人各自持有不同線索，用聊天室交換資訊並提交答案。可選調查不會阻擋主線，但蒐集到的證據會改變最後能做的選擇。音訊題附有完整文字轉錄。
+
+## 房間限制
+
+- 房間只存在伺服器記憶體，重新啟動會清空；重新整理網頁可保留現有房間與角色。
+- 角色綁定 HttpOnly cookie，無法透過修改網址切換角色；清除 cookie 後無法取回已占用角色。
+- 第二位玩家加入後開始 45 分鐘倒數。歸零會切換警報與劇情，不會清除進度或禁止通關。
+- 目前供本機單一伺服器使用。正式部署前仍需處理 HTTPS、持久儲存、限流與多程序狀態一致性。
+- 45 分鐘是劇情倒數設定，實際遊玩時長尚未經真人測試確認。
+
+## 測試
+
+```sh
+npm test
+npx playwright install chromium
+npm run test:e2e
+npm run check
 ```
+
+單元與整合測試檢查房間身份、角色線索隔離、重試、倒數、主支線與結局。Playwright 用獨立瀏覽器工作階段走完三種結局，並檢查聊天重試、重新整理、鍵盤操作與三種螢幕尺寸。測試伺服器使用 3100 埠。
+
+## 程式碼位置
+
+- `game/roomStore.js`：房間生命週期、身份與 revision。
+- `game/gameEngine.js`：主支線判定與進度。
+- `game/content/`：謎題、劇情與結局文案，答案只留在伺服器。
+- `game/safeState.js`：各角色可見狀態。
+- `routes/`：頁面、房間與 API。
+- `views/`、`public/js/`、`public/css/terminal.css`：單一遊戲畫面與互動。
+- `scripts/generate-morse.js`：重建緊急電力題的 Morse WAV。
+
+舊解答文字、影片與歷史素材保留。已移除的舊控制器、路由與畫面可從 Git 歷史找回。

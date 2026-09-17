@@ -1,0 +1,25 @@
+<section class="monitor-frame intercom-monitor" role="region" aria-labelledby="intercom-monitor-heading">
+  <div class="monitor-casing">
+    <header class="monitor-header">
+      <h2 id="intercom-monitor-heading">MONITOR 01 / INTERCOM</h2>
+      <span class="monitor-status"><span class="status-light" aria-hidden="true"></span>LINK ACTIVE</span>
+    </header>
+    <div class="monitor-bezel">
+      <div class="monitor-screen">
+        <div data-intercom-alarm class="intercom-alarm" role="alert" aria-live="assertive" hidden></div>
+        <section class="terminal-panel chat-panel" aria-labelledby="chat-heading">
+          <div class="panel-heading"><span class="panel-index">01 / COMMUNICATION</span><h2 id="chat-heading">設施通訊</h2><span class="live-mark">● LIVE</span></div>
+          <div data-intercom-log data-chat class="chat-log" role="log" aria-label="通訊紀錄" aria-live="off" aria-relevant="additions" tabindex="-1">
+            <p data-intercom-empty class="intercom-empty" role="status">等待通訊封包⋯ 尚未收到可供比對的訊息。</p>
+          </div>
+          <p data-intercom-announcer class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>
+          <form data-chat-form class="chat-form">
+            <label for="chat-text">傳訊給另一位受試者</label>
+            <div class="input-action-row"><input id="chat-text" name="text" maxlength="1000" required autocomplete="off" placeholder="你那邊看到了什麼？"><button class="button" type="submit">傳送訊息</button></div>
+            <p data-chat-feedback class="feedback" role="status"></p>
+          </form>
+        </section>
+      </div>
+    </div>
+  </div>
+</section>
