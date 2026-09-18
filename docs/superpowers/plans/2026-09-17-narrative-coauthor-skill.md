@@ -73,10 +73,10 @@
 - [ ] **Step 1: 用 skill-creator 初始化**
 
   ```powershell
-  python "C:\Users\7157\.codex\skills\.system\skill-creator\scripts\init_skill.py" narrative-coauthor --path "C:\Users\7157\.codex\skills" --resources references --interface "display_name=Narrative Coauthor" --interface "short_description=自然敘述與個人聲音的小說共寫" --interface "default_prompt=Use $narrative-coauthor to write or revise fiction with natural prose, richer narration, emotional truth, and protected world logic."
+  python "C:\Users\7157\.codex\skills\.system\skill-creator\scripts\init_skill.py" narrative-coauthor --path "C:\Users\7157\.codex\skills" --resources references --interface 'display_name=Narrative Coauthor' --interface 'short_description=Natural, narrative-first fiction co-writing in your voice' --interface 'default_prompt=Use $narrative-coauthor to write or revise fiction with natural prose, richer narration, emotional truth, and protected world logic.'
   ```
 
-  Expected result: 建立 `SKILL.md`、`agents/openai.yaml` 與 `references/`；不使用 `--examples`，避免留下無關 placeholder。
+  Expected result: 建立 `SKILL.md`、`agents/openai.yaml` 與 `references/`；不使用 `--examples`，避免留下無關 placeholder。若 initializer 因參數驗證留下 partial `SKILL.md`，不得刪除或覆寫它；改由 implementer 建立缺少的 `agents/openai.yaml` 與 `references/`，並在報告中說明。
 
 - [ ] **Step 2: 確認初始化沒有覆蓋既有 skill**
 
@@ -126,7 +126,7 @@
   若 `openai.yaml` 與完成的 `SKILL.md` 不一致，使用：
 
   ```powershell
-  python "C:\Users\7157\.codex\skills\.system\skill-creator\scripts\generate_openai_yaml.py" "C:\Users\7157\.codex\skills\narrative-coauthor" --interface "display_name=Narrative Coauthor" --interface "short_description=自然敘述與個人聲音的小說共寫" --interface "default_prompt=Use $narrative-coauthor to write or revise fiction with natural prose, richer narration, emotional truth, and protected world logic."
+  python "C:\Users\7157\.codex\skills\.system\skill-creator\scripts\generate_openai_yaml.py" "C:\Users\7157\.codex\skills\narrative-coauthor" --interface 'display_name=Narrative Coauthor' --interface 'short_description=Natural, narrative-first fiction co-writing in your voice' --interface 'default_prompt=Use $narrative-coauthor to write or revise fiction with natural prose, richer narration, emotional truth, and protected world logic.'
   ```
 
 ### Task 4: 驗證 skill 結構與內容完整性
@@ -143,7 +143,7 @@
 - [ ] **Step 1: 執行 quick validator**
 
   ```powershell
-  python "C:\Users\7157\.codex\skills\.system\skill-creator\scripts\quick_validate.py" "C:\Users\7157\.codex\skills\narrative-coauthor"
+  python -X utf8 "C:\Users\7157\.codex\skills\.system\skill-creator\scripts\quick_validate.py" "C:\Users\7157\.codex\skills\narrative-coauthor"
   ```
 
   Expected result: validator 通過，沒有 frontmatter、命名或必要欄位錯誤。
