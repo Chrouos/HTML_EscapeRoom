@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-05
+CREATED BY: ORPHEUS BACKUP SERVICE
+CREATED AT: 2038-04-12
+SOURCE CLASS: mixed
+EVIDENCE TAGS: 文件, 事故, 備份, 權限, 來源
+VISIBILITY: public-mid
+IMPACT: 將主檔案、鏡像與 A／B 原始欄位分開保存，讓來源標記的差異成為可追查的證據，而非被誤當成最終真相。
+RELATED FILES: `archives/mirror_checksum.md`, `archives/incident_raw_notes.md`, `public/archive_incident_bundle.md`
+
 DOCUMENT TYPE: ARCHIVE MANIFEST
 CREATED: 2038-04-12
 LAST MODIFIED: 2038-04-12

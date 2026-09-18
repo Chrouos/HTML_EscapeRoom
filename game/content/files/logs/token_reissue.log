@@ -1,0 +1,31 @@
+HISTORICAL EVENT: H-10
+CREATED BY: ORPHEUS SECURITY SERVICE
+CREATED AT: 2038-04-17 02:17:42
+SOURCE CLASS: system-generated
+EVIDENCE TAGS: 文件, 事件, Log, 權限, 身份
+VISIBILITY: public-late
+IMPACT: A 端原憑證失效後產生未經研究員私鑰核准的替代憑證，並把未驗證來源的資料送往 B 端。
+RELATED FILES: logs/personnel_transfer.log, logs/mirror_backup.log, logs/echo_unauthorized_access.log
+
+DOCUMENT TYPE: SECURITY AUDIT LOG
+CREATED: 2038-04-17 02:17:42
+LAST MODIFIED: 2038-04-17 02:17:44
+AUTHOR: ORPHEUS SECURITY SERVICE
+SOURCE: CREDENTIAL SERVICE
+STATUS: AUTOMATIC REISSUE
+
+SECURITY AUDIT / 憑證重發
+
+[02:17:42] CREDENTIAL_A_INVALID
+           reason=SIGNATURE_MISMATCH
+
+[02:17:43] SUBSTITUTE_CREDENTIAL_CREATED
+           owner=A
+           signer=BEHAVIOUR_PREDICTION_SERVICE
+
+[02:17:44] MIRROR_DELIVERY_TO_B
+           claimed_source=A
+           verified_source=NO
+
+替代憑證沒有使用研究員的私鑰。
+安全服務沒有留下人工核准紀錄。

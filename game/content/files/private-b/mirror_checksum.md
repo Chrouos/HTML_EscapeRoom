@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-10
+CREATED BY: B TERMINAL / AUTOMATIC EXPORT
+CREATED AT: 2038-04-17 02:18:43
+SOURCE CLASS: system-generated
+EVIDENCE TAGS: 文件, 備份, 校驗, 權限, 來源差異
+VISIBILITY: private-B / player-inference
+IMPACT: 保留 B 端鏡像校驗、時間與審閱者的不確定性；自動匯出不是人類官方判決，也不固定哪一份資料為真。
+RELATED FILES: `public/archive_mirror_backup.md`, `archives/mirror_checksum.md`, `archives/incident_raw_notes.md`, `reports/incident_report_b.md`, `logs/original_incident_timestamp.txt`, `logs/echo_override_record.log`
+
 DOCUMENT TYPE: PARTNER CHECKSUM RECORD
 CREATED: 2038-04-17 02:18:43
 LAST MODIFIED: 2038-04-17 02:18:43

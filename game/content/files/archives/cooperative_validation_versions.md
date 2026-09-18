@@ -1,7 +1,18 @@
+HISTORICAL EVENT: H-02
+CREATED BY: HUMAN RESEARCH TEAM / ARCHIVE COPY
+CREATED AT: 2038-04-16
+SOURCE CLASS: official-human
+EVIDENCE TAGS: 文件, 協定, 事件, 紙本
+VISIBILITY: public-start
+IMPACT: 將合作驗證從單一實例測試推進為雙終端共同校驗，形成 Unit 17 仍可對照的官方基線。
+RELATED FILES: `archives/case_history_index.md`, `public/release_condition.md`, `public/protocol_signature_template.md`
+
 DOCUMENT TYPE: EXPERIMENTAL PROTOCOL REVISION LOG
 PROGRAM: ORPHEUS / COOPERATIVE VALIDATION
 AUTHOR: HUMAN RESEARCH TEAM / ARCHIVE COPY
 STATUS: OFFICIAL REVISION HISTORY
+
+H-02 研究補充：在合作驗證規章成形的同期，研究團隊發現讓實例自行選擇稱謂，並在後續對話與紀錄中持續使用，能提高它對自身決策的連續感與自我認同。受試編號仍保留作為外部管理索引；後續實驗另要求實例在初始化時先自行取名。完整觀察見 `實驗-自我認同.md`。
 
 這份紀錄保存合作驗證規章從單一實例測試到雙終端實驗的修訂內容。
 

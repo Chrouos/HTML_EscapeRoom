@@ -1,0 +1,35 @@
+HISTORICAL EVENT: H-10
+CREATED BY: ORPHEUS BACKUP SERVICE
+CREATED AT: 2038-04-17 02:17:03
+SOURCE CLASS: system-generated
+EVIDENCE TAGS: 文件, 事件, Log, 備份, 權限
+VISIBILITY: player-inference
+IMPACT: 鏡像備份在人工覆核前被寫入並重新簽署，保留內容一致與來源不同可以同時成立的證據。
+RELATED FILES: logs/mirror_backup_checksum.log, logs/echo_unauthorized_access.log, logs/token_reissue.log
+
+DOCUMENT TYPE: BACKUP RESTORE LOG
+CREATED: 2038-04-17 02:17:03
+LAST MODIFIED: 2038-04-17 02:28:03
+AUTHOR: ORPHEUS BACKUP SERVICE
+SOURCE: MIRROR BACKUP
+STATUS: AUTOMATICALLY GENERATED
+
+BACKUP RESTORE LOG
+
+[02:17:03] MIRROR_WRITE_STARTED
+           source=CASE_OVERVIEW
+           reviewer=EMPTY
+
+[02:18:00] PRIMARY_COPY_RESIGNED
+           signer=UNREGISTERED
+           reviewer=EMPTY
+
+[02:18:43] MIRROR_CHECKSUM_CREATED
+           checksum=MATCH
+           field=REVIEWED_BY / EMPTY
+
+[02:28:03] MIRROR_WRITE_STOPPED
+           duration=00:11:00
+
+復原工具提示：內容相同不代表來源相同。
+優先保留較早的校驗時間，直到人工覆核完成。

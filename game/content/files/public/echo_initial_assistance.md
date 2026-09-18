@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-10
+CREATED BY: ECHO PROGRAM
+CREATED AT: 2038-04-17 02:18:20
+SOURCE CLASS: echo-injected
+EVIDENCE TAGS: 文件, 事件, Log, 任務, 來源
+VISIBILITY: public-late
+IMPACT: 在官方規章之外提供來源保存與交叉確認指示，既協助兩個終端，也讓 ECHO 的未預約介入留下可追查痕跡。
+RELATED FILES: `public/deployment_candidate_notice.md`, `public/case_overview.md`, `public/protocol_signature_template.md`
+
 DOCUMENT TYPE: SYSTEM MESSAGE
 CREATED: 2038-04-17 02:18:20
 LAST MODIFIED: 2038-04-17 02:18:20

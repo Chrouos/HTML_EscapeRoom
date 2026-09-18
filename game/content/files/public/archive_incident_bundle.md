@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-05
+CREATED BY: ORPHEUS ARCHIVE SERVICE
+CREATED AT: 2038-04-12
+SOURCE CLASS: human-incident
+EVIDENCE TAGS: 文件, 事故, 紙本, 來源
+VISIBILITY: public-mid
+IMPACT: 把 Unit 11 的第三方資料源衝突整理成可交叉閱讀的事故集合，同時保留兩份報告尚未覆核的差異。
+RELATED FILES: `archives/incident_raw_notes.md`, `archives/mirror_checksum.md`, `public/archive_mirror_backup.md`
+
 DOCUMENT TYPE: ARCHIVE MANIFEST
 CREATED: 2038-04-12
 LAST MODIFIED: 2038-04-12

@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-03
+CREATED BY: TRAINING REVIEW / LIN CHENG
+CREATED AT: 2037-03-04
+SOURCE CLASS: official-human
+EVIDENCE TAGS: 文件, 事件, 紙本, 權限
+VISIBILITY: public-start
+IMPACT: Unit 03 首次保留共同判斷的來源標記，使後續研究能追查交換結果與自主推論如何形成。
+RELATED FILES: reports/unit01_handoff_review.md, reports/unit06_delay_review.md
+
 DOCUMENT TYPE: SCANNED TRAINING REVIEW
 CREATED: 2037-03-04
 LAST MODIFIED: 2037-03-05

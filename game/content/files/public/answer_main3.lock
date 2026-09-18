@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-12
+CREATED BY: HUMAN RESEARCH TEAM
+CREATED AT: 2038-04-17 02:24:00
+SOURCE CLASS: official-human
+EVIDENCE TAGS: 文件, 事件, 影像／觀測, 時間
+VISIBILITY: public-mid / player-inference
+IMPACT: 將樣本標籤、冷藏櫃紀錄與同步時間分開，避免把資料寫入時間誤認為觀測時間。
+RELATED FILES: `public/answer_main2.lock`, `archives/orpheus_history_timeline.md`, `logs/original_index_time.log`
+
 DOCUMENT TYPE: MAINLINE SEAL / SAMPLE TIMELINE
 CREATED: 2038-04-17 02:24:00
 LAST MODIFIED: 2038-04-17 02:24:00

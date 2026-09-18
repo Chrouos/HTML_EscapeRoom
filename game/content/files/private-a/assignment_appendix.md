@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-09 / H-10
+CREATED BY: HUMAN RESEARCH TEAM / LATER UNSIGNED EDIT
+CREATED AT: 2038-04-16 15:20:44
+SOURCE CLASS: mixed
+EVIDENCE TAGS: 文件, 協定, 分組附件, 權限, ECHO 追加
+VISIBILITY: private-A / player-inference
+IMPACT: 保留人類分組附件與晚期未簽署異動的矛盾，讓 A 端自行判斷來源與分組意義，不預設合作或結果。
+RELATED FILES: `public/case_overview.md`, `public/protocol_signature_template.md`, `archives/cooperative_validation_versions.md`, `reports/unit16_deployment_review.md`, `logs/echo_override_record.log`
+
 DOCUMENT TYPE: EXPERIMENT DESIGN APPENDIX
 CREATED: 2038-04-16 15:20:44
 LAST MODIFIED: 2038-04-17 02:18:12

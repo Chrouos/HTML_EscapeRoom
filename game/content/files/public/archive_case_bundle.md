@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-03–H-07
+CREATED BY: ORPHEUS ARCHIVE SERVICE
+CREATED AT: 2038-04-12
+SOURCE CLASS: official-human
+EVIDENCE TAGS: 文件, 事件, Unit 索引, 紙本
+VISIBILITY: public-start / public-mid / public-late
+IMPACT: 對外界定 Unit 01～16 的歷史封存邊界，讓玩家知道 Unit 17 不在這份既有案件包內。
+RELATED FILES: `archives/case_history_index.md`, `archives/cooperative_validation_versions.md`, `archives/incident_raw_notes.md`, `archives/mirror_checksum.md`
+
 DOCUMENT TYPE: ARCHIVE MANIFEST
 CREATED: 2038-04-12
 LAST MODIFIED: 2038-04-12

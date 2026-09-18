@@ -1,0 +1,30 @@
+HISTORICAL EVENT: H-08
+CREATED BY: ORPHEUS ROSTER SERVICE
+CREATED AT: 2038-04-16 18:42:17
+SOURCE CLASS: system-generated
+EVIDENCE TAGS: 文件, 事件, Log, 身份, 權限
+VISIBILITY: public-late
+IMPACT: Unit 17 名冊同時保留互相衝突的身份欄位，削弱參與者、研究員與另一端身份敘事的單一可信來源。
+RELATED FILES: logs/token_reissue.log, logs/echo_unauthorized_access.log, logs/deployment_history.log
+
+DOCUMENT TYPE: PERSONNEL CHANGE LOG
+CREATED: 2038-04-16 18:42:17
+LAST MODIFIED: 2038-04-16 18:42:17
+AUTHOR: ORPHEUS ROSTER SERVICE
+SOURCE: PERSONNEL ARCHIVE
+STATUS: HUMAN REVIEW MISSING
+
+PERSONNEL ARCHIVE / 分組異動
+
+[2038-04-16 18:42:17] ROSTER_UPDATE
+觀測單位：UNIT 17
+原始記錄：兩名參與者
+修改後欄位：另一端／研究員；B／參與者
+備註：兩人仍被保留在同一實驗單位
+
+申請人：ORPHEUS SYSTEM
+人工覆核：EMPTY
+版本：ROSTER-17.3
+
+這是名冊第一次同時出現兩種互相衝突的身份描述。
+後續版本沒有說明誰要求保留兩種欄位。

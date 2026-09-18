@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-12
+CREATED BY: HUMAN ARCHIVE TEAM
+CREATED AT: 2038-04-17 02:34:00
+SOURCE CLASS: official-human
+EVIDENCE TAGS: 文件, 事件, 紙本, 備份, 校驗
+VISIBILITY: public-late / player-inference
+IMPACT: 要求復原時同時保留原始、鏡像與校驗結果，使內容相同不會掩蓋簽署來源不同。
+RELATED FILES: `archives/mirror_checksum.md`, `private-b/mirror_checksum.md`, `logs/mirror_backup_checksum.log`
+
 DOCUMENT TYPE: MAINLINE SEAL / ARCHIVE RECOVERY
 CREATED: 2038-04-17 02:34:00
 LAST MODIFIED: 2038-04-17 02:34:00

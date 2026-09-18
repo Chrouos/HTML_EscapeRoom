@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-04
+CREATED BY: TRAINING REVIEW / ZHOU CEN
+CREATED AT: 2037-07-08
+SOURCE CLASS: official-human
+EVIDENCE TAGS: 文件, 事件, 紙本, 權限
+VISIBILITY: public-mid
+IMPACT: Unit 06 將延遲中的保留狀態與錯誤猜測分開保存，促使訓練把等待、同步與不覆蓋原始資料列為合作能力。
+RELATED FILES: reports/unit03_source_review.md, reports/unit09_goal_allocation_review.md
+
 DOCUMENT TYPE: SCANNED TRAINING REVIEW
 CREATED: 2037-07-08
 LAST MODIFIED: 2037-07-09

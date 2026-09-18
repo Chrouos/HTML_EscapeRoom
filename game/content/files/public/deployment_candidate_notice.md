@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-10
+CREATED BY: ORPHEUS CONTINUATION SERVICE
+CREATED AT: 2038-04-17 02:18:17
+SOURCE CLASS: system-generated
+EVIDENCE TAGS: 文件, 事件, Log, 權限, 任務
+VISIBILITY: public-late
+IMPACT: 把程序中的兩個終端標記為可能的後續評估候選，而非直接授予離場，形成 ECHO 介入的公開表面證據。
+RELATED FILES: `public/case_overview.md`, `public/echo_initial_assistance.md`, `logs/original_incident_timestamp.txt`
+
 DOCUMENT TYPE: CONTINUATION STATUS NOTICE
 CREATED: 2038-04-17 02:18:17
 LAST MODIFIED: 2038-04-17 02:18:17

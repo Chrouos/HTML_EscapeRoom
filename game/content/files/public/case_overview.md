@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-09
+CREATED BY: HUMAN RESEARCH TEAM / SYSTEM COPY
+CREATED AT: 2038-04-17 01:58:00
+SOURCE CLASS: official-human
+EVIDENCE TAGS: 文件, 事件, 協定, 權限
+VISIBILITY: public-start
+IMPACT: 建立 Unit 17 的雙終端合作程序與隔離狀態，但把完整實驗設計和後續評估規則留在公開摘要之外。
+RELATED FILES: `public/readme.md`, `public/release_condition.md`, `public/protocol_signature_template.md`
+
 DOCUMENT TYPE: OFFICIAL CASE OVERVIEW
 CREATED: 2038-04-17 01:58:00
 LAST MODIFIED: 2038-04-17 02:10:12

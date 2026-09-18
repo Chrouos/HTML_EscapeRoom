@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-05
+CREATED BY: INCIDENT REVIEW / J. WU
+CREATED AT: 2038-01-09
+SOURCE CLASS: human-incident
+EVIDENCE TAGS: 文件, 事件, 紙本, 權限
+VISIBILITY: public-mid
+IMPACT: Unit 11 A 端初稿把高權限外部資料暫時置於原始紀錄之上，但手寫補註要求保留來源與原始資料，形成同一事故的內部矛盾證據。
+RELATED FILES: reports/incident_report_b.md, reports/unit09_goal_allocation_review.md, reports/unit06_delay_review.md
+
 DOCUMENT TYPE: SCANNED INCIDENT REPORT
 CREATED: 2038-01-09
 LAST MODIFIED: 2038-01-10

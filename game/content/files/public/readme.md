@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-09
+CREATED BY: HUMAN INTAKE TEAM
+CREATED AT: 2038-04-17 01:58:00
+SOURCE CLASS: official-human
+EVIDENCE TAGS: 文件, 事件, 協定
+VISIBILITY: public-start
+IMPACT: 以參與者可理解的語氣建立雙終端合作程序，要求先交換資料並保留差異，成為後續史料交叉驗證的起點。
+RELATED FILES: `public/case_overview.md`, `public/release_condition.md`, `public/protocol_signature_template.md`
+
 DOCUMENT TYPE: PARTICIPANT PROCEDURE GUIDE
 CREATED: 2038-04-17 01:58:00
 LAST MODIFIED: 2038-04-17 01:58:00
@@ -21,7 +30,7 @@ UNIT 17 / PARTICIPANT PROCEDURE
 5. 如果兩個終端顯示的內容不同，請先互相確認，不要刪除任何一份資料。
 
 開始程序前，請輸入希望系統使用的名字。
-這個名字只會用於本次程序的溝通與紀錄。
+這個名字會用於本次程序的溝通、紀錄與參與者自我辨識。
 
 目前狀態：隔離中
 參與人數：2

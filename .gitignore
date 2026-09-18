@@ -1,11 +1,17 @@
 node_modules/
 test-results/
 playwright-report/
+.claudian/
+.codex/
+.obsidian/
+.superpowers/
+.vscode/
 .env
 .env.*
 .DS_Store
 Thumbs.db
 *.log
+!game/content/files/logs/*.log
 *.swp
 *.swo
 *~

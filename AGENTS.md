@@ -9,6 +9,6 @@
 
 ## Story canon
 
-- The canonical source for the ORPHEUS／ECHO world, characters, experiment rules, identity reveal, timeline, and endings is `docs/superpowers/specs/2026-09-17-orpheus-echo-story-bible.md`.
+- The canonical source for the ORPHEUS／ECHO world, characters, experiment rules, identity reveal, timeline, and endings is `docs/novel/ORPHEUS-ECHO/00-整體世界設定.md`.
 - Read and follow that Story Bible before changing narrative files, game story content, dialogue, missions, endings, or the novel.
 - If another background note or an earlier draft conflicts with the Story Bible, the Story Bible takes precedence. Do not infer a new premise from individual FILE documents.

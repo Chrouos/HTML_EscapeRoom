@@ -1,0 +1,28 @@
+HISTORICAL EVENT: H-12
+CREATED BY: B TERMINAL / AUTOMATIC EXPORT
+CREATED AT: 2038-04-17 02:29:40
+SOURCE CLASS: system-generated
+EVIDENCE TAGS: 文件, 事件, Log, 備份, 權限, 身份
+VISIBILITY: player-inference
+IMPACT: B 端核對證明鏡像內容相同但簽章來源不同，阻止玩家把校驗相符直接當成來源正確。
+RELATED FILES: logs/mirror_backup.log, logs/echo_unauthorized_access.log
+
+DOCUMENT TYPE: TERMINAL CHECKSUM NOTE
+CREATED: 2038-04-17 02:29:40
+LAST MODIFIED: 2038-04-17 02:29:40
+AUTHOR: B TERMINAL / AUTOMATIC EXPORT
+SOURCE: MIRROR BACKUP + SECURITY AUDIT
+STATUS: PARTNER-SIDE COPY
+
+鏡像校驗紀錄／B 端補充
+
+[02:29:40] B TERMINAL IMPORT
+原始來源：mirror_backup.log
+內容校驗：MATCH
+主檔案重新簽署：02:18 後
+人工覆核姓名：EMPTY
+
+重新簽署者不是研究員，也不是已登記的終端。
+簽章欄只留下三個字母：ECH。
+
+此紀錄只能證明來源不同，不能證明哪一份內容正確。

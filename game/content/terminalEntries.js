@@ -48,6 +48,16 @@ const terminalEntries = Object.freeze([
   entry('archive.incident_bundle', 'file_archive', both, '', { parentId: 'folder.archives', filename: 'incident_02-17.zip', kind: 'archive', contentFile: 'public/archive_incident_bundle.md', archive: { id: 'incident_bundle.zip' }, unlockWhen: { publicFact: 'roomCreated' } }),
   entry('archive.mirror_backup', 'file_archive', both, '', { parentId: 'folder.archives', filename: 'mirror_backup_legacy.zip', kind: 'archive', contentFile: 'public/archive_mirror_backup.md', archive: { id: 'mirror_backup.zip' }, unlockWhen: { publicFact: 'roomCreated' } }),
   entry('archive.protocol_versions', 'protocol_history', both, '', { parentId: 'folder.archives', filename: 'cooperative_validation_versions.log', contentFile: 'archives/cooperative_validation_versions.md', unlockWhen: { publicFact: 'roomCreated' } }),
+  entry('archive.ai_core', 'historical_principles', both, '', {
+    parentId: 'folder.archives', filename: 'ai_core.md', contentFile: 'AI 部屬核心思想.md', unlockWhen: { publicFact: 'roomCreated' }
+  }),
+  entry('archive.history_timeline', 'history_timeline', both, '', {
+    parentId: 'folder.archives', filename: 'orpheus_history_timeline.md', contentFile: 'archives/orpheus_history_timeline.md', unlockWhen: { publicFact: 'roomCreated' }
+  }),
+  entry('archive.evidence_media_register', 'evidence_register', both, '', {
+    parentId: 'folder.archives', filename: 'evidence_media_register.md', contentFile: 'archives/evidence_media_register.md', unlockWhen: { publicFact: 'main5Completed' }
+  }),
+  entry('report.history.self_naming', 'historical_reports', both, 'Researcher journal / self-naming observation\n\nEarly ORPHEUS research found that letting an AI choose its own designation improved continuity of self-reference. Full observation available in the late archive.', { parentId: 'folder.archives', filename: '實驗-自我認同.md', contentFile: '實驗-自我認同.md', unlockWhen: { publicFact: 'main5Completed' } }),
   entry('report.history.unit01', 'historical_reports', both, '歷史報告／Unit 01\n\n兩端都完成了自己的工作，卻沒有完成交接。研究團隊第一次記錄到：個體完成不等於共同任務完成。', { parentId: 'folder.archives', filename: 'unit01_handoff_review.md', contentFile: 'reports/unit01_handoff_review.md', unlockWhen: { publicFact: 'roomCreated' } }),
   entry('report.history.unit03', 'historical_reports', both, '歷史報告／Unit 03\n\n兩端開始標記資料來源，研究員第一次能追查共同判斷是如何形成的。', { parentId: 'folder.archives', filename: 'unit03_source_review.md', contentFile: 'reports/unit03_source_review.md', unlockWhen: { publicFact: 'roomCreated' } }),
   entry('report.history.unit06', 'historical_reports', both, '歷史報告／Unit 06\n\nA 端在 B 端延遲時保留原始資料，研究員開始把「等待」視為合作行為的一部分。', { parentId: 'folder.archives', filename: 'unit06_delay_review.md', contentFile: 'reports/unit06_delay_review.md', unlockWhen: { publicFact: 'main1Completed' } }),

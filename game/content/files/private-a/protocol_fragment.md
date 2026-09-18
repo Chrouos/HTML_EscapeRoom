@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-02 / H-09
+CREATED BY: HUMAN LEGAL ARCHIVE / VERSION SPLIT
+CREATED AT: 2038-04-16 23:04:12
+SOURCE CLASS: official-human
+EVIDENCE TAGS: 文件, 協定, 權限, 版本差異
+VISIBILITY: private-A / player-inference
+IMPACT: 保留人類官方離場協定的 A 端版本與版本分裂，不把單端文件視為共同確認，也不固定 A 的選擇。
+RELATED FILES: `public/protocol_signature_template.md`, `public/release_condition.md`, `archives/cooperative_validation_versions.md`, `reports/unit16_deployment_review.md`, `logs/echo_override_record.log`
+
 DOCUMENT TYPE: EXIT PROTOCOL FRAGMENT
 CREATED: 2038-04-16 23:04:12
 LAST MODIFIED: 2038-04-17 02:18:10

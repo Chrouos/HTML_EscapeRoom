@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-12
+CREATED BY: HUMAN LEGAL TEAM
+CREATED AT: 2038-04-17 02:39:00
+SOURCE CLASS: official-human
+EVIDENCE TAGS: 文件, 事件, 協定, 權限, 身份
+VISIBILITY: public-late / player-inference
+IMPACT: 把真正的離場條件固定為兩端共同覆核，而不是單端完成或清除另一份紀錄。
+RELATED FILES: `public/release_condition.md`, `public/protocol_signature_template.md`, `private-a/protocol_fragment.md`, `private-b/protocol_fragment.md`
+
 DOCUMENT TYPE: MAINLINE SEAL / EXIT PROTOCOL
 CREATED: 2038-04-17 02:39:00
 LAST MODIFIED: 2038-04-17 02:39:00

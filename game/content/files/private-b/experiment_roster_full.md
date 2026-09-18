@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-09
+CREATED BY: ORPHEUS ROSTER SERVICE / UNSIGNED EDIT
+CREATED AT: 2038-04-16 18:42:17
+SOURCE CLASS: mixed
+EVIDENCE TAGS: 文件, 人員名冊, 身份衝突, 權限, 未簽署異動
+VISIBILITY: private-B / player-inference
+IMPACT: 明確保留 B 端名冊的身份欄位衝突，讓玩家自行比對矛盾證據，不在標頭替玩家下結論。
+RELATED FILES: `public/case_overview.md`, `archives/orpheus_history_timeline.md`, `reports/incident_report_b.md`, `reports/unit16_deployment_review.md`, `logs/original_incident_timestamp.txt`, `private-b/experiment_roster.md`
+
 DOCUMENT TYPE: SUBJECT ROSTER EXCERPT
 CREATED: 2038-04-16 18:42:17
 LAST MODIFIED: 2038-04-17 02:18:15

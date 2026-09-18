@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-03–H-07
+CREATED BY: ARCHIVE CLERK / Y. LIN
+CREATED AT: 2038-04-12
+SOURCE CLASS: official-human
+EVIDENCE TAGS: 文件, 紙本, 事件, Unit 索引
+VISIBILITY: public-start / public-mid / public-late
+IMPACT: 保留 Unit 01～16 的歷史順序，並明確把 Unit 17 排除在既有封存之外。
+RELATED FILES: `archives/cooperative_validation_versions.md`, `public/archive_case_bundle.md`
+
 DOCUMENT TYPE: SCANNED PAPER HISTORY INDEX
 CREATED: 2038-04-12
 LAST MODIFIED: 2038-04-12

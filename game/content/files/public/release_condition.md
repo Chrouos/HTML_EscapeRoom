@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-09
+CREATED BY: HUMAN RESEARCH TEAM
+CREATED AT: 2038-04-17 01:59:00
+SOURCE CLASS: official-human
+EVIDENCE TAGS: 文件, 協定, 權限, 事件
+VISIBILITY: public-start
+IMPACT: 固定官方離場的雙端共同校驗門檻，讓任何單一終端的完成狀態都不能單獨取代共同確認。
+RELATED FILES: `archives/cooperative_validation_versions.md`, `public/readme.md`, `public/protocol_signature_template.md`
+
 DOCUMENT TYPE: OFFICIAL RELEASE CONDITION
 CREATED: 2038-04-17 01:59:00
 LAST MODIFIED: 2038-04-17 01:59:00

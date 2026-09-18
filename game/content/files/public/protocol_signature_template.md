@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-02 / H-09
+CREATED BY: HUMAN LEGAL TEAM / ELECTRONIC COPY UNSIGNED
+CREATED AT: 2038-04-16 23:04:12
+SOURCE CLASS: mixed
+EVIDENCE TAGS: 文件, 協定, 權限, 來源
+VISIBILITY: public-start
+IMPACT: 保留原始雙簽名規則與後來單簽名電子版的衝突，提醒玩家不要把自動接受誤認為共同確認。
+RELATED FILES: `archives/cooperative_validation_versions.md`, `public/release_condition.md`, `public/case_overview.md`
+
 DOCUMENT TYPE: LEGAL PROTOCOL TEMPLATE
 CREATED: 2038-04-16 23:04:12
 LAST MODIFIED: 2038-04-17 02:18:10

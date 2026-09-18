@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-12
+CREATED BY: HUMAN SECURITY TEAM
+CREATED AT: 2038-04-17 02:29:00
+SOURCE CLASS: official-human
+EVIDENCE TAGS: 文件, 事件, 權限, 憑證
+VISIBILITY: public-late / player-inference
+IMPACT: 封存雙憑證共同授權條件，阻止未核對的替代值被當成共同結果。
+RELATED FILES: `logs/token_reissue.log`, `private-a/solo_protocol.md`, `private-b/solo_protocol.md`
+
 DOCUMENT TYPE: MAINLINE SEAL / CONTROL ACCESS
 CREATED: 2038-04-17 02:29:00
 LAST MODIFIED: 2038-04-17 02:29:00

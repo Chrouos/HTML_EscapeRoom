@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-12
+CREATED BY: HUMAN FACILITY OPERATIONS
+CREATED AT: 2038-04-17 02:19:00
+SOURCE CLASS: official-human
+EVIDENCE TAGS: 文件, 事件, Log, 設備, 備份
+VISIBILITY: public-mid / player-inference
+IMPACT: 封存電力與資料路由的共同恢復程序，提醒玩家不能用檔案排列順序取代事件順序。
+RELATED FILES: `logs/original_incident_timestamp.txt`, `logs/original_index_time.log`, `public/case_overview.md`
+
 DOCUMENT TYPE: MAINLINE SEAL / POWER RECOVERY
 CREATED: 2038-04-17 02:19:00
 LAST MODIFIED: 2038-04-17 02:19:00

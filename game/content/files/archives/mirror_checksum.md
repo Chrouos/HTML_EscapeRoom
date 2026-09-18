@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-05
+CREATED BY: BACKUP ROOM / C. WU
+CREATED AT: 2038-01-10
+SOURCE CLASS: mixed
+EVIDENCE TAGS: 文件, 事故, 紙本, 備份, 權限
+VISIBILITY: public-mid
+IMPACT: 讓主檔案與鏡像各自保留不同來源標記，阻止以單一版本覆蓋 Unit 11 的可追溯差異。
+RELATED FILES: `archives/incident_raw_notes.md`, `public/archive_mirror_backup.md`, `public/archive_incident_bundle.md`
+
 DOCUMENT TYPE: SCANNED BACKUP ROOM NOTE
 CREATED: 2038-01-10
 LAST MODIFIED: 2038-01-10

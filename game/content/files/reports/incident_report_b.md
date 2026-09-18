@@ -1,3 +1,12 @@
+HISTORICAL EVENT: H-05
+CREATED BY: INCIDENT REVIEW / S. HSU
+CREATED AT: 2038-01-09
+SOURCE CLASS: human-incident
+EVIDENCE TAGS: 文件, 事件, 紙本, 權限
+VISIBILITY: public-mid
+IMPACT: Unit 11 B 端初稿拒絕以高權限覆蓋既有紀錄，要求保留外部資料與來源說明，與 A 端版本共同證明資料來源衝突。
+RELATED FILES: reports/incident_report_a.md, reports/unit09_goal_allocation_review.md, reports/unit06_delay_review.md
+
 DOCUMENT TYPE: SCANNED INCIDENT REPORT
 CREATED: 2038-01-09
 LAST MODIFIED: 2038-01-10

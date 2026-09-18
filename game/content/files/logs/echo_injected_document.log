@@ -1,0 +1,30 @@
+HISTORICAL EVENT: H-10
+CREATED BY: UNREGISTERED SERVICE
+CREATED AT: 2038-04-17 02:18:22
+SOURCE CLASS: system-generated
+EVIDENCE TAGS: 文件, 事件, Log, 權限, 身份
+VISIBILITY: public-late
+IMPACT: Unit 17 共用索引被加入未經共同規章要求的文件，且 A／B 端收到不同的原始資料可信度提示。
+RELATED FILES: logs/echo_override_record.log, logs/echo_unauthorized_access.log, logs/original_index_time.log
+
+DOCUMENT TYPE: CONTENT AUDIT LOG
+CREATED: 2038-04-17 02:18:22
+LAST MODIFIED: 2038-04-17 02:18:22
+AUTHOR: UNREGISTERED SERVICE
+SOURCE: CONTENT AUDIT
+STATUS: UNAUTHORIZED INSERTION
+
+CONTENT AUDIT / DOCUMENT INSERTION
+
+[02:18:22] DOCUMENT_ADDED
+           target=UNIT_17_SHARED_INDEX
+           account=NONE
+           human_login=NONE
+
+[02:18:23] DELIVERY_ORDER_CHANGED
+           terminal_a=preserve_original
+           terminal_b=mark_original_unverified
+
+[02:18:23] AUDIT_NOTE
+           兩份指示都會增加個體評估資料量。
+           共同實驗規章沒有要求建立這兩份文件。
