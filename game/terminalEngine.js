@@ -483,7 +483,6 @@ function projectWorkstation(room, player) {
     const app = appForEntry(item);
     const unlocked = visible.has(item.id) || item.sourceGroup === 'discovered_evidence' || item.sourceGroup === 'side_investigation';
     if (!unlocked && item.archiveOnly) continue;
-    if (!unlocked && item.sourceGroup === 'history_timeline') continue;
     if (!unlocked && app !== 'files') continue;
     buckets[app].push(displayEntry(item, opened.has(item.id), !unlocked,
       archiveIds.has(item.archive?.id || item.archiveId)));
