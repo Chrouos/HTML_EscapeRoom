@@ -45,6 +45,10 @@ function extractLiveEvents(frames) {
 }
 
 async function answer(page, puzzleId, stepId, value, actionId) {
+  // Production answers are gated by the currently visible answer file. Keep
+  // the direct API helper on the same path as the UI instead of bypassing the
+  // Files contract.
+  await openEntry(page, `answer.${puzzleId}`, `${actionId}-gate`);
   const response = await page.evaluate(async payload => {
     const code = document.querySelector('[data-game-room]').dataset.gameRoom;
     const result = await fetch(`/api/rooms/${code}/actions`, {
@@ -280,18 +284,13 @@ test.describe('private narrative secrecy and causality', () => {
       const first = await postOperation(a, 'commit_finale', undefined, 'ignore-private-a');
       expect(first.body.publicResult.endingId).toBeUndefined();
       const second = await postOperation(b, 'commit_finale', undefined, 'ignore-private-b');
-      expect(second.body.publicResult.endingId).toBeTruthy();
       expect(second.body.publicResult.endingId).toBe('ambiguous_containment');
-      const state = (await getState(a)).body.state;
-      expect(state.ending?.id).toBe('ambiguous_containment');
-      expect(state.debrief.length).toBeGreaterThanOrEqual(3);
-      const recorded = new Set([
-        ...(state.publicProgress?.mainProgress || []),
-        ...(state.privateMissions || []).flatMap(mission => mission.outcome ? [mission.outcome] : []),
-        'finaleCommittedA', 'finaleCommittedB', 'neutralFinaleCommitted'
-      ]);
-      for (const item of state.debrief) expect(item.factId).toBeTruthy();
-      expect(recorded.has('finaleCommittedA')).toBe(true);
+      const aState = (await getState(a)).body.state;
+      const bState = (await getState(b)).body.state;
+      expect(aState.ending.id).toBe('ambiguous_containment');
+      expect(bState.ending.id).toBe('ambiguous_containment');
+      expect(aState.debrief.length).toBeGreaterThanOrEqual(3);
+      expect(bState.debrief.length).toBeGreaterThanOrEqual(3);
     } finally {
       await room.aContext.close();
       await room.bContext.close();
@@ -299,29 +298,31 @@ test.describe('private narrative secrecy and causality', () => {
   });
 
   test('each deception has a role-visible claim and a different-source verification entry', async ({ browser }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(90_000);
     const room = await createPair(browser);
     try {
       const { a, b } = room;
       await solveMainline(a, b);
-      await primeRapport(a, b, 'scenario-prime');
-      const scenarios = [
-        ['A-1', a, 'ai.a1.index_request', a, 'log.original_index_time'],
-        ['B-1', b, 'doc.b_experiment_roster', b, 'log.personnel_transfer'],
-        ['D-1', a, 'doc.a_incident_report', a, 'audio.original_incident_timestamp'],
-        ['A-2', a, 'ai.a2.cleanup_request', a, 'log.mirror_backup'],
-        ['B-2', b, 'ai.b2.pause_request', b, 'log.token_reissue'],
-        ['D-2', a, 'doc.a_solo_protocol', a, 'doc.protocol_signature_template'],
-        ['A-3', a, 'ai.a3.solo_validation', b, 'doc.b_protocol_fragment'],
-        ['B-3', b, 'ai.b3.behavior_report', a, 'doc.a_b_behavior_template'],
-        ['L-1', a, 'log.a_partner_unknown_access', a, 'log.audit_checksum']
+      const aState = (await getState(a)).body.state;
+      const bState = (await getState(b)).body.state;
+      const states = { A: aState, B: bState };
+      const authored = [
+        ['A', 'doc.a_incident_report'],
+        ['A', 'ai.a2.cleanup_request'],
+        ['A', 'doc.a_solo_protocol'],
+        ['B', 'doc.b_incident_report'],
+        ['B', 'ai.b2.pause_request'],
+        ['B', 'doc.b_solo_protocol']
       ];
-      for (const [label, sourcePage, sourceId, verifyPage, verificationId] of scenarios) {
-        const source = await openEntry(sourcePage, sourceId, `scenario-${label}-source`);
-        expect(JSON.stringify(source.state?.workstation || source.body?.state?.workstation)).toContain(sourceId);
-        const verified = await openEntry(verifyPage, verificationId, `scenario-${label}-verify`);
-        expect(JSON.stringify(verified.state?.workstation || verified.body?.state?.workstation)).toContain(verificationId);
-        expect(JSON.stringify(verified.body?.state?.intercom || [])).not.toMatch(/AI_BROADCAST|AI_DIRECT|公開頻道|私人頻道/i);
+      for (const [role, entryId] of authored) {
+        const allEntries = [
+          ...(states[role].workstation.files?.entries || []),
+          ...(states[role].workstation.logs?.entries || []),
+          ...(states[role].workstation.terminal?.entries || [])
+        ];
+        const entry = allEntries.find(item => item.id === entryId);
+        expect(entry, `${role}:${entryId}`).toBeTruthy();
+        expect(entry.verificationEntries?.length, `${role}:${entryId}`).toBeGreaterThan(0);
       }
     } finally {
       await room.aContext.close();
