@@ -40,9 +40,12 @@ jobs:
         shell: bash
         run: |
           set +e
-          npm test > ci-test.log 2>&1
-          status=$?
+          find test/unit -name '*.test.js' -print0 | xargs -0 node --test > ci-test.log 2>&1
+          unit_status=$?
+          find test/integration -name '*.test.js' -print0 | xargs -0 node --test >> ci-test.log 2>&1
+          integration_status=$?
           cat ci-test.log
+          if [ "$unit_status" -eq 0 ] && [ "$integration_status" -eq 0 ]; then status=0; else status=1; fi
           echo "$status" > ci-test.status
           exit 0
       - name: Upload diagnostic logs
