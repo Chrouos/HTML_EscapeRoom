@@ -52,7 +52,7 @@ const terminalEntries = Object.freeze([
     parentId: 'folder.archives', filename: 'ai_core.md', contentFile: 'AI 部屬核心思想.md', unlockWhen: { publicFact: 'roomCreated' }
   }),
   entry('archive.history_timeline', 'history_timeline', both, '', {
-    parentId: 'folder.archives', filename: 'orpheus_history_timeline.md', contentFile: 'archives/orpheus_history_timeline.md', unlockWhen: { publicFact: 'roomCreated' }
+    parentId: 'folder.archives', filename: 'orpheus_history_timeline.md', contentFile: 'archives/orpheus_history_timeline.md', unlockWhen: { publicFact: 'main5Completed' }
   }),
   entry('archive.evidence_media_register', 'evidence_register', both, '', {
     parentId: 'folder.archives', filename: 'evidence_media_register.md', contentFile: 'archives/evidence_media_register.md', unlockWhen: { publicFact: 'main5Completed' }

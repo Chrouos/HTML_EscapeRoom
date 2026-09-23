@@ -130,7 +130,8 @@ test.describe('private narrative secrecy and causality', () => {
         ]));
         expect(state.state.intercom.filter(message => message.contentId.startsWith('orpheus.')).length)
           .toBeGreaterThanOrEqual(3);
-        expect(state.state.intercom.some(message => message.text.includes('偷偷接進來'))).toBe(true);
+        expect(state.state.intercom.some(message => /正式流程|研究團隊|離場程序/.test(message.text))).toBe(true);
+        expect(state.state.intercom.some(message => /偷偷接進|事故發生後/.test(message.text))).toBe(false);
       }
 
       // The public opening is projected to each actor stream once per
