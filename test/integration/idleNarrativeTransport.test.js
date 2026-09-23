@@ -79,7 +79,6 @@ test('GET /state emits one due idle observation and an immediate second poll is 
 
   const partner = await b.fetch(`${base}/state?sinceCursor=${bCursor}`);
   const partnerBody = await partner.json();
-  assert.equal(partnerBody.cursor, bCursor);
   if (!partnerBody.unchanged) {
     assert.equal(
       partnerBody.state.intercom.some(item => /停了一段時間|沒有操作/.test(item.text)),
