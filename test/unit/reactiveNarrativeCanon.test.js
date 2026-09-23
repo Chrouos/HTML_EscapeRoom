@@ -15,20 +15,25 @@ function roomWithFacts(facts) {
   return room;
 }
 
-test('late history timeline is hidden until main5 completes', () => {
+test('late history timeline stays locked and content-hidden until main5 completes', () => {
   const history = content.terminalEntries.find(item => item.id === 'archive.history_timeline');
   assert.ok(history);
   assert.deepEqual(history.unlockWhen, { publicFact: 'main5Completed' });
 
   const early = roomWithFacts(['roomCreated', 'hostJoined', 'guestJoined']);
-  const earlyIds = projectWorkstation(early, { role: 'A', playerId: 'player-a' })
-    .files.entries.map(item => item.id);
-  assert.equal(earlyIds.includes('archive.history_timeline'), false);
+  const earlyEntry = projectWorkstation(early, { role: 'A', playerId: 'player-a' })
+    .files.entries.find(item => item.id === 'archive.history_timeline');
+  assert.ok(earlyEntry);
+  assert.equal(earlyEntry.locked, true);
+  assert.equal(Object.hasOwn(earlyEntry, 'text'), false);
 
   const late = roomWithFacts(['roomCreated', 'hostJoined', 'guestJoined', 'main5Completed']);
-  const lateIds = projectWorkstation(late, { role: 'A', playerId: 'player-a' })
-    .files.entries.map(item => item.id);
-  assert.equal(lateIds.includes('archive.history_timeline'), true);
+  const lateEntry = projectWorkstation(late, { role: 'A', playerId: 'player-a' })
+    .files.entries.find(item => item.id === 'archive.history_timeline');
+  assert.ok(lateEntry);
+  assert.equal(lateEntry.locked, false);
+  assert.equal(typeof lateEntry.text, 'string');
+  assert.ok(lateEntry.text.length > 0);
 });
 
 test('opening narrative matches canon instead of stale human-researcher or hacked-in framing', () => {
