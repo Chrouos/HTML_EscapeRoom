@@ -61,13 +61,16 @@ test('GET /state emits one due idle observation and an immediate second poll is 
   const before = app.locals.roomStore.getRoom(code);
   const aCursor = before.streams.A.cursor;
   const bCursor = before.streams.B.cursor;
+  const aBeforeEvents = before.streams.A.events.length;
 
   const first = await a.fetch(`${base}/state?sinceCursor=${aCursor}`);
   const firstBody = await first.json();
   assert.equal(first.status, 200);
   assert.equal(firstBody.unchanged, false);
-  assert.equal(firstBody.cursor, aCursor + 1);
-  assert.match(firstBody.state.intercom.at(-1).text, /停了一段時間|沒有操作/);
+  assert.ok(firstBody.cursor > aCursor);
+  assert.equal(firstBody.state.intercom.filter(item => /停了一段時間|沒有操作/.test(item.text)).length, 1);
+  const afterFirst = app.locals.roomStore.getRoom(code);
+  assert.equal(afterFirst.streams.A.events.length, aBeforeEvents + 1);
 
   const second = await a.fetch(`${base}/state?sinceCursor=${firstBody.cursor}`);
   const secondBody = await second.json();
