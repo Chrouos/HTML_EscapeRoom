@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'feat/reactive-narrative-reveal-*'
+  workflow_dispatch:
 
 jobs:
   test:
