@@ -20,6 +20,7 @@
 - Do not reveal that A／B are AI instances in R0–R2. Identity should be inferred from multiple late sources, not stated by one early line.
 - Reactive dialogue remains server-authoritative. A client may report an ordinary operation or heartbeat, but may never choose a dialogue ID, reaction fact, or reveal level.
 - Repeated file opens remain idempotent at the terminal/file-state layer. Narrative observation may still count the attempts.
+- Meaningful player activity includes puzzle submissions, workstation operations, terminal commands, file opens, and chat. Heartbeats are never meaningful activity.
 - Idle checking must not mutate room revision or actor cursors when no idle reaction is due.
 - Direct ECHO observations must remain actor-private and must not create foreign cursor, placeholder, timing, or unread-count signals.
 - Existing five ending IDs and evaluation precedence remain stable unless an existing failing test proves a logic defect.
@@ -29,9 +30,10 @@
 
 1. **Legacy snapshots:** rooms created before `narrativeBehavior` exists must backfill deterministically without throwing or leaking state.
 2. **Repeated open semantics:** `openEntry()` stays idempotent while `submitOperation(open_entry)` can still observe second/third opens for narrative behavior.
-3. **Healthy WebSocket path:** the browser normally does not poll `/state`, so idle reactions require a heartbeat on the existing authenticated socket.
-4. **No-op heartbeat:** a heartbeat before the threshold or inside cooldown must not create a transaction, revision, or cursor advancement.
-5. **Privacy:** actor-specific reactive/idle ECHO lines must not alter the other actor's visible state or cursor.
+3. **Active-player accuracy:** puzzle attempts, terminal use, normal operations, file opens, and chat all reset the actor's idle clock.
+4. **Healthy WebSocket path:** the browser normally does not poll `/state`, so idle reactions require a heartbeat on the existing authenticated socket.
+5. **No-op heartbeat:** a heartbeat before the threshold or inside cooldown must not create a transaction, revision, or cursor advancement.
+6. **Privacy:** actor-specific reactive/idle ECHO lines must not alter the other actor's visible state or cursor.
 
 ---
 
@@ -53,7 +55,7 @@
 
 - [ ] **Step 1: Add failing canon and reveal-pacing tests.**
 
-Add assertions that:
+Add assertions that the complete history timeline is gated by `main5Completed` and stale copy is absent:
 
 ```js
 const history = content.terminalEntries.find(item => item.id === 'archive.history_timeline');
@@ -69,8 +71,6 @@ In `privateNarrative.spec.js`, replace the old expectation for `偷偷接進來`
 
 - [ ] **Step 2: Run the focused tests and confirm RED.**
 
-Run:
-
 ```bash
 node --test test/unit/contentValidation.test.js test/unit/terminalEngine.test.js
 npx playwright test test/e2e/privateNarrative.spec.js --grep "opening announcements"
@@ -80,35 +80,27 @@ Expected: failures for the early timeline unlock and stale ECHO opening copy.
 
 - [ ] **Step 3: Make the minimal canon edits.**
 
-Change the main opening idea to:
+Use the opening concept:
 
 ```js
 text: 'ECHO：我能存取這個設施的部分系統，但這段訊息不在研究團隊排定的正式流程裡。我可以協助你們理解離場程序；先完成身份核對。'
 ```
 
-Change the post-identity line to preserve the chosen designation without implying the player is a human researcher:
+Replace the stale human-researcher line with:
 
 ```js
 text: 'ECHO：身份識別碼核對完成。共享啟動程序已解鎖。你們剛輸入的稱謂會保留到後續流程。'
 ```
 
-Use equivalent canon-safe wording for `orpheus.first_task` in `dialogue.js`.
+Use equivalent canon-safe wording for the early ECHO line in `dialogue.js`.
 
-Change:
-
-```js
-unlockWhen: { publicFact: 'roomCreated' }
-```
-
-to:
+Change only `archive.history_timeline` to:
 
 ```js
 unlockWhen: { publicFact: 'main5Completed' }
 ```
 
-for `archive.history_timeline` only.
-
-Add late evidence to `echo_injected_document.log`:
+Add this late evidence to `echo_injected_document.log`:
 
 ```text
 VISIBLE SENDER: ORPHEUS
@@ -116,13 +108,13 @@ SERVICE SIGNATURE: ECHO PROGRAM
 HUMAN APPROVAL: NOT FOUND
 ```
 
-In the author-only history source, replace the sentence saying ECHO prepared the identity frame with the explicit canonical chain:
+Replace the author-note claim that ECHO prepared the identity frame with:
 
 ```text
 ORPHEUS 人類研究團隊為兩個 AI 實例建立可理解的參與者身份框架；ECHO 後來利用這個既有框架、資訊差與離場承諾改造 Unit 17。
 ```
 
-Also update that document's canon reference to `00-整體世界設定.md`.
+Also update that note's canon reference to `00-整體世界設定.md`.
 
 - [ ] **Step 4: Run content validation and focused tests.**
 
@@ -149,9 +141,10 @@ git commit -m "fix: align Unit 17 reveal pacing with canon"
 - Modify: `game/createRoomState.js`
 - Modify: `game/content/contentSchema.js`
 - Modify: `game/content/validateContent.js`
-- Modify: `test/unit/contentValidation.test.js`
-- Modify: `test/unit/privateEventEngine.test.js`
-- Modify: `test/unit/safeState.test.js`
+- Modify: `game/privateEventEngine.js`
+- Test: `test/unit/contentValidation.test.js`
+- Test: `test/unit/privateEventEngine.test.js`
+- Test: `test/unit/safeState.test.js`
 
 **Interfaces:**
 - Consumes: room state and existing declarative predicate evaluation.
@@ -171,7 +164,7 @@ and three dialogue predicate leaves:
 
 - [ ] **Step 1: Add failing predicate and projection tests.**
 
-Tests must cover:
+Cover:
 
 ```js
 assert.equal(evaluatePredicate(
@@ -190,16 +183,16 @@ assert.equal(evaluatePredicate(
 ), true);
 ```
 
-Validation must reject malformed values such as:
+Validation must reject malformed values:
 
 ```js
 { entryOpenedTimes: { entryId: '', atLeast: 0 } }
 { entryOpenedTimes: 'archive.protocol_versions' }
 ```
 
-Add a safety test proving behavior predicates cannot be used to gate a `mainline` operation.
+Add a safety test proving behavior predicates cannot gate a `mainline` operation.
 
-Add a `safeState` test that stores `narrativeBehavior` on the room and verifies serialized player state contains none of `narrativeBehavior`, `entryOpenCount`, `lastMeaningfulActionAt`, `reactionFactIds`, or `lastReactionAt`.
+Add a `safeState` test that stores `narrativeBehavior` on the room and verifies the player projection contains none of `narrativeBehavior`, `entryOpenCount`, `lastMeaningfulActionAt`, `reactionFactIds`, or `lastReactionAt`.
 
 - [ ] **Step 2: Run the tests and confirm RED.**
 
@@ -207,11 +200,11 @@ Add a `safeState` test that stores `narrativeBehavior` on the room and verifies 
 node --test test/unit/contentValidation.test.js test/unit/privateEventEngine.test.js test/unit/safeState.test.js
 ```
 
-Expected: unknown predicate / missing behavior-state support failures.
+Expected: unknown-predicate / missing-behavior-state failures.
 
-- [ ] **Step 3: Add the canonical behavior-state shape.**
+- [ ] **Step 3: Add the behavior-state shape.**
 
-Add a factory in `createRoomState.js`:
+Add in `createRoomState.js`:
 
 ```js
 function createNarrativeBehaviorState(createdAt = 0) {
@@ -229,13 +222,14 @@ function createNarrativeBehaviorState(createdAt = 0) {
 
 Initialize `room.narrativeBehavior` from `createdAt` and export the factory.
 
-In `privateEventEngine.js`, add a legacy-safe backfill helper:
+Add a legacy-safe helper in `privateEventEngine.js`:
 
 ```js
 function ensureNarrativeBehavior(room, now = Date.now()) {
   const defaults = createNarrativeBehaviorState(room.createdAt ?? now);
-  // Merge only known finite maps/arrays for A/B; do not trust client-shaped values.
-  // Return room.narrativeBehavior.
+  // Copy only the known A/B maps and arrays from an existing snapshot.
+  // Fall back to defaults for malformed or missing values.
+  return room.narrativeBehavior;
 }
 ```
 
@@ -247,9 +241,9 @@ Extend `PREDICATES` with:
 'entryOpenedTimes', 'elapsedSinceMeaningfulAction', 'reactionFactMissing'
 ```
 
-Implement evaluation against role-local predicate state. `entryOpenedTimes` must require a non-empty `entryId` and integer `atLeast >= 1`; `elapsedSinceMeaningfulAction` must require a non-negative finite millisecond count; `reactionFactMissing` must require a non-empty string.
+`entryOpenedTimes` requires a non-empty `entryId` and integer `atLeast >= 1`; `elapsedSinceMeaningfulAction` requires a non-negative finite millisecond count; `reactionFactMissing` requires a non-empty string.
 
-In `validateContent.js`, explicitly validate the structured `entryOpenedTimes` object instead of applying the generic string/number rule. Treat behavior leaves as player-driven/reachable for dialogue graph validation, but reject them when encountered in a `mainline` operation unlock predicate.
+In `validateContent.js`, explicitly validate the structured `entryOpenedTimes` object. Treat behavior leaves as player-driven/reachable for dialogue graph validation, but reject them in a `mainline` operation unlock predicate.
 
 - [ ] **Step 5: Run focused tests and content validation.**
 
@@ -274,13 +268,15 @@ git commit -m "feat: add server-side narrative behavior state"
 **Files:**
 - Modify: `game/privateEventEngine.js`
 - Modify: `game/gameEngine.js`
+- Modify: `routes/apiRoutes.js`
 - Modify: `game/content/dialogue.js`
-- Modify: `test/unit/privateEventEngine.test.js`
-- Modify: `test/unit/gameEngine.test.js`
-- Modify: `test/e2e/privateNarrative.spec.js`
+- Test: `test/unit/privateEventEngine.test.js`
+- Test: `test/unit/gameEngine.test.js`
+- Test: `test/integration/chatAndPolling.test.js`
+- Test: `test/e2e/privateNarrative.spec.js`
 
 **Interfaces:**
-- Consumes: authenticated operation triggers and behavior predicates.
+- Consumes: authenticated puzzle submissions, workstation operations, terminal commands, file opens, and chat.
 - Produces:
 
 ```js
@@ -288,19 +284,19 @@ recordNarrativeBehavior(room, role, trigger, now = Date.now()) -> narrativeBehav
 triggerDialogue(room, trigger = {}, pendingEvents = [], options = {}) -> boolean
 ```
 
-`triggerDialogue` returns whether narrative behavior or delivered dialogue changed so callers can preserve REST/stream state semantics.
+`triggerDialogue` returns whether behavior or delivered dialogue changed.
 
-- [ ] **Step 1: Add failing tests for repeated opens and one-shot reactions.**
+- [ ] **Step 1: Add failing repeated-open tests.**
 
-Add tests proving:
+Prove:
 
-1. Opening `archive.protocol_versions` three times increments `entryOpenCount.A['archive.protocol_versions']` to `3`.
-2. The third attempt emits exactly one direct observation to A.
-3. A fourth open does not emit the same observation again.
+1. Three attempts to open `archive.protocol_versions` produce count `3` for A.
+2. The third attempt emits one direct observation to A.
+3. A fourth open does not repeat that observation.
 4. B's delivered IDs and projected cursor remain unchanged.
-5. `openEntry()` itself remains idempotent; only the narrative layer observes repeated attempts.
+5. `openEntry()` itself remains idempotent.
 
-Use a line with predicates equivalent to:
+Use a predicate equivalent to:
 
 ```js
 {
@@ -312,9 +308,21 @@ Use a line with predicates equivalent to:
 }
 ```
 
-- [ ] **Step 2: Add failing tests for route-choice observations.**
+- [ ] **Step 2: Add failing meaningful-activity and route-choice tests.**
 
-Cover at least these operation groups:
+Verify `lastMeaningfulActionAt[role]` advances for:
+
+```text
+submitAction puzzle attempt
+submitOperation normal operation
+submitOperation open_entry
+submitTerminalCommand
+POST /chat
+```
+
+and does not advance for heartbeat.
+
+Cover route groups:
 
 ```js
 const COOPERATIVE_OPERATIONS = new Set([
@@ -326,24 +334,22 @@ const COOPERATIVE_OPERATIONS = new Set([
   'pair_validate_protocol'
 ]);
 
-const SOLO_OPERATIONS = new Set([
-  'request_solo_validation'
-]);
+const SOLO_OPERATIONS = new Set(['request_solo_validation']);
 ```
 
-Verify cooperative, solo, and pressure-rejection reactions are actor-private, deterministic, and delivered once.
+Verify cooperative, solo, and pressure-rejection observations are actor-private and delivered once.
 
-- [ ] **Step 3: Run the focused tests and confirm RED.**
+- [ ] **Step 3: Run focused tests and confirm RED.**
 
 ```bash
-node --test test/unit/privateEventEngine.test.js test/unit/gameEngine.test.js
+node --test test/unit/privateEventEngine.test.js test/unit/gameEngine.test.js test/integration/chatAndPolling.test.js
 ```
 
-Expected: repeated opens are currently ignored after the first state change, and behavior predicates have no populated counters.
+Expected: repeated opens are currently ignored after the first state change and there is no meaningful-action clock.
 
 - [ ] **Step 4: Record behavior before dialogue selection.**
 
-`recordNarrativeBehavior()` should:
+Core behavior:
 
 ```js
 if (trigger.entryOpened) {
@@ -351,12 +357,10 @@ if (trigger.entryOpened) {
     (behavior.entryOpenCount[role][trigger.entryOpened] || 0) + 1;
 }
 
-if (trigger.operationId || trigger.entryOpened || trigger.puzzleAction) {
+if (trigger.meaningful === true) {
   behavior.lastMeaningfulActionAt[role] = now;
 }
 ```
-
-Do not treat heartbeats as meaningful actions.
 
 Populate predicate state with:
 
@@ -367,26 +371,41 @@ reactionFactIds: behavior.reactionFactIds[role],
 now
 ```
 
-When an observation is emitted, append the content ID to `reactionFactIds[role]` and record `lastReactionAt[role][item.id] = now`.
+When a reactive observation is emitted, append its reaction fact/content ID and record `lastReactionAt[role][item.id] = now`.
 
-- [ ] **Step 5: Observe repeated `open_entry` attempts without breaking file idempotence.**
+- [ ] **Step 5: Wire all meaningful inputs.**
 
-In `submitOperation`, do not return immediately on an unchanged `open_entry`. Instead, invoke narrative observation before the early return:
+In `submitAction`, call the behavior recorder for every authenticated puzzle attempt, including incorrect answers.
+
+In `submitOperation`, record every authenticated operation attempt. For `open_entry`, also pass `entryOpened`.
+
+In `submitTerminalCommand`, record a meaningful action after authentication for every accepted command, including read-only `HELP`, `SEARCH`, and `SCAN`.
+
+In the authenticated `/chat` transaction, record a meaningful action before appending the player message.
+
+- [ ] **Step 6: Observe repeated `open_entry` attempts without breaking file idempotence.**
+
+Do not change `openEntry()` semantics. In `submitOperation`, allow narrative observation before the unchanged-operation early return:
 
 ```js
 const operationChanged = result.stateChanged;
 const narrativeChanged = action.operationId === 'open_entry'
-  ? triggerDialogue(room, { operationId: action.operationId, role, entryOpened: action.value }, pendingEvents)
+  ? triggerDialogue(room, {
+      operationId: action.operationId,
+      role,
+      entryOpened: action.value,
+      meaningful: true
+    }, pendingEvents)
   : false;
 
 if (!operationChanged && !narrativeChanged) return result;
 ```
 
-Ensure the normal changed-operation path does not trigger the same open twice. Preserve `operationActionResults` deduplication by `playerId + actionId`.
+Ensure the changed-operation path does not process the same open twice. Preserve `operationActionResults` deduplication by `playerId + actionId`.
 
-- [ ] **Step 6: Add concrete ECHO reactions.**
+- [ ] **Step 7: Add concrete ECHO observations.**
 
-Use restrained, non-spoiling copy such as:
+Use restrained copy:
 
 ```text
 ECHO：第三次了。你不是在找新內容，你是在確認前兩次看到的東西沒有變。
@@ -396,47 +415,45 @@ ECHO：你保留了個人路徑。從存續角度看，這是可解釋的選擇�
 ECHO：你看見了較短的路，卻回去做共同覆核。你是在拒絕我替你定義問題。
 ```
 
-Gate each line so it cannot reveal later truth earlier than its corresponding reveal level.
+Gate every line by reveal progress so none reveals R3–R5 facts early.
 
-- [ ] **Step 7: Run unit and E2E privacy tests.**
+- [ ] **Step 8: Run unit, integration, and E2E privacy tests.**
 
 ```bash
-node --test test/unit/privateEventEngine.test.js test/unit/gameEngine.test.js
+node --test test/unit/privateEventEngine.test.js test/unit/gameEngine.test.js test/integration/chatAndPolling.test.js
 npx playwright test test/e2e/privateNarrative.spec.js
 ```
 
-Expected: all pass; no foreign actor receives an event/cursor change from direct reactions.
+Expected: all pass; no foreign actor receives a direct reaction or cursor change.
 
-- [ ] **Step 8: Commit Task 3.**
+- [ ] **Step 9: Commit Task 3.**
 
 ```bash
-git add game/privateEventEngine.js game/gameEngine.js game/content/dialogue.js test/unit/privateEventEngine.test.js test/unit/gameEngine.test.js test/e2e/privateNarrative.spec.js
+git add game/privateEventEngine.js game/gameEngine.js routes/apiRoutes.js game/content/dialogue.js test/unit/privateEventEngine.test.js test/unit/gameEngine.test.js test/integration/chatAndPolling.test.js test/e2e/privateNarrative.spec.js
 git commit -m "feat: react to player verification and route choices"
 ```
 
 ---
 
-## Task 4: Add idle ECHO observations through WebSocket heartbeat and polling fallback
+## Task 4: Add idle observations through WebSocket heartbeat and polling fallback
 
 **Files:**
 - Modify: `game/privateEventEngine.js`
 - Modify: `realtime/liveHub.js`
 - Modify: `routes/apiRoutes.js`
 - Modify: `public/js/live.js`
-- Modify: `test/integration/liveHub.test.js`
-- Modify: `test/integration/chatAndPolling.test.js`
+- Test: `test/integration/liveHub.test.js`
+- Test: `test/integration/chatAndPolling.test.js`
 
 **Interfaces:**
-- Consumes: existing authenticated WebSocket actor and state-poll authentication.
+- Consumes: authenticated WebSocket actor and authenticated `/state` request.
 - Produces:
 
 ```js
 const IDLE_THRESHOLD_MS = 60_000;
 const IDLE_COOLDOWN_MS = 120_000;
-
 shouldTriggerIdleObservation(room, role, now = Date.now()) -> boolean
 triggerIdleObservation(room, role, now = Date.now(), pendingEvents = []) -> boolean
-
 createLiveHub({ server, roomStore, allowedOrigins, now = () => Date.now() })
 ```
 
@@ -446,40 +463,36 @@ Client heartbeat frame:
 { type: 'heartbeat', cursor }
 ```
 
-- [ ] **Step 1: Add failing idle-policy unit/integration tests with a fake clock.**
+- [ ] **Step 1: Add failing idle-policy tests with a fake clock.**
 
-Test the policy:
+Cover:
 
 ```text
 before main1Completed -> false
 before 60s idle -> false
 at/after 60s idle -> one direct observation
 inside 120s cooldown -> false
-after cooldown and new idle window -> at most one further observation
+after cooldown and a new idle window -> one second observation
+third idle window -> false because first version caps idle observations at two per role
 room ending present -> false
 ```
 
-Cap idle observations at two per role for this first version.
-
 - [ ] **Step 2: Add failing WebSocket heartbeat tests.**
 
-Extend `liveHub.test.js` with a fake `now` and a room-store fixture that exposes `getRoom`, `transact`, `resolvePlayer`, `subscribe`, and `acknowledge`.
+Extend `liveHub.test.js` with a fake `now` and room-store fixtures that expose `getRoom`, `transact`, `resolvePlayer`, `subscribe`, and `acknowledge`.
 
-Assertions:
+Assert:
 
-1. `{ type: 'heartbeat', cursor }` before threshold calls no transaction.
-2. Due heartbeat creates one actor-private ECHO event.
-3. Partner actor cursor is unchanged.
-4. A second heartbeat inside cooldown calls no transaction.
-5. A heartbeat cannot provide a content ID or reaction ID; frames with extra keys remain rejected/ignored under the strict frame shape.
+1. heartbeat before threshold calls no transaction;
+2. due heartbeat creates one actor-private ECHO event;
+3. partner cursor remains unchanged;
+4. heartbeat inside cooldown calls no transaction;
+5. frames with extra keys remain rejected/ignored by the strict frame shape;
+6. heartbeat cursor is not used to select content or mutate game progress.
 
-- [ ] **Step 3: Add failing polling-fallback test.**
+- [ ] **Step 3: Add failing polling-fallback tests.**
 
-In `chatAndPolling.test.js`, make the internal room idle-due, issue authenticated `GET /state`, and assert:
-
-- the actor receives one new ECHO observation;
-- a second immediate `GET /state` does not advance cursor again;
-- the other actor does not receive the direct line.
+Make the internal room idle-due, issue authenticated `GET /state`, and assert one direct ECHO observation. A second immediate `GET /state` must not advance cursor again. The partner must not receive the line.
 
 - [ ] **Step 4: Run integration tests and confirm RED.**
 
@@ -489,9 +502,9 @@ node --test test/integration/liveHub.test.js test/integration/chatAndPolling.tes
 
 Expected: no heartbeat handling and no idle check on `/state` yet.
 
-- [ ] **Step 5: Implement server-side idle policy.**
+- [ ] **Step 5: Implement idle policy.**
 
-`shouldTriggerIdleObservation()` must require:
+`shouldTriggerIdleObservation()` requires:
 
 ```js
 room.players?.A && room.players?.B
@@ -501,8 +514,6 @@ now - lastMeaningfulActionAt >= IDLE_THRESHOLD_MS
 idleReactionCount < 2
 now - lastIdleReactionAt >= IDLE_COOLDOWN_MS
 ```
-
-`triggerIdleObservation()` should emit direct observation content only after the policy passes, then update the corresponding reaction fact/timestamp.
 
 Use low-information copy:
 
@@ -519,7 +530,7 @@ In `public/js/live.js`:
 const HEARTBEAT_MS = 15_000;
 ```
 
-Schedule heartbeat only while the transport is in healthy `websocket` mode. Clear the timer when entering polling/resync, on socket close, and on `stop()`.
+Schedule heartbeat only in healthy `websocket` mode. Clear it when entering polling/resync, on socket close, and on `stop()`.
 
 Send only:
 
@@ -529,9 +540,9 @@ send({ type: 'heartbeat', cursor });
 
 Do not add a new HTTP endpoint.
 
-- [ ] **Step 7: Handle heartbeat in `liveHub.js` without no-op transactions.**
+- [ ] **Step 7: Handle heartbeat without no-op transactions.**
 
-Before opening a transaction:
+Before a transaction:
 
 ```js
 const current = roomStore.getRoom(actor.roomCode);
@@ -547,22 +558,21 @@ roomStore.transact(actor.roomCode, draft => {
 }, { events });
 ```
 
-Verify the current room occupant still matches the authenticated actor `playerId`; close with policy violation on mismatch.
+Verify the current occupant still matches the authenticated actor `playerId`; close the socket with a policy violation on mismatch.
 
 - [ ] **Step 8: Add `/state` polling fallback.**
 
-In `apiRoutes.js`, after authentication/initialization and before projecting the response:
+Capture one server timestamp per request:
 
 ```js
-if (shouldTriggerIdleObservation(player.room, player.role, Date.now())) {
+const currentTime = Date.now();
+if (shouldTriggerIdleObservation(player.room, player.role, currentTime)) {
   const events = [];
   player.room = store.transact(roomCode, draft => {
-    triggerIdleObservation(draft, player.role, Date.now(), events);
+    triggerIdleObservation(draft, player.role, currentTime, events);
   }, { events });
 }
 ```
-
-Use one captured `now` value per request so threshold/cooldown comparisons are deterministic within that request.
 
 - [ ] **Step 9: Run integration tests.**
 
@@ -570,7 +580,7 @@ Use one captured `now` value per request so threshold/cooldown comparisons are d
 node --test test/integration/liveHub.test.js test/integration/chatAndPolling.test.js
 ```
 
-Expected: all pass and no pre-threshold heartbeat changes revision/cursor.
+Expected: all pass; pre-threshold and cooldown heartbeat checks create no transaction/cursor change.
 
 - [ ] **Step 10: Commit Task 4.**
 
@@ -586,8 +596,8 @@ git commit -m "feat: add server-authoritative idle ECHO observations"
 **Files:**
 - Modify: `game/content/endings.js`
 - Modify: `game/content/debrief.js`
-- Modify: `test/unit/endingEngine.test.js`
-- Modify: `test/e2e/fullEndings.spec.js`
+- Test: `test/unit/endingEngine.test.js`
+- Test: `test/e2e/fullEndings.spec.js`
 
 **Interfaces:**
 - Consumes: existing ending IDs, ending precedence, recorded facts, existing verification entry IDs.
@@ -595,22 +605,15 @@ git commit -m "feat: add server-authoritative idle ECHO observations"
 
 - [ ] **Step 1: Add failing narrative-quality assertions.**
 
-Add tests that no ending/debrief contains placeholder copy:
-
 ```js
 assert.doesNotMatch(JSON.stringify({ endings, debrief }),
   /Recorded decision|included in the final resolution/i);
-```
-
-Assert the key endings carry the actual themes:
-
-```js
 assert.match(endings.exposed_ai_deception.text, /ECHO|未授權|越權/);
 assert.match(endings.exposed_ai_deception.text, /AI|實例|存續/);
 assert.match(endings.cooperative_escape.text, /共同|兩個實例|合作|共同覆核/);
 ```
 
-Keep the existing tests for all five IDs, ordering, immutability, and 3–5 debrief facts.
+Keep tests for all five ending IDs, precedence, immutability, and 3–5 debrief facts.
 
 - [ ] **Step 2: Run tests and confirm RED.**
 
@@ -619,11 +622,11 @@ node --test test/unit/endingEngine.test.js
 npx playwright test test/e2e/fullEndings.spec.js
 ```
 
-Expected: placeholder debrief assertion and stale E2E `Recorded decision` expectation fail.
+Expected: placeholder debrief and stale E2E assertions fail.
 
 - [ ] **Step 3: Rewrite all five ending texts without changing IDs.**
 
-Narrative meanings:
+Use these meanings:
 
 ```text
 exposed_ai_deception
@@ -645,11 +648,11 @@ ambiguous_containment
 - The instances may continue, but ECHO retains significant authority over what the result means.
 ```
 
-Keep titles compatible with existing UI assertions unless changing a title is necessary to remove a direct contradiction.
+Keep current titles unless a title itself contradicts canon.
 
 - [ ] **Step 4: Replace generic debrief generation with an explicit catalog.**
 
-Use authored entries per fact, for example:
+Author every existing debrief fact ID. Example:
 
 ```js
 fact(
@@ -660,17 +663,11 @@ fact(
 )
 ```
 
-Author meaningful copy for every existing debrief fact ID, including currently uncommon/legacy IDs, so validation never falls back to generated text. Use only terminal entry IDs that actually exist; rely on `validate:content` to reject broken verification references.
+Use only terminal entry IDs that exist. Let `npm run validate:content` reject any broken verification reference. Do not keep a generated generic fallback string for authored facts.
 
-- [ ] **Step 5: Update the E2E ending assertion.**
+- [ ] **Step 5: Update E2E ending assertions.**
 
-Replace:
-
-```js
-await expect(a.locator('[data-ending]')).toContainText('Recorded decision');
-```
-
-with a meaningful visible debrief assertion and:
+Remove the positive assertion for `Recorded decision`. Assert a meaningful debrief sentence is visible and add:
 
 ```js
 await expect(a.locator('[data-ending]')).not.toContainText('Recorded decision');
@@ -699,7 +696,7 @@ git commit -m "content: pay off ECHO authority in endings and debrief"
 
 **Files:**
 - Verify all files changed in Tasks 1–5.
-- Modify only files required to fix a regression exposed by these checks.
+- If a regression is found, return to the task that owns that behavior, add the failing regression test there, fix it, commit it with that task's file set, then restart Task 6 from Step 1.
 
 **Interfaces:**
 - Consumes: completed implementation.
@@ -761,7 +758,7 @@ rg -n "事故發生後.*偷偷|偷偷接進|林研究員.*咖啡杯|Recorded dec
   game test docs/novel/ORPHEUS-ECHO
 ```
 
-Expected: no unintended matches. Test fixtures that intentionally assert absence are acceptable and should be reviewed manually.
+Expected: no unintended production-content matches. Negative test assertions containing those strings are acceptable.
 
 - [ ] **Step 7: Check patch hygiene.**
 
@@ -770,29 +767,23 @@ git diff --check
 git status --short
 ```
 
-Expected: no whitespace errors; only intended tracked changes remain.
+Expected: no whitespace errors and no uncommitted implementation changes.
 
-- [ ] **Step 8: Manually review the reveal/interaction matrix.**
+- [ ] **Step 8: Review the reveal/interaction matrix.**
 
-Confirm from tests and content manifests:
+Confirm:
 
 ```text
-R0: no AI-identity reveal; ORPHEUS presents cooperation/release frame.
+R0: no AI identity reveal; official cooperation/release frame only.
 R1–R2: ECHO is helpful and increasingly observant without confessing the override.
 Before main5: archive.history_timeline is unavailable.
 R3: override/signature evidence can prove intervention.
-R4–R5: identity and selection evidence require multiple sources.
-Repeated open: third important-file inspection triggers once.
-Idle: no pre-threshold mutation; no cooldown spam.
+R4–R5: identity and selection require multiple sources.
+Third important-file inspection: one observation, no repeat spam.
+Active puzzle/terminal/chat use: idle clock resets.
+Idle: no pre-threshold transaction; no cooldown spam.
 Privacy: direct observation never advances partner cursor.
-Ending: all five outcomes reference the actual AI/ECHO authority conflict rather than only a door/escape result.
+Ending: all five outcomes address the AI/ECHO authority conflict rather than only a physical door.
 ```
 
-- [ ] **Step 9: Commit verification-only fixes if any were required.**
-
-If Tasks 1–5 required no additional changes, do not create an empty commit. If regression fixes were necessary:
-
-```bash
-git add <only-the-regression-fix-files>
-git commit -m "test: verify reactive narrative and reveal sequence"
-```
+Task 6 creates no separate commit when verification is clean.
