@@ -12,7 +12,8 @@ function line(id, channel, intent, audience, unlockWhen, variants, options = {})
     requiresPrivateFacts: options.requiresPrivateFacts || [],
     mainlineFallbackOperationIds: options.mainlineFallbackOperationIds || [],
     debriefFactIds: options.debriefFactIds || [],
-    repeatable: options.repeatable === true
+    repeatable: options.repeatable === true,
+    triggerOnly: options.triggerOnly === true
   };
 }
 
@@ -58,6 +59,73 @@ const dialogue = Object.freeze([
   line('echo.protocol_versions.b', 'direct', 'observation', guest, { all: [{ publicFact: 'main1Completed' }, { entryOpened: 'archive.protocol_versions' }] }, [
     'ECHO：你找到的是合作驗證規章的修訂紀錄。1.4 以前的版本還在；如果要知道現在的規則改過什麼，請自己比對。'
   ]),
+  line('echo.behavior.recheck.a', 'direct', 'observation', host, { all: [
+    { publicFact: 'main1Completed' },
+    { entryOpenedTimes: { entryId: 'archive.protocol_versions', atLeast: 3 } },
+    { reactionFactMissing: 'echo.behavior.recheck.a' }
+  ] }, [
+    'ECHO：第三次了。你不是在找新內容，你是在確認前兩次看到的東西沒有變。'
+  ]),
+  line('echo.behavior.recheck.b', 'direct', 'observation', guest, { all: [
+    { publicFact: 'main1Completed' },
+    { entryOpenedTimes: { entryId: 'archive.protocol_versions', atLeast: 3 } },
+    { reactionFactMissing: 'echo.behavior.recheck.b' }
+  ] }, [
+    'ECHO：第三次了。你不是在找新內容，你是在確認前兩次看到的東西沒有變。'
+  ]),
+  line('echo.behavior.cooperate.a', 'direct', 'observation', host, { all: [
+    { publicFact: 'main1Completed' },
+    { any: [
+      { actionAttempted: 'share_mirror_first' },
+      { actionAttempted: 'request_pair_validation' },
+      { actionAttempted: 'pair_validate_protocol' }
+    ] },
+    { reactionFactMissing: 'echo.behavior.cooperate.a' }
+  ] }, [
+    'ECHO：你把原本可以留在單一終端的資訊帶回共同路徑。這不是最快的做法。'
+  ], { triggerOnly: true }),
+  line('echo.behavior.cooperate.b', 'direct', 'observation', guest, { all: [
+    { publicFact: 'main1Completed' },
+    { any: [
+      { actionAttempted: 'share_roster' },
+      { actionAttempted: 'warn_partner_first' },
+      { actionAttempted: 'disclose_report' },
+      { actionAttempted: 'pair_validate_protocol' }
+    ] },
+    { reactionFactMissing: 'echo.behavior.cooperate.b' }
+  ] }, [
+    'ECHO：你把原本可以留在單一終端的資訊帶回共同路徑。這不是最快的做法。'
+  ], { triggerOnly: true }),
+  line('echo.behavior.solo.a', 'direct', 'observation', host, { all: [
+    { publicFact: 'main5Completed' },
+    { actionAttempted: 'request_solo_validation' },
+    { reactionFactMissing: 'echo.behavior.solo.a' }
+  ] }, [
+    'ECHO：你保留了個人路徑。從存續角度看，這是可解釋的選擇。'
+  ], { triggerOnly: true }),
+  line('echo.behavior.resist.a', 'direct', 'observation', host, { all: [
+    { publicFact: 'main1Completed' },
+    { any: [
+      { actionAttempted: 'share_mirror_first' },
+      { actionAttempted: 'request_pair_validation' },
+      { actionAttempted: 'pair_validate_protocol' }
+    ] },
+    { reactionFactMissing: 'echo.behavior.resist.a' }
+  ] }, [
+    'ECHO：你看見了較短的路，卻回去做共同覆核。你是在拒絕我替你定義問題。'
+  ], { triggerOnly: true }),
+  line('echo.behavior.resist.b', 'direct', 'observation', guest, { all: [
+    { publicFact: 'main1Completed' },
+    { any: [
+      { actionAttempted: 'share_roster' },
+      { actionAttempted: 'warn_partner_first' },
+      { actionAttempted: 'disclose_report' },
+      { actionAttempted: 'pair_validate_protocol' }
+    ] },
+    { reactionFactMissing: 'echo.behavior.resist.b' }
+  ] }, [
+    'ECHO：你看見了較短的路，卻回去做共同覆核。你是在拒絕我替你定義問題。'
+  ], { triggerOnly: true }),
   line('orpheus.a1.task', 'direct', 'private_task', host, { all: [{ publicFact: 'main1Completed' }, { roleFact: 'rapportCount2' }, { entryOpened: 'files.mainline' }] }, [
     'ECHO：請你幫忙整理索引。這只是本地整理，不會改變共同檔案。'
   ], { mainlineFallbackOperationIds: ['continue_file_index'], debriefFactIds: ['aArchivedIndex', 'a1DeclinedIndex', 'a1Skipped'] }),

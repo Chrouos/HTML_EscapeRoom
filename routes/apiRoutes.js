@@ -6,6 +6,7 @@ const { parseCookieHeader, roomTokenCookieName } = require('../utils/cookies');
 const { isRoomCode, statusForError, userMessageForError } = require('./roomRoutes');
 const { initializeGame, submitAction, submitOperation, submitTerminalCommand } = require('../game/gameEngine');
 const { appendStoryEvents } = require('../game/storyEngine');
+const { recordNarrativeBehavior } = require('../game/privateEventEngine');
 const { operations } = require('../game/content/operations');
 
 function validateAction(action) {
@@ -215,6 +216,7 @@ function createApiRoutes(store) {
       const events = [];
       const room = store.transact(roomCode, draft => {
         initializeGame(draft, events);
+        recordNarrativeBehavior(draft, player.role, { meaningful: true, chat: true });
         appendStoryEvents(draft, [{ id: `chat-${player.role}-${actionId}`, type: 'player',
           text: text.trim(), payload: { role: player.role }, audience: { kind: 'both' } }], events);
       }, { playerId: player.playerId, actionId, events });

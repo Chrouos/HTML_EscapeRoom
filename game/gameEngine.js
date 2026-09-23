@@ -11,7 +11,8 @@ const {
   refreshPrivateMissions,
   missionForOperation,
   resolvePrivateMission,
-  triggerDialogue
+  triggerDialogue,
+  recordNarrativeBehavior
 } = require('./privateEventEngine');
 
 function fail(code, status, message) {
@@ -183,11 +184,28 @@ function submitOperation(room, player, action, pendingEvents = []) {
     if (!current || current.state !== 'available') fail(current?.state === 'resolved' ? 'MISSION_RESOLVED' : 'MISSION_LOCKED', 423, 'Mission is locked or already resolved');
   }
 
+  const previousIntent = room.directDialogueState?.[role]?.lastIntent || null;
   const failedAttempt = mission && typeof action.value === 'string'
     && /^(failed|invalid|error)$/i.test(action.value.trim());
   const result = executeOperation(room, typeof player === 'object' ? player : { role }, action.operationId, action.value,
     { skipEffects: Boolean(failedAttempt) });
-  if (!result.stateChanged) return result;
+  if (!result.stateChanged) {
+    const narrativeChanged = triggerDialogue(room, {
+      operationId: action.operationId,
+      role,
+      meaningful: true,
+      previousIntent,
+      ...(action.operationId === 'open_entry' ? { entryOpened: action.value } : {})
+    }, pendingEvents);
+    if (!narrativeChanged) return result;
+    const response = {
+      stateChanged: true,
+      events: pendingEvents,
+      publicResult: { operationId: action.operationId }
+    };
+    room.operationActionResults[key] = structuredClone(response);
+    return response;
+  }
 
   let outcome = OPERATION_OUTCOMES[action.operationId];
   if (failedAttempt) outcome = 'failed';
@@ -220,6 +238,8 @@ function submitOperation(room, player, action, pendingEvents = []) {
   triggerDialogue(room, {
     operationId: action.operationId,
     role,
+    meaningful: true,
+    previousIntent,
     ...(action.operationId === 'open_entry' ? { entryOpened: action.value } : {})
   }, pendingEvents);
   syncMainlineProjection(room);
@@ -267,6 +287,7 @@ function submitTerminalCommand(room, player, action, pendingEvents = []) {
   }
 
   const result = executeTerminalCommand(room, identity, action.value);
+  recordNarrativeBehavior(room, role, { meaningful: true, operationId: 'terminal_command' });
   room.terminalActionResults ??= {};
   const generated = (result.publicEvents || []).map((event, index) => ({
     ...event,
@@ -325,6 +346,7 @@ function submitAction(room, player, action, pendingEvents = []) {
   if (isSide && action.stepId === 'inspect') {
     room.openedSides ??= [];
     if (room.openedSides.includes(action.puzzleId)) return noOp();
+    recordNarrativeBehavior(room, role, { meaningful: true, puzzleAction: action.puzzleId });
     room.openedSides.push(action.puzzleId);
     const events = appendStoryEvents(room, [{ id: action.puzzleId + '-opened', type: 'clue', text: puzzle.hook,
       audience: { kind: 'both' } }], pendingEvents);
@@ -339,6 +361,7 @@ function submitAction(room, player, action, pendingEvents = []) {
   if (step.kind === 'ending') {
     fail('INVALID_ACTION', 400, 'Finale requires the neutral commit_finale operation');
   }
+  recordNarrativeBehavior(room, role, { meaningful: true, puzzleAction: action.puzzleId });
   const authorization = action.puzzleId === 'main4' && stepId === 'authorization';
   const correct = (authorization ? step.acceptedAnswers : [step.answer]).some(answer => answersMatch(action.value, answer));
   if (!correct) {
