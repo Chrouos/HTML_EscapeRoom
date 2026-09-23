@@ -15,6 +15,52 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
-      - run: npm run validate:content
-      - run: npm test
+      - name: Install dependencies
+        id: install
+        shell: bash
+        run: |
+          set +e
+          npm ci > ci-install.log 2>&1
+          status=$?
+          cat ci-install.log
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Validate content
+        if: steps.install.outputs.status == '0'
+        shell: bash
+        run: |
+          set +e
+          npm run validate:content > ci-validate.log 2>&1
+          status=$?
+          cat ci-validate.log
+          echo "$status" > ci-validate.status
+          exit 0
+      - name: Run tests
+        if: steps.install.outputs.status == '0'
+        shell: bash
+        run: |
+          set +e
+          npm test > ci-test.log 2>&1
+          status=$?
+          cat ci-test.log
+          echo "$status" > ci-test.status
+          exit 0
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reactive-narrative-ci-logs
+          path: |
+            ci-install.log
+            ci-validate.log
+            ci-validate.status
+            ci-test.log
+            ci-test.status
+          if-no-files-found: ignore
+      - name: Enforce results
+        shell: bash
+        run: |
+          install_status='${{ steps.install.outputs.status }}'
+          validate_status=$(cat ci-validate.status 2>/dev/null || echo 1)
+          test_status=$(cat ci-test.status 2>/dev/null || echo 1)
+          test "$install_status" = "0" && test "$validate_status" = "0" && test "$test_status" = "0"
