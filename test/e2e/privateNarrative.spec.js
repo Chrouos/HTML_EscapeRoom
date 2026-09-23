@@ -57,7 +57,7 @@ async function answer(page, puzzleId, stepId, value, actionId) {
     });
     return { status: result.status, body: await result.json() };
   }, { actionId, puzzleId, stepId, value });
-  expect(response.status).toBe(200);
+  expect(response.status, `answer ${puzzleId}/${stepId} failed: ${JSON.stringify(response.body)}`).toBe(200);
   expect(response.body.success).toBe(true);
   return response.body;
 }
