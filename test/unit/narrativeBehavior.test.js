@@ -5,6 +5,7 @@ const { createRoomState } = require('../../game/createRoomState');
 const { content, evaluatePredicate } = require('../../game/content/contentSchema');
 const { validateContent } = require('../../game/content/validateContent');
 const { projectForPlayer } = require('../../game/safeState');
+const { ensureNarrativeBehavior } = require('../../game/privateEventEngine');
 
 function cloneContent(overrides = {}) {
   return { ...structuredClone(content), ...overrides };
@@ -37,6 +38,24 @@ test('room state owns actor-local narrative behavior without exposing it to clie
 
   const projected = projectForPlayer(room, { role: 'A', playerId: 'player-a' });
   assert.doesNotMatch(JSON.stringify(projected), /narrativeBehavior|entryOpenCount|lastMeaningfulActionAt|reactionFactIds|lastReactionAt/);
+});
+
+test('legacy snapshots backfill narrative behavior deterministically and sanitize malformed fields', () => {
+  const room = { createdAt: 5_000, narrativeBehavior: {
+    entryOpenCount: { A: { 'files.mainline': 2 }, B: 'bad' },
+    lastMeaningfulActionAt: { A: 6_000, B: -1 },
+    reactionFactIds: { A: ['echo.one', 'echo.one', 7], B: null },
+    lastReactionAt: { A: { idle: 9_000 }, B: [] }
+  } };
+  const behavior = ensureNarrativeBehavior(room, 20_000);
+  assert.deepEqual(behavior.entryOpenCount.A, { 'files.mainline': 2 });
+  assert.deepEqual(behavior.entryOpenCount.B, {});
+  assert.equal(behavior.lastMeaningfulActionAt.A, 6_000);
+  assert.equal(behavior.lastMeaningfulActionAt.B, 5_000);
+  assert.deepEqual(behavior.reactionFactIds.A, ['echo.one']);
+  assert.deepEqual(behavior.reactionFactIds.B, []);
+  assert.deepEqual(behavior.lastReactionAt.A, { idle: 9_000 });
+  assert.deepEqual(behavior.lastReactionAt.B, {});
 });
 
 test('behavior predicates evaluate against actor-local observation state', () => {
