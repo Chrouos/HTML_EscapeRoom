@@ -53,12 +53,12 @@ jobs:
       - name: Install Chromium
         if: steps.install.outputs.status == '0'
         run: npx playwright install --with-deps chromium
-      - name: Verify opening narrative in browser
+      - name: Verify private narrative privacy in browser
         if: steps.install.outputs.status == '0'
         shell: bash
         run: |
           set +e
-          npx playwright test test/e2e/privateNarrative.spec.js --grep "opening announcements" > ci-e2e.log 2>&1
+          npx playwright test test/e2e/privateNarrative.spec.js > ci-e2e.log 2>&1
           status=$?
           cat ci-e2e.log
           echo "$status" > ci-e2e.status
