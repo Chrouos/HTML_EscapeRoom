@@ -48,6 +48,19 @@ jobs:
           if [ "$unit_status" -eq 0 ] && [ "$integration_status" -eq 0 ]; then status=0; else status=1; fi
           echo "$status" > ci-test.status
           exit 0
+      - name: Install Chromium
+        if: steps.install.outputs.status == '0'
+        run: npx playwright install --with-deps chromium
+      - name: Verify opening narrative in browser
+        if: steps.install.outputs.status == '0'
+        shell: bash
+        run: |
+          set +e
+          npx playwright test test/e2e/privateNarrative.spec.js --grep "opening announcements" > ci-e2e.log 2>&1
+          status=$?
+          cat ci-e2e.log
+          echo "$status" > ci-e2e.status
+          exit 0
       - name: Upload diagnostic logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -59,6 +72,8 @@ jobs:
             ci-validate.status
             ci-test.log
             ci-test.status
+            ci-e2e.log
+            ci-e2e.status
           if-no-files-found: ignore
       - name: Enforce results
         shell: bash
@@ -66,4 +81,5 @@ jobs:
           install_status='${{ steps.install.outputs.status }}'
           validate_status=$(cat ci-validate.status 2>/dev/null || echo 1)
           test_status=$(cat ci-test.status 2>/dev/null || echo 1)
-          test "$install_status" = "0" && test "$validate_status" = "0" && test "$test_status" = "0"
+          e2e_status=$(cat ci-e2e.status 2>/dev/null || echo 1)
+          test "$install_status" = "0" && test "$validate_status" = "0" && test "$test_status" = "0" && test "$e2e_status" = "0"
