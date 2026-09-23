@@ -15,6 +15,9 @@ const COOPERATIVE_OPERATIONS = new Set([
   'request_pair_validation', 'disclose_report', 'pair_validate_protocol'
 ]);
 const SOLO_OPERATIONS = new Set(['request_solo_validation']);
+const IDLE_THRESHOLD_MS = 60_000;
+const IDLE_COOLDOWN_MS = 120_000;
+const MAX_IDLE_OBSERVATIONS = 2;
 
 const MISSION_OUTCOMES = new Set(['completed', 'declined', 'skipped', 'failed']);
 const MISSION_STATES = new Set(['locked', 'available', 'resolved']);
@@ -453,6 +456,40 @@ function triggerDialogue(room, trigger = {}, pendingEvents = []) {
   return behaviorChanged || pendingEvents.length > beforeEvents;
 }
 
+function idleReactionIds(room, role, now = Date.now()) {
+  const behavior = ensureNarrativeBehavior(room, now);
+  return behavior.reactionFactIds[role].filter(id => id.startsWith('echo.behavior.idle.'));
+}
+
+function shouldTriggerIdleObservation(room, role, now = Date.now()) {
+  const normalized = normalizeRole(role);
+  if (!normalized || room?.ending || !room?.publicFacts?.includes('main1Completed')) return false;
+  if (!Number.isFinite(now) || now < 0) return false;
+  const behavior = ensureNarrativeBehavior(room, now);
+  const lastMeaningful = Number(behavior.lastMeaningfulActionAt[normalized]);
+  if (!Number.isFinite(lastMeaningful) || now - lastMeaningful < IDLE_THRESHOLD_MS) return false;
+  const ids = idleReactionIds(room, normalized, now);
+  if (ids.length >= MAX_IDLE_OBSERVATIONS) return false;
+  if (ids.length > 0) {
+    const lastReaction = Math.max(...ids.map(id => Number(behavior.lastReactionAt[normalized][id] || 0)));
+    if (now - lastReaction < IDLE_COOLDOWN_MS) return false;
+  }
+  return true;
+}
+
+function triggerIdleObservation(room, role, now = Date.now(), pendingEvents = []) {
+  const normalized = normalizeRole(role);
+  if (!normalized || !shouldTriggerIdleObservation(room, normalized, now)) return false;
+  ensureDialogueState(room);
+  const count = idleReactionIds(room, normalized, now).length + 1;
+  const id = `echo.behavior.idle.${count}.${normalized.toLowerCase()}`;
+  const text = count === 1
+    ? 'ECHO：你停了一段時間。沒有操作也是一種選擇；我不會替你填上答案。'
+    : 'ECHO：你又停下來了。這次我仍然只記錄，不替你決定下一步。';
+  const item = { id, intent: 'observation', variants: [text] };
+  return Boolean(emitSelected(room, item, normalized, pendingEvents, now));
+}
+
 // Friendly aliases keep callers decoupled from the cadence name used in the UI.
 const scheduleDialogue = triggerDialogue;
 const appendDialogueEvents = triggerDialogue;
@@ -460,6 +497,8 @@ const resolveBroadcast = (room, item) => projectDialogueEvent(item, { kind: 'bot
 const resolveDirect = (room, role, item) => projectDialogueEvent(item, { kind: 'role', role: roleName(role) }, resolveText(room, item, role));
 
 module.exports = {
+  IDLE_THRESHOLD_MS,
+  IDLE_COOLDOWN_MS,
   MISSION_OUTCOMES,
   missionForOperation,
   ensurePrivateMissions,
@@ -468,6 +507,8 @@ module.exports = {
   ensureDialogueState,
   ensureNarrativeBehavior,
   recordNarrativeBehavior,
+  shouldTriggerIdleObservation,
+  triggerIdleObservation,
   resolveSeed,
   eligibleDialogue,
   selectDialogue,

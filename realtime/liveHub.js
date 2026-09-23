@@ -2,6 +2,7 @@ const { randomUUID } = require('node:crypto');
 const { WebSocket, WebSocketServer } = require('ws');
 
 const { parseCookieHeader, roomTokenCookieName } = require('../utils/cookies');
+const { shouldTriggerIdleObservation, triggerIdleObservation } = require('../game/privateEventEngine');
 
 const RETENTION_LIMIT = 256;
 
@@ -38,7 +39,7 @@ function send(socket, frame) {
   }
 }
 
-function createLiveHub({ server, roomStore, allowedOrigins }) {
+function createLiveHub({ server, roomStore, allowedOrigins, now = () => Date.now() }) {
   if (!server || typeof server.on !== 'function') {
     throw new TypeError('HTTP server is required');
   }
@@ -50,6 +51,7 @@ function createLiveHub({ server, roomStore, allowedOrigins }) {
   if (!Array.isArray(allowedOrigins) && !(allowedOrigins instanceof Set)) {
     throw new TypeError('allowedOrigins must be an array or Set');
   }
+  if (typeof now !== 'function') throw new TypeError('now must be a function');
 
   const originAllowlist = new Set(allowedOrigins);
   const webSocketServer = new WebSocketServer({ noServer: true, maxPayload: 4096 });
@@ -164,6 +166,27 @@ function createLiveHub({ server, roomStore, allowedOrigins }) {
 
       if (frame.type === 'resume') {
         replay(connection, frame.cursor);
+        return;
+      }
+      if (frame.type === 'heartbeat') {
+        if (!Number.isSafeInteger(frame.cursor) || frame.cursor < 0 || frame.cursor > actor.latestCursor) return;
+        let room;
+        try {
+          room = roomStore.getRoom(actor.roomCode);
+        } catch {
+          socket.close(1008);
+          return;
+        }
+        const currentTime = now();
+        if (!shouldTriggerIdleObservation(room, actor.role, currentTime)) return;
+        const events = [];
+        try {
+          roomStore.transact(actor.roomCode, draft => {
+            triggerIdleObservation(draft, actor.role, currentTime, events);
+          }, { events });
+        } catch {
+          socket.close(1008);
+        }
         return;
       }
       if (frame.type === 'ack'

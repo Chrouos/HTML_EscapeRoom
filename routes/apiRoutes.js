@@ -6,7 +6,11 @@ const { parseCookieHeader, roomTokenCookieName } = require('../utils/cookies');
 const { isRoomCode, statusForError, userMessageForError } = require('./roomRoutes');
 const { initializeGame, submitAction, submitOperation, submitTerminalCommand } = require('../game/gameEngine');
 const { appendStoryEvents } = require('../game/storyEngine');
-const { recordNarrativeBehavior } = require('../game/privateEventEngine');
+const {
+  recordNarrativeBehavior,
+  shouldTriggerIdleObservation,
+  triggerIdleObservation
+} = require('../game/privateEventEngine');
 const { operations } = require('../game/content/operations');
 
 function validateAction(action) {
@@ -102,6 +106,13 @@ function createApiRoutes(store) {
           appendStoryEvents(draft, [{ id: 'containment-zero', type: 'story',
             audience: { kind: 'both' },
             text: '警報：隔離倒數歸零。門沒有打開，空氣也沒有改變。ECHO：預估時間只是行為引導；你們還沒完成程序。' }], events);
+        }, { events });
+      }
+      const idleNow = Date.now();
+      if (shouldTriggerIdleObservation(player.room, player.role, idleNow)) {
+        const events = [];
+        player.room = store.transact(roomCode, draft => {
+          triggerIdleObservation(draft, player.role, idleNow, events);
         }, { events });
       }
       response.json(stateResponse(player.room, player, sinceCursor));

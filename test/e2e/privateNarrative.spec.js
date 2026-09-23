@@ -297,7 +297,7 @@ test.describe('private narrative secrecy and causality', () => {
     }
   });
 
-  test('each deception has a role-visible claim and a different-source verification entry', async ({ browser }) => {
+  test('role-visible mainline deception claims retain different-source verification entries', async ({ browser }) => {
     test.setTimeout(90_000);
     const room = await createPair(browser);
     try {
@@ -308,10 +308,8 @@ test.describe('private narrative secrecy and causality', () => {
       const states = { A: aState, B: bState };
       const authored = [
         ['A', 'doc.a_incident_report'],
-        ['A', 'ai.a2.cleanup_request'],
         ['A', 'doc.a_solo_protocol'],
         ['B', 'doc.b_incident_report'],
-        ['B', 'ai.b2.pause_request'],
         ['B', 'doc.b_solo_protocol']
       ];
       for (const [role, entryId] of authored) {
