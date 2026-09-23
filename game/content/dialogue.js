@@ -24,7 +24,7 @@ const dialogue = Object.freeze([
     'ORPHEUS：兩個終端都已上線。合作是目前最穩定的離開方式。'
   ]),
   line('orpheus.first_task', 'broadcast', 'common_task', both, { publicFact: 'guestJoined' }, [
-    'ECHO：我不是主控台的官方聲音。我偷偷接進來，是想幫你們找到出口。先把啟動備忘錄讀完。'
+    'ECHO：我能存取這個設施的部分系統，但這段訊息不在研究團隊排定的正式流程裡。先把啟動備忘錄讀完，我會協助你們理解離場程序。'
   ]),
   line('orpheus.rapport.a', 'direct', 'rapport', host, { publicFact: 'main1Completed' }, [
     'ECHO：你整理得很快。若有疑問，可以先告訴我。',

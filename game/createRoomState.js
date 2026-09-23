@@ -20,6 +20,19 @@ function createDialogueState() {
   };
 }
 
+function createNarrativeBehaviorState(createdAt = 0) {
+  const baseline = Number.isFinite(createdAt) && createdAt >= 0 ? createdAt : 0;
+  return {
+    entryOpenCount: { A: {}, B: {} },
+    lastMeaningfulActionAt: { A: baseline, B: baseline },
+    pendingObservation: { A: null, B: null },
+    sharedEvidenceIds: { A: [], B: [] },
+    ignoredPromptIds: { A: [], B: [] },
+    reactionFactIds: { A: [], B: [] },
+    lastReactionAt: { A: {}, B: {} }
+  };
+}
+
 function createRoomState(roomCode, createdAt) {
   if (roomCode && typeof roomCode === 'object') {
     ({ roomCode, createdAt } = roomCode);
@@ -40,6 +53,7 @@ function createRoomState(roomCode, createdAt) {
     hints: {},
     messages: [],
     pendingChoices: {},
+    narrativeBehavior: createNarrativeBehaviorState(createdAt),
     countdownStartedAt: null,
     ending: null,
     processedActionIds: new Set(),
@@ -47,4 +61,9 @@ function createRoomState(roomCode, createdAt) {
   };
 }
 
-module.exports = { createRoomState, createWorkstationState, createDialogueState };
+module.exports = {
+  createRoomState,
+  createWorkstationState,
+  createDialogueState,
+  createNarrativeBehaviorState
+};

@@ -4,7 +4,7 @@ const { dialogue } = require('./content/dialogue');
 const { privateMissions } = require('./content/privateMissions');
 const { operations } = require('./content/operations');
 const { evaluatePredicate } = require('./content/contentSchema');
-const { createDialogueState } = require('./createRoomState');
+const { createDialogueState, createNarrativeBehaviorState } = require('./createRoomState');
 
 const ROLES = Object.freeze(['A', 'B']);
 const PRESSURE_INTENTS = new Set(['manipulation', 'private_task']);
@@ -119,6 +119,48 @@ function normalizeRole(player) {
   return ROLES.includes(role) ? role : null;
 }
 
+function finiteMap(value, predicate) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const result = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof key === 'string' && key && predicate(item)) result[key] = item;
+  }
+  return result;
+}
+
+function stringList(value) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter(item => typeof item === 'string' && item.trim()))];
+}
+
+function ensureNarrativeBehavior(room, now = Date.now()) {
+  if (!room || typeof room !== 'object') throw new TypeError('Room is required');
+  const fallback = Number.isFinite(room.createdAt) && room.createdAt >= 0
+    ? room.createdAt : (Number.isFinite(now) && now >= 0 ? now : 0);
+  const defaults = createNarrativeBehaviorState(fallback);
+  const current = room.narrativeBehavior && typeof room.narrativeBehavior === 'object'
+    && !Array.isArray(room.narrativeBehavior) ? room.narrativeBehavior : {};
+  const next = createNarrativeBehaviorState(fallback);
+
+  for (const role of ROLES) {
+    next.entryOpenCount[role] = finiteMap(current.entryOpenCount?.[role],
+      value => Number.isSafeInteger(value) && value >= 0);
+    const lastAction = current.lastMeaningfulActionAt?.[role];
+    next.lastMeaningfulActionAt[role] = Number.isFinite(lastAction) && lastAction >= 0
+      ? lastAction : defaults.lastMeaningfulActionAt[role];
+    const pending = current.pendingObservation?.[role];
+    next.pendingObservation[role] = typeof pending === 'string' && pending.trim() ? pending : null;
+    next.sharedEvidenceIds[role] = stringList(current.sharedEvidenceIds?.[role]);
+    next.ignoredPromptIds[role] = stringList(current.ignoredPromptIds?.[role]);
+    next.reactionFactIds[role] = stringList(current.reactionFactIds?.[role]);
+    next.lastReactionAt[role] = finiteMap(current.lastReactionAt?.[role],
+      value => Number.isFinite(value) && value >= 0);
+  }
+
+  room.narrativeBehavior = next;
+  return next;
+}
+
 function ensureDialogueState(room) {
   if (!room || typeof room !== 'object') throw new TypeError('Room is required');
   const defaults = createDialogueState();
@@ -174,8 +216,9 @@ function roleFacts(room, role) {
   return [...facts];
 }
 
-function predicateState(room, role) {
+function predicateState(room, role, now = Date.now()) {
   const workstation = room.workstation?.[role] || {};
+  const behavior = ensureNarrativeBehavior(room, now);
   return {
     chapter: room.chapter,
     publicFacts: Array.isArray(room.publicFacts) ? room.publicFacts : [],
@@ -185,7 +228,11 @@ function predicateState(room, role) {
     actionIds: [
       ...(Array.isArray(room.actionAttempts) ? room.actionAttempts : []),
       ...(Array.isArray(workstation.actionAttempts) ? workstation.actionAttempts : [])
-    ]
+    ],
+    entryOpenCount: behavior.entryOpenCount[role],
+    lastMeaningfulActionAt: behavior.lastMeaningfulActionAt[role],
+    reactionFactIds: behavior.reactionFactIds[role],
+    now
   };
 }
 
@@ -355,6 +402,7 @@ module.exports = {
   refreshPrivateMissions,
   resolvePrivateMission,
   ensureDialogueState,
+  ensureNarrativeBehavior,
   resolveSeed,
   eligibleDialogue,
   selectDialogue,

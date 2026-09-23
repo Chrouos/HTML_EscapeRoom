@@ -1,0 +1,87 @@
+name: Reactive Narrative CI
+
+on:
+  push:
+    branches:
+      - 'feat/reactive-narrative-reveal-*'
+  workflow_dispatch:
+
+# Keep manual dispatch available after one-shot authoring patches so the latest
+# branch head can always receive a fresh verification run.
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        id: install
+        shell: bash
+        run: |
+          set +e
+          npm ci > ci-install.log 2>&1
+          status=$?
+          cat ci-install.log
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Validate content
+        if: steps.install.outputs.status == '0'
+        shell: bash
+        run: |
+          set +e
+          npm run validate:content > ci-validate.log 2>&1
+          status=$?
+          cat ci-validate.log
+          echo "$status" > ci-validate.status
+          exit 0
+      - name: Run tests
+        if: steps.install.outputs.status == '0'
+        shell: bash
+        run: |
+          set +e
+          find test/unit -name '*.test.js' -print0 | xargs -0 node --test > ci-test.log 2>&1
+          unit_status=$?
+          find test/integration -name '*.test.js' -print0 | xargs -0 node --test >> ci-test.log 2>&1
+          integration_status=$?
+          cat ci-test.log
+          if [ "$unit_status" -eq 0 ] && [ "$integration_status" -eq 0 ]; then status=0; else status=1; fi
+          echo "$status" > ci-test.status
+          exit 0
+      - name: Install Chromium
+        if: steps.install.outputs.status == '0'
+        run: npx playwright install --with-deps chromium
+      - name: Verify opening narrative in browser
+        if: steps.install.outputs.status == '0'
+        shell: bash
+        run: |
+          set +e
+          npx playwright test test/e2e/privateNarrative.spec.js --grep "opening announcements" > ci-e2e.log 2>&1
+          status=$?
+          cat ci-e2e.log
+          echo "$status" > ci-e2e.status
+          exit 0
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reactive-narrative-ci-logs
+          path: |
+            ci-install.log
+            ci-validate.log
+            ci-validate.status
+            ci-test.log
+            ci-test.status
+            ci-e2e.log
+            ci-e2e.status
+          if-no-files-found: ignore
+      - name: Enforce results
+        shell: bash
+        run: |
+          install_status='${{ steps.install.outputs.status }}'
+          validate_status=$(cat ci-validate.status 2>/dev/null || echo 1)
+          test_status=$(cat ci-test.status 2>/dev/null || echo 1)
+          e2e_status=$(cat ci-e2e.status 2>/dev/null || echo 1)
+          test "$install_status" = "0" && test "$validate_status" = "0" && test "$test_status" = "0" && test "$e2e_status" = "0"

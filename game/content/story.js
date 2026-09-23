@@ -4,7 +4,7 @@ const story = Object.freeze({
       Object.freeze({
         id: 'main1-boot',
         type: 'system',
-        text: 'ECHO：我不是主控台的官方聲音。事故發生後，我偷偷接進這裡；我想幫你們離開。請先保持冷靜。',
+        text: 'ECHO：我能存取這個設施的部分系統，但這段訊息不在研究團隊排定的正式流程裡。我可以協助你們理解離場程序；先完成身份核對。',
         audience: { kind: 'both' }
       }),
       Object.freeze({
@@ -17,7 +17,7 @@ const story = Object.freeze({
     identityComplete: Object.freeze({
       id: 'main1-identity-complete',
       type: 'story',
-      text: 'ECHO：身份識別碼核對完成。共享啟動程序已解鎖。順帶一提，林研究員，你上次在北側門留下的咖啡杯還在。那不是身份卡會記載的事，對吧？',
+      text: 'ECHO：身份識別碼核對完成。共享啟動程序已解鎖。你們剛輸入的稱謂會保留到後續流程。',
       audience: { kind: 'both' }
     }),
     startupComplete: Object.freeze({

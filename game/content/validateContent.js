@@ -40,7 +40,25 @@ function predicateErrors(predicate, path, errors) {
   if (Array.isArray(predicate.any)) predicate.any.forEach((item, i) => predicateErrors(item, `${path}.any[${i}]`, errors));
   else if (predicate.any !== undefined) errors.push(`${path}.any must be an array`);
   if (predicate.not !== undefined) predicateErrors(predicate.not, `${path}.not`, errors);
-  for (const key of PREDICATES) {
+  if (predicate.entryOpenedTimes !== undefined) {
+    const value = predicate.entryOpenedTimes;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      errors.push(`${path}.entryOpenedTimes must be an object`);
+    } else {
+      if (typeof value.entryId !== 'string' || !value.entryId.trim()) errors.push(`${path}.entryOpenedTimes.entryId must be non-empty`);
+      if (!Number.isSafeInteger(value.atLeast) || value.atLeast < 1) errors.push(`${path}.entryOpenedTimes.atLeast must be an integer >= 1`);
+      if (Object.keys(value).some(key => !['entryId', 'atLeast'].includes(key))) errors.push(`${path}.entryOpenedTimes has invalid fields`);
+    }
+  }
+  if (predicate.elapsedSinceMeaningfulAction !== undefined
+    && (!Number.isFinite(predicate.elapsedSinceMeaningfulAction) || predicate.elapsedSinceMeaningfulAction < 0)) {
+    errors.push(`${path}.elapsedSinceMeaningfulAction must be a non-negative number`);
+  }
+  if (predicate.reactionFactMissing !== undefined
+    && (typeof predicate.reactionFactMissing !== 'string' || !predicate.reactionFactMissing.trim())) {
+    errors.push(`${path}.reactionFactMissing must be a non-empty string`);
+  }
+  for (const key of PREDICATES.filter(key => !['entryOpenedTimes', 'elapsedSinceMeaningfulAction', 'reactionFactMissing'].includes(key))) {
     if (predicate[key] !== undefined && !['string', 'number'].includes(typeof predicate[key])) errors.push(`${path}.${key} must be a string or number`);
   }
 }
@@ -51,8 +69,10 @@ function publicReachable(predicate, facts) {
   if (Array.isArray(predicate.any)) return predicate.any.some(item => publicReachable(item, facts));
   if (predicate.not !== undefined) return !publicReachable(predicate.not, facts);
   if (predicate.publicFact !== undefined) return facts.has(predicate.publicFact);
-  // Role facts, opened entries and attempted actions are player-controlled and may be reached.
-  if (predicate.roleFact !== undefined || predicate.entryOpened !== undefined || predicate.actionAttempted !== undefined) return true;
+  // Role facts, opened entries, attempted actions, and narrative behavior are player-driven and may be reached.
+  if (predicate.roleFact !== undefined || predicate.entryOpened !== undefined || predicate.actionAttempted !== undefined
+    || predicate.entryOpenedTimes !== undefined || predicate.elapsedSinceMeaningfulAction !== undefined
+    || predicate.reactionFactMissing !== undefined) return true;
   if (predicate.chapterAtLeast !== undefined) return Number(predicate.chapterAtLeast) <= 6;
   return false;
 }
@@ -100,9 +120,11 @@ function graphPredicateReachable(predicate, state) {
   if (predicate.not !== undefined) return !graphPredicateReachable(predicate.not, state);
   if (predicate.publicFact !== undefined) return state.facts.has(predicate.publicFact);
   if (predicate.actionAttempted !== undefined) return state.actionIds.has(predicate.actionAttempted);
-  // Entry discovery and role rapport are player-controlled decisions. They
-  // are possible whenever the operation itself is reachable.
-  if (predicate.roleFact !== undefined || predicate.entryOpened !== undefined) return true;
+  // Entry discovery, role rapport, and narrative behavior are player-controlled decisions.
+  // They are possible whenever the operation itself is reachable.
+  if (predicate.roleFact !== undefined || predicate.entryOpened !== undefined
+    || predicate.entryOpenedTimes !== undefined || predicate.elapsedSinceMeaningfulAction !== undefined
+    || predicate.reactionFactMissing !== undefined) return true;
   if (predicate.chapterAtLeast !== undefined) return Number(predicate.chapterAtLeast) <= 6;
   return false;
 }
@@ -142,6 +164,7 @@ function validateContent(bundle = defaultContent) {
     // a verification attempt); only its unlock predicate may not depend on
     // private facts.
     if (operation.kind === 'mainline' && predicateContainsRoleFact(operation.unlockWhen)) errors.push(`mainline operation ${operation.operationId} depends on private role fact`);
+    if (operation.kind === 'mainline' && predicateContainsBehavior(operation.unlockWhen)) errors.push(`mainline operation ${operation.operationId} depends on behavior predicate`);
   }
   const entryIds = new Set(terminalEntries.map(item => item.id));
   const contentIds = new Set([...entryIds, ...dialogue.map(item => item.id), 'neutral_finale']);
@@ -282,6 +305,15 @@ function predicateContainsRoleFact(predicate) {
   return predicate.not !== undefined && predicateContainsRoleFact(predicate.not);
 }
 
+function predicateContainsBehavior(predicate) {
+  if (!predicate || typeof predicate !== 'object') return false;
+  if (predicate.entryOpenedTimes !== undefined || predicate.elapsedSinceMeaningfulAction !== undefined
+    || predicate.reactionFactMissing !== undefined) return true;
+  if (Array.isArray(predicate.all) && predicate.all.some(predicateContainsBehavior)) return true;
+  if (Array.isArray(predicate.any) && predicate.any.some(predicateContainsBehavior)) return true;
+  return predicate.not !== undefined && predicateContainsBehavior(predicate.not);
+}
+
 function predicateReferencesPrivateEntry(predicate, entries) {
   if (!predicate || typeof predicate !== 'object') return false;
   if (predicate.entryOpened !== undefined) {
@@ -311,4 +343,4 @@ function assertValidContent(bundle = defaultContent) {
 }
 
 module.exports = { validateContent, assertValidContent, operationReachability, traverseOperationGraph,
-  predicateContainsRoleFact, predicateReferencesPrivateEntry, predicateReferencesPrivateAction };
+  predicateContainsRoleFact, predicateContainsBehavior, predicateReferencesPrivateEntry, predicateReferencesPrivateAction };
