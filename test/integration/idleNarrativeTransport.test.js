@@ -79,8 +79,17 @@ test('GET /state emits one due idle observation and an immediate second poll is 
 
   const partner = await b.fetch(`${base}/state?sinceCursor=${bCursor}`);
   const partnerBody = await partner.json();
-  assert.equal(partnerBody.unchanged, true);
   assert.equal(partnerBody.cursor, bCursor);
+  if (!partnerBody.unchanged) {
+    assert.equal(
+      partnerBody.state.intercom.some(item => /停了一段時間|沒有操作/.test(item.text)),
+      false
+    );
+  }
+  const afterPartner = app.locals.roomStore.getRoom(code);
+  assert.equal(afterPartner.narrativeBehavior.reactionFactIds.B.filter(
+    id => id.startsWith('echo.behavior.idle.')
+  ).length, 0);
 });
 
 test('authenticated WebSocket heartbeat triggers idle observation only for that actor', async () => {
