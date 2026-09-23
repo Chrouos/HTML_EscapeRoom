@@ -6,6 +6,8 @@ on:
       - 'feat/reactive-narrative-reveal-*'
   workflow_dispatch:
 
+# Keep manual dispatch available after one-shot authoring patches so the latest
+# branch head can always receive a fresh verification run.
 jobs:
   test:
     runs-on: ubuntu-latest
