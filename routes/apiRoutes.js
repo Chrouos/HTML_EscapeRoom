@@ -7,6 +7,10 @@ const { isRoomCode, statusForError, userMessageForError } = require('./roomRoute
 const { initializeGame, submitAction, submitOperation, submitTerminalCommand } = require('../game/gameEngine');
 const { appendStoryEvents } = require('../game/storyEngine');
 const { recordNarrativeBehavior } = require('../game/privateEventEngine');
+const {
+  shouldTriggerIdleObservation,
+  triggerIdleObservation
+} = require('../game/idleNarrative');
 const { operations } = require('../game/content/operations');
 
 function validateAction(action) {
@@ -77,7 +81,6 @@ function createApiRoutes(store) {
 
     try {
       const sinceCursor = parseSinceCursor(request.query.sinceCursor);
-      // Resolve room existence before checking credentials so missing rooms stay 404.
       store.getRoom(roomCode);
       const cookies = parseCookieHeader(request.headers.cookie);
       const token = cookies[roomTokenCookieName(roomCode)];
@@ -104,6 +107,15 @@ function createApiRoutes(store) {
             text: '警報：隔離倒數歸零。門沒有打開，空氣也沒有改變。ECHO：預估時間只是行為引導；你們還沒完成程序。' }], events);
         }, { events });
       }
+
+      const currentTime = Date.now();
+      if (shouldTriggerIdleObservation(player.room, player.role, currentTime)) {
+        const events = [];
+        player.room = store.transact(roomCode, draft => {
+          triggerIdleObservation(draft, player.role, currentTime, events);
+        }, { events });
+      }
+
       response.json(stateResponse(player.room, player, sinceCursor));
     } catch (error) {
       const status = error.status || statusForError(error);
@@ -152,8 +164,6 @@ function createApiRoutes(store) {
             publicResult: result?.publicResult || { command: 'terminal_command' },
             ...stateResponse(room, player) });
         }
-        // Keep the pre-manifest semantic operation shim for older clients.
-        // Manifest operations are executed by the game engine below.
         if (!operations.some(item => item.operationId === operationId)) {
           const room = store.transact(roomCode, () => {}, {
             playerId: player.playerId,
