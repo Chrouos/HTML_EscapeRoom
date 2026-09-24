@@ -8,6 +8,14 @@ function answerSubmit(page) {
   return page.getByRole('button', { name: 'VERIFY RESPONSE', exact: true });
 }
 
+async function showAnswerGate(page) {
+  const requestApp = page.getByRole('button', { name: 'Request', exact: true });
+  await expect(requestApp).toBeEnabled();
+  await requestApp.click();
+  await expect(answerInput(page)).toBeVisible();
+  await expect(answerSubmit(page)).toBeEnabled();
+}
+
 async function openAnswerGate(page, puzzleId, actionId) {
   const result = await page.evaluate(async ({ puzzleId, actionId }) => {
     const roomCode = document.querySelector('[data-game-room]').dataset.gameRoom;
@@ -19,10 +27,7 @@ async function openAnswerGate(page, puzzleId, actionId) {
   }, { puzzleId, actionId });
   expect(result.status).toBe(200);
   expect(result.body.success).toBe(true);
-  const requestApp = page.getByRole('button', { name: 'Request', exact: true });
-  await expect(requestApp).toBeEnabled();
-  await requestApp.click();
-  await expect(answerSubmit(page)).toBeEnabled();
+  await showAnswerGate(page);
 }
 
 test('two browsers exchange clues, solve initialization and recover on refresh', async ({ browser }) => {
@@ -50,12 +55,14 @@ test('two browsers exchange clues, solve initialization and recover on refresh',
 
     await openAnswerGate(a, 'main1', 'room-flow-open-a-main1');
     await openAnswerGate(b, 'main1', 'room-flow-open-b-main1');
+    await showAnswerGate(b);
     await answerInput(b).fill('old identity draft');
+    await showAnswerGate(a);
     await answerInput(a).fill('ORPHEUS-17');
     await answerSubmit(a).click();
     await expect(b.locator('[data-prompt]')).toContainText('啟動');
+    await showAnswerGate(b);
     await expect(answerInput(b)).toHaveValue('');
-    await expect(answerSubmit(b)).toBeEnabled();
     await answerInput(b).fill('AUX CORE EMERGENCY');
     await answerSubmit(b).click();
     await expect(b.getByRole('log')).toContainText('電力');
