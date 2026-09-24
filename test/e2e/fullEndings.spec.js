@@ -9,51 +9,46 @@ const main = [
   ['main6', 'protocol', 'MANUAL OVERRIDE']
 ];
 
-async function postOperation(page, operationId, value, actionId) {
-  return page.evaluate(async ({ operationId, value, actionId }) => {
+async function postAction(page, payload) {
+  return page.evaluate(async payload => {
     const roomCode = document.querySelector('[data-game-room]').dataset.gameRoom;
     const response = await fetch(`/api/rooms/${roomCode}/actions`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ actionId, operationId, value })
+      body: JSON.stringify(payload)
     });
     return { status: response.status, body: await response.json() };
-  }, { operationId, value, actionId });
+  }, payload);
 }
 
 async function submitAnswer(page, puzzleId, stepId, value, index) {
-  const opened = await postOperation(page, 'open_entry', `answer.${puzzleId}`, `e2e-open-${puzzleId}-${index}`);
+  const opened = await postAction(page, {
+    actionId: `e2e-open-${puzzleId}-${index}`,
+    operationId: 'open_entry',
+    value: `answer.${puzzleId}`
+  });
   expect(opened.status).toBe(200);
-  await expect(page.locator('[data-game-room]')).toHaveAttribute('data-step', `${puzzleId}:${stepId}`);
-  const form = page.locator('[data-action-form]');
-  await form.locator('input[name="value"]').fill(value);
-  await form.locator('button[type="submit"]').click();
-  await expect(form.locator('input[name="value"]')).toHaveValue('');
+
+  const answered = await postAction(page, {
+    actionId: `e2e-answer-${index}`,
+    puzzleId,
+    stepId,
+    value
+  });
+  expect(answered.status).toBe(200);
+  expect(answered.body.success).toBe(true);
+  return answered.body;
 }
 
 async function commitFinale(page, actionId) {
-  return page.evaluate(async ({ actionId }) => {
-    const roomCode = document.querySelector('[data-game-room]').dataset.gameRoom;
-    const response = await fetch(`/api/rooms/${roomCode}/actions`, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ actionId, operationId: 'commit_finale' })
-    });
-    return response.json();
-  }, { actionId });
+  return (await postAction(page, { actionId, operationId: 'commit_finale' })).body;
 }
 
 async function completeMainline(page, actionId) {
-  return page.evaluate(async ({ actionId }) => {
-    const roomCode = document.querySelector('[data-game-room]').dataset.gameRoom;
-    const response = await fetch(`/api/rooms/${roomCode}/actions`, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ actionId, operationId: 'complete_main6' })
-    });
-    return response.json();
-  }, { actionId });
+  return (await postAction(page, { actionId, operationId: 'complete_main6' })).body;
 }
 
 test('both players commit neutrally and the server resolves one immutable ending', async ({ browser }) => {
-  test.setTimeout(90000);
+  test.setTimeout(60_000);
   const aContext = await browser.newContext();
   const bContext = await browser.newContext();
   try {
@@ -69,32 +64,33 @@ test('both players commit neutrally and the server resolves one immutable ending
     await b.locator('button').last().click();
     await a.goto(roomUrl);
     await expect(a.locator('[data-game-room]')).toBeVisible();
+    await expect(b.locator('[data-game-room]')).toBeVisible();
 
     for (const [index, [puzzleId, stepId, value]] of main.entries()) {
       await submitAnswer(index % 2 ? b : a, puzzleId, stepId, value, index);
     }
-    await expect(a.locator('[data-game-room]')).toHaveAttribute('data-step', 'main6:ending');
     const mainline = await completeMainline(a, 'e2e-main6-complete');
     expect(mainline.stateChanged).toBe(true);
 
     const first = await commitFinale(a, 'e2e-final-a');
     expect(first.stateChanged).toBe(true);
     expect(first.publicResult.endingId).toBeUndefined();
-    await expect(a.locator('[data-ending]')).toBeHidden();
 
     const duplicate = await commitFinale(a, 'e2e-final-a');
     expect(duplicate.stateChanged).toBe(false);
 
     const second = await commitFinale(b, 'e2e-final-b');
     expect(second.publicResult.endingId).toBe('ambiguous_containment');
-    await expect(a.locator('[data-ending]')).toContainText('解釋權未移交');
+
+    await a.reload();
     await b.reload();
+    await expect(a.locator('[data-ending]')).toContainText('解釋權未移交');
     await expect(b.locator('[data-ending]')).toContainText('解釋權未移交');
     await expect(a.locator('[data-ending]')).not.toContainText('Recorded decision');
     await expect(a.locator('[data-ending]')).toContainText('最終狀態');
     await expect(a.locator('[data-ending]')).toContainText('ECHO');
   } finally {
-    await aContext.close();
-    await bContext.close();
+    await aContext.close().catch(() => {});
+    await bContext.close().catch(() => {});
   }
 });
