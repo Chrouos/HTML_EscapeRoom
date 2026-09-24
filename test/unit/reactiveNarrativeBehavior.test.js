@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { createRoomState } = require('../../game/createRoomState');
-const { submitOperation } = require('../../game/gameEngine');
+const { initializeGame, submitAction, submitOperation, submitTerminalCommand } = require('../../game/gameEngine');
 const { refreshWorkstation } = require('../../game/terminalEngine');
 const {
   triggerDialogue,
@@ -21,6 +21,20 @@ function readyRoom() {
   };
   ensureDialogueState(room);
   ensureNarrativeBehavior(room, 1000);
+  return room;
+}
+
+function puzzleRoom() {
+  const room = createRoomState('ROOM-PZ', 1000);
+  room.players.A = { playerId: 'player-a' };
+  room.players.B = { playerId: 'player-b' };
+  room.workstation = {
+    A: { openedEntryIds: ['answer.main1'], roleFacts: [], actionAttempts: [] },
+    B: { openedEntryIds: ['answer.main1'], roleFacts: [], actionAttempts: [] }
+  };
+  initializeGame(room, []);
+  ensureNarrativeBehavior(room, 1000);
+  room.narrativeBehavior.lastMeaningfulActionAt.A = 1000;
   return room;
 }
 
@@ -89,4 +103,38 @@ test('game engine preserves repeated open attempts for narrative observation', (
 
   assert.equal(room.narrativeBehavior.entryOpenCount.A['archive.protocol_versions'], 3);
   assert.ok(room.directDialogueState.A.deliveredContentIds.includes('echo.behavior.protocol_recheck'));
+});
+
+test('normal workstation operations reset the actor narrative idle clock', () => {
+  const room = readyRoom();
+  refreshWorkstation(room);
+  room.narrativeBehavior.lastMeaningfulActionAt.A = 1000;
+
+  submitOperation(room, { role: 'A', playerId: 'player-a' }, {
+    actionId: 'continue-index', operationId: 'continue_file_index'
+  }, []);
+
+  assert.ok(room.narrativeBehavior.lastMeaningfulActionAt.A > 1000);
+});
+
+test('terminal commands reset the actor narrative idle clock', () => {
+  const room = readyRoom();
+  refreshWorkstation(room);
+  room.narrativeBehavior.lastMeaningfulActionAt.A = 1000;
+
+  submitTerminalCommand(room, { role: 'A', playerId: 'player-a' }, {
+    actionId: 'terminal-help', operationId: 'terminal_command', value: 'HELP'
+  }, []);
+
+  assert.ok(room.narrativeBehavior.lastMeaningfulActionAt.A > 1000);
+});
+
+test('puzzle submissions reset the actor narrative idle clock even when the answer is wrong', () => {
+  const room = puzzleRoom();
+
+  submitAction(room, { role: 'A', playerId: 'player-a' }, {
+    actionId: 'wrong-identity', puzzleId: 'main1', stepId: 'identity', value: 'wrong'
+  }, []);
+
+  assert.ok(room.narrativeBehavior.lastMeaningfulActionAt.A > 1000);
 });
