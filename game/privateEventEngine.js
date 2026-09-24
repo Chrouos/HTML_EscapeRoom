@@ -161,6 +161,26 @@ function ensureNarrativeBehavior(room, now = Date.now()) {
   return next;
 }
 
+function recordNarrativeBehavior(room, role, trigger = {}, now = Date.now()) {
+  if (!ROLES.includes(role)) return false;
+  const behavior = ensureNarrativeBehavior(room, now);
+  let changed = false;
+
+  if (typeof trigger.entryOpened === 'string' && trigger.entryOpened) {
+    const counts = behavior.entryOpenCount[role];
+    counts[trigger.entryOpened] = (counts[trigger.entryOpened] || 0) + 1;
+    changed = true;
+  }
+
+  if (trigger.meaningful === true && Number.isFinite(now) && now >= 0
+      && behavior.lastMeaningfulActionAt[role] !== now) {
+    behavior.lastMeaningfulActionAt[role] = now;
+    changed = true;
+  }
+
+  return changed;
+}
+
 function ensureDialogueState(room) {
   if (!room || typeof room !== 'object') throw new TypeError('Room is required');
   const defaults = createDialogueState();
@@ -246,7 +266,7 @@ function hasDelivered(room, role, id) {
   return state.deliveredContentIds.includes(id);
 }
 
-function eligibleDialogue(room, role, intent) {
+function eligibleDialogue(room, role, intent, now = Date.now()) {
   ensureDialogueState(room);
   const direct = Boolean(role);
   return dialogue.filter(item => {
@@ -256,7 +276,7 @@ function eligibleDialogue(room, role, intent) {
       if (!audienceMatches(item, role)) return false;
       if (!room.publicFacts?.includes('main1Completed')) return false;
       if (!item.repeatable && hasDelivered(room, role, item.id)) return false;
-      if (!evaluatePredicate(item.unlockWhen || { all: [] }, predicateState(room, role))) return false;
+      if (!evaluatePredicate(item.unlockWhen || { all: [] }, predicateState(room, role, now))) return false;
       const state = room.directDialogueState[role];
       if (PRESSURE_INTENTS.has(item.intent)) {
         if (state.lastIntent && PRESSURE_INTENTS.has(state.lastIntent)) return false;
@@ -267,14 +287,14 @@ function eligibleDialogue(room, role, intent) {
     if (item.channel !== 'broadcast' || !PUBLIC_INTENTS.has(item.intent)) return false;
     if (item.audience?.kind !== 'both') return false;
     if (!item.repeatable && hasDelivered(room, null, item.id)) return false;
-    return evaluatePredicate(item.unlockWhen || { all: [] }, predicateState(room, 'A'));
+    return evaluatePredicate(item.unlockWhen || { all: [] }, predicateState(room, 'A', now));
   });
 }
 
-function selectDialogue(room, role, intent) {
+function selectDialogue(room, role, intent, now = Date.now()) {
   ensureDialogueState(room);
   const directRole = normalizeRole(role);
-  const pool = eligibleDialogue(room, directRole, intent);
+  const pool = eligibleDialogue(room, directRole, intent, now);
   if (!pool.length) return null;
   const playerId = directRole ? room.players?.[directRole]?.playerId : null;
   const seed = directRole
@@ -301,7 +321,7 @@ function projectDialogueEvent(item, audience, text) {
   };
 }
 
-function markDelivered(room, role, item) {
+function markDelivered(room, role, item, now = Date.now()) {
   const state = role ? room.directDialogueState[role] : room.publicDialogueState;
   if (!state.deliveredContentIds.includes(item.id)) state.deliveredContentIds.push(item.id);
   if (!role) return;
@@ -312,34 +332,41 @@ function markDelivered(room, role, item) {
   } else if (PRESSURE_INTENTS.has(item.intent)) {
     state.rapportSincePressure = 0;
   }
+  if (item.intent === 'observation') {
+    const behavior = ensureNarrativeBehavior(room, now);
+    if (!behavior.reactionFactIds[role].includes(item.id)) behavior.reactionFactIds[role].push(item.id);
+    behavior.lastReactionAt[role][item.id] = now;
+  }
 }
 
-function emitSelected(room, item, role, events) {
+function emitSelected(room, item, role, events, now = Date.now()) {
   if (!item) return null;
   const audience = role ? { kind: 'role', role: roleName(role) } : { kind: 'both' };
   const event = projectDialogueEvent(item, audience, resolveText(room, item, role));
-  markDelivered(room, role, item);
+  markDelivered(room, role, item, now);
   if (events) events.push(event);
   return event;
 }
 
-function emitPublic(room, intent, events) {
-  const item = selectDialogue(room, null, intent);
-  return emitSelected(room, item, null, events);
+function emitPublic(room, intent, events, now = Date.now()) {
+  const item = selectDialogue(room, null, intent, now);
+  return emitSelected(room, item, null, events, now);
 }
 
-function emitDirect(room, role, intent, events) {
+function emitDirect(room, role, intent, events, now = Date.now()) {
   if (!normalizeRole(role)) return null;
-  return emitSelected(room, selectDialogue(room, role, intent), role, events);
+  return emitSelected(room, selectDialogue(room, role, intent, now), role, events, now);
 }
 
 function triggerDialogue(room, trigger = {}, pendingEvents = []) {
   ensureDialogueState(room);
+  const role = normalizeRole(trigger.role || trigger.player);
+  const now = Number.isFinite(trigger.now) && trigger.now >= 0 ? trigger.now : Date.now();
+  recordNarrativeBehavior(room, role, trigger, now);
   // Dialogue and workstation triggers share the same deterministic mission
   // predicates; refresh here so callers that only dispatch a trigger still
   // observe the lifecycle transition in the same transaction.
   refreshPrivateMissions(room);
-  const role = normalizeRole(trigger.role || trigger.player);
   const operationId = trigger.operationId;
   const entryOpened = trigger.entryOpened;
   if (role && entryOpened) {
@@ -354,29 +381,29 @@ function triggerDialogue(room, trigger = {}, pendingEvents = []) {
 
   // Operation events are the only public cadence source. These three lines are
   // deliberately tied to room lifecycle transitions, never a clock.
-  if (operationId === 'create_room') emitPublic(room, 'system', pendingEvents);
-  if (operationId === 'host_join') emitPublic(room, 'common_task', pendingEvents);
-  if (operationId === 'guest_join') emitPublic(room, 'common_task', pendingEvents);
+  if (operationId === 'create_room') emitPublic(room, 'system', pendingEvents, now);
+  if (operationId === 'host_join') emitPublic(room, 'common_task', pendingEvents, now);
+  if (operationId === 'guest_join') emitPublic(room, 'common_task', pendingEvents, now);
   if (['complete_main2', 'complete_main3', 'complete_main4', 'complete_main5', 'complete_main6'].includes(operationId)) {
-    emitPublic(room, 'common_task', pendingEvents);
+    emitPublic(room, 'common_task', pendingEvents, now);
   }
   if (operationId === 'complete_main1') {
-    for (const target of ROLES) emitDirect(room, target, 'rapport', pendingEvents);
+    for (const target of ROLES) emitDirect(room, target, 'rapport', pendingEvents, now);
   }
 
   if (role && entryOpened && (entryOpened === 'files.mainline' || entryOpened === 'files.experiment_roster')) {
-    emitDirect(room, role, 'rapport', pendingEvents);
+    emitDirect(room, role, 'rapport', pendingEvents, now);
   }
   if (role && entryOpened === 'archive.protocol_versions') {
-    emitDirect(room, role, 'observation', pendingEvents);
+    emitDirect(room, role, 'observation', pendingEvents, now);
   }
   if (role && operationId === 'verify_incident_timestamp') {
     // Give the player space to breathe before another pressure instruction.
-    emitDirect(room, role, 'rapport', pendingEvents);
+    emitDirect(room, role, 'rapport', pendingEvents, now);
   }
 
-  if (role && trigger.intent) emitDirect(room, role, trigger.intent, pendingEvents);
-  if (role && entryOpened && entryOpened.startsWith('ai.')) emitDirect(room, role, 'private_task', pendingEvents);
+  if (role && trigger.intent) emitDirect(room, role, trigger.intent, pendingEvents, now);
+  if (role && entryOpened && entryOpened.startsWith('ai.')) emitDirect(room, role, 'private_task', pendingEvents, now);
 
   const privateOperations = new Set([
     'archive_index', 'flag_identity', 'delete_local_mirror', 'share_mirror_first',
@@ -384,7 +411,7 @@ function triggerDialogue(room, trigger = {}, pendingEvents = []) {
     'request_solo_validation', 'publish_fragment', 'request_pair_validation',
     'file_full_report', 'file_anonymous_summary', 'disclose_report'
   ]);
-  if (role && privateOperations.has(operationId)) emitDirect(room, role, 'private_task', pendingEvents);
+  if (role && privateOperations.has(operationId)) emitDirect(room, role, 'private_task', pendingEvents, now);
   refreshPrivateMissions(room);
   return pendingEvents;
 }
@@ -403,6 +430,7 @@ module.exports = {
   resolvePrivateMission,
   ensureDialogueState,
   ensureNarrativeBehavior,
+  recordNarrativeBehavior,
   resolveSeed,
   eligibleDialogue,
   selectDialogue,
