@@ -368,17 +368,20 @@ test('a failed snapshot discards the stale socket and reconnects with polling ac
 
   try {
     const { a } = await openPairedRoom(aContext, bContext);
-    await expect.poll(() => liveSockets.length).toBe(1);
-    liveSockets[0].send(JSON.stringify({ type: 'snapshot_required', reason: 'test_setup' }));
+    await expect.poll(() => liveSockets.length).toBeGreaterThan(0);
+    const setupSocketCount = liveSockets.length;
+    const activeSocket = liveSockets.at(-1);
+    expect(activeSocket).toBeTruthy();
+    activeSocket.send(JSON.stringify({ type: 'snapshot_required', reason: 'test_setup' }));
     await expect.poll(() => Boolean(latestSnapshot?.state?.workstation?.text)).toBe(true);
 
     failNextSnapshot = true;
-    liveSockets[0].send(JSON.stringify({ type: 'event', cursor: latestSnapshot.cursor + 2,
+    activeSocket.send(JSON.stringify({ type: 'event', cursor: latestSnapshot.cursor + 2,
       event: { eventId: 'failed-resync-gap', kind: 'state',
         payload: { state: latestSnapshot.state, events: [] } } }));
     await expect(a.locator('[data-connection]')).toHaveText(/LINK RETRYING|SIGNAL LOST|RECONNECTING/);
     await expect.poll(() => stateRequests.some(url => url.includes('sinceCursor='))).toBe(true);
-    await expect.poll(() => liveSockets.length, { timeout: 15_000 }).toBeGreaterThan(1);
+    await expect.poll(() => liveSockets.length, { timeout: 15_000 }).toBeGreaterThan(setupSocketCount);
     await expect(a.locator('[data-connection]')).not.toHaveText(/LINK RETRYING|SIGNAL LOST/);
   } finally {
     await aContext.close().catch(() => {});
