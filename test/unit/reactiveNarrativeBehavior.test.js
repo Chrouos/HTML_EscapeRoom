@@ -138,3 +138,46 @@ test('puzzle submissions reset the actor narrative idle clock even when the answ
 
   assert.ok(room.narrativeBehavior.lastMeaningfulActionAt.A > 1000);
 });
+
+test('ECHO notices a cooperative private choice once and only for the actor', () => {
+  const room = readyRoom();
+  const events = [];
+  room.workstation.A.actionAttempts.push('share_mirror_first');
+
+  triggerDialogue(room, { role: 'A', operationId: 'share_mirror_first', now: 5000 }, events);
+  triggerDialogue(room, { role: 'A', operationId: 'share_mirror_first', now: 5001 }, events);
+
+  const reactions = events.filter(event => event.contentId === 'echo.behavior.cooperation.a');
+  assert.equal(reactions.length, 1);
+  assert.deepEqual(reactions[0].audience, { kind: 'role', role: 'host' });
+  assert.match(reactions[0].text, /分享|共同|夥伴|合作/);
+  assert.equal(room.directDialogueState.B.deliveredContentIds.includes('echo.behavior.cooperation.a'), false);
+});
+
+test('ECHO notices a solo survival choice without turning emotional', () => {
+  const room = readyRoom();
+  const events = [];
+  room.workstation.A.actionAttempts.push('request_solo_validation');
+
+  triggerDialogue(room, { role: 'A', operationId: 'request_solo_validation', now: 6000 }, events);
+
+  const reaction = events.find(event => event.contentId === 'echo.behavior.solo.a');
+  assert.ok(reaction);
+  assert.deepEqual(reaction.audience, { kind: 'role', role: 'host' });
+  assert.match(reaction.text, /個人|保留|存續|自己/);
+  assert.doesNotMatch(reaction.text, /生氣|失望|背叛|恨/);
+});
+
+test('ECHO recognizes when an actor returns to shared validation after pressure', () => {
+  const room = readyRoom();
+  const events = [];
+  room.publicFacts.push('main4Completed');
+  room.workstation.B.actionAttempts.push('pair_validate_protocol');
+
+  triggerDialogue(room, { role: 'B', operationId: 'pair_validate_protocol', now: 7000 }, events);
+
+  const reaction = events.find(event => event.contentId === 'echo.behavior.reject_frame.b');
+  assert.ok(reaction);
+  assert.deepEqual(reaction.audience, { kind: 'role', role: 'guest' });
+  assert.match(reaction.text, /共同|覆核|框架|選擇/);
+});
