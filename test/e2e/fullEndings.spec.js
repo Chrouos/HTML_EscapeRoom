@@ -9,7 +9,20 @@ const main = [
   ['main6', 'protocol', 'MANUAL OVERRIDE']
 ];
 
-async function submitAnswer(page, puzzleId, stepId, value) {
+async function postOperation(page, operationId, value, actionId) {
+  return page.evaluate(async ({ operationId, value, actionId }) => {
+    const roomCode = document.querySelector('[data-game-room]').dataset.gameRoom;
+    const response = await fetch(`/api/rooms/${roomCode}/actions`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ actionId, operationId, value })
+    });
+    return { status: response.status, body: await response.json() };
+  }, { operationId, value, actionId });
+}
+
+async function submitAnswer(page, puzzleId, stepId, value, index) {
+  const opened = await postOperation(page, 'open_entry', `answer.${puzzleId}`, `e2e-open-${puzzleId}-${index}`);
+  expect(opened.status).toBe(200);
   await expect(page.locator('[data-game-room]')).toHaveAttribute('data-step', `${puzzleId}:${stepId}`);
   const form = page.locator('[data-action-form]');
   await form.locator('input[name="value"]').fill(value);
@@ -49,13 +62,16 @@ test('both players commit neutrally and the server resolves one immutable ending
     await a.goto('/');
     await a.locator('button').first().click();
     await expect(a).toHaveURL(/\/rooms\/\d{6}$/);
-    const code = a.url().split('/').pop();
+    const roomUrl = a.url();
+    const code = roomUrl.split('/').pop();
     await b.goto('/');
     await b.locator('input').first().fill(code);
     await b.locator('button').last().click();
+    await a.goto(roomUrl);
+    await expect(a.locator('[data-game-room]')).toBeVisible();
 
     for (const [index, [puzzleId, stepId, value]] of main.entries()) {
-      await submitAnswer(index % 2 ? b : a, puzzleId, stepId, value);
+      await submitAnswer(index % 2 ? b : a, puzzleId, stepId, value, index);
     }
     await expect(a.locator('[data-game-room]')).toHaveAttribute('data-step', 'main6:ending');
     const mainline = await completeMainline(a, 'e2e-main6-complete');
