@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 function answerInput(page) {
-  return page.getByLabel('SECURE RESPONSE / 解鎖密碼');
+  return page.locator('[data-workstation-answer-form] input[name="value"]');
 }
 
 function answerSubmit(page) {
