@@ -11,10 +11,11 @@ async function openAnswerGate(page, puzzleId, actionId) {
   }, { puzzleId, actionId });
   expect(result.status).toBe(200);
   expect(result.body.success).toBe(true);
+  await expect(page.getByRole('button', { name: '送出', exact: true })).toBeEnabled();
 }
 
 test('two browsers exchange clues, solve initialization and recover on refresh', async ({ browser }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(45_000);
   const aContext = await browser.newContext();
   const bContext = await browser.newContext();
   try {
@@ -43,6 +44,7 @@ test('two browsers exchange clues, solve initialization and recover on refresh',
     await a.getByRole('button', { name: '送出', exact: true }).click();
     await expect(b.locator('[data-prompt]')).toContainText('啟動');
     await expect(b.getByLabel('提交答案')).toHaveValue('');
+    await expect(b.getByRole('button', { name: '送出', exact: true })).toBeEnabled();
     await b.getByLabel('提交答案').fill('AUX CORE EMERGENCY');
     await b.getByRole('button', { name: '送出', exact: true }).click();
     await expect(b.getByRole('log')).toContainText('電力');
@@ -55,8 +57,8 @@ test('two browsers exchange clues, solve initialization and recover on refresh',
     expect(recording.ok()).toBeTruthy();
     expect((await recording.body()).subarray(0, 4).toString()).toBe('RIFF');
   } finally {
-    await aContext.close();
-    await bContext.close();
+    await aContext.close().catch(() => {});
+    await bContext.close().catch(() => {});
   }
 });
 
@@ -94,7 +96,7 @@ test('responsive console panes preserve chat draft and restore both monitors aft
     await expect(page.locator('.operations-monitor')).toBeVisible();
     await expect(chat).toHaveValue(draft);
   } finally {
-    await aContext.close();
-    await bContext.close();
+    await aContext.close().catch(() => {});
+    await bContext.close().catch(() => {});
   }
 });
