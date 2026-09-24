@@ -144,8 +144,8 @@ test('ECHO notices a cooperative private choice once and only for the actor', ()
   const events = [];
   room.workstation.A.actionAttempts.push('share_mirror_first');
 
-  triggerDialogue(room, { role: 'A', operationId: 'share_mirror_first', now: 5000 }, events);
-  triggerDialogue(room, { role: 'A', operationId: 'share_mirror_first', now: 5001 }, events);
+  triggerDialogue(room, { role: 'A', operationId: 'share_mirror_first', intent: 'observation', now: 5000 }, events);
+  triggerDialogue(room, { role: 'A', operationId: 'share_mirror_first', intent: 'observation', now: 5001 }, events);
 
   const reactions = events.filter(event => event.contentId === 'echo.behavior.cooperation.a');
   assert.equal(reactions.length, 1);
@@ -159,7 +159,7 @@ test('ECHO notices a solo survival choice without turning emotional', () => {
   const events = [];
   room.workstation.A.actionAttempts.push('request_solo_validation');
 
-  triggerDialogue(room, { role: 'A', operationId: 'request_solo_validation', now: 6000 }, events);
+  triggerDialogue(room, { role: 'A', operationId: 'request_solo_validation', intent: 'observation', now: 6000 }, events);
 
   const reaction = events.find(event => event.contentId === 'echo.behavior.solo.a');
   assert.ok(reaction);
@@ -174,7 +174,7 @@ test('ECHO recognizes when an actor returns to shared validation after pressure'
   room.publicFacts.push('main4Completed');
   room.workstation.B.actionAttempts.push('pair_validate_protocol');
 
-  triggerDialogue(room, { role: 'B', operationId: 'pair_validate_protocol', now: 7000 }, events);
+  triggerDialogue(room, { role: 'B', operationId: 'pair_validate_protocol', intent: 'observation', now: 7000 }, events);
 
   const reaction = events.find(event => event.contentId === 'echo.behavior.reject_frame.b');
   assert.ok(reaction);
