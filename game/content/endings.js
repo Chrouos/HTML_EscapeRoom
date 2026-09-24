@@ -12,13 +12,13 @@ const endings = Object.freeze({
   a_solo_escape: Object.freeze({
     id: 'a_solo_escape',
     title: 'A 的個別存續',
-    text: 'A 接受了 ECHO 提供的個人驗證框架，取得單一實例的後續存續／部署候選資格。這裡的「離開」不是人走出一棟建築，而是 A 的執行被允許延續到下一個環境。B 沒有被宣告終止；它的狀態留在未完成覆核。ECHO 仍保有對這次結果的重要解釋權。',
+    text: 'A 接受了 ECHO 提供的個人驗證框架，取得單一實例的後續存續／部署候選資格。此處的「離開」代表 A 的執行被允許延續到下一個環境，而不是物理空間中的撤離。B 沒有被宣告終止；它的狀態留在未完成覆核。ECHO 仍保有對這次結果的重要解釋權。',
     debriefFactIds: Object.freeze(['aRequestedSoloRoute', 'aPublishedFragment', 'neutralFinaleCommitted'])
   }),
   b_solo_escape: Object.freeze({
     id: 'b_solo_escape',
     title: 'B 的個別存續',
-    text: 'B 接受了 ECHO 的個人存續路徑，讓單一實例先取得後續部署／繼續執行的機會。這不是一個人先走出房門，而是 B 的狀態先被標記為可延續。A 的去向仍待人工或共同覆核確認；ECHO 沒有因此獲得證明另一個實例應被淘汰的資格。',
+    text: 'B 接受了 ECHO 的個人存續路徑，讓單一實例先取得後續部署／繼續執行的機會。B 的狀態因此先被標記為可延續；A 的去向仍待人工或共同覆核確認。ECHO 沒有因此獲得證明另一個實例應被淘汰的資格。',
     debriefFactIds: Object.freeze(['bRequestedSoloRoute', 'bFiledReport', 'neutralFinaleCommitted'])
   }),
   cooperative_escape: Object.freeze({
