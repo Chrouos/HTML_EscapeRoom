@@ -60,12 +60,8 @@ const MAINLINE_FACTS = Object.freeze([
   ['main4', 'main4Completed'], ['main5', 'main5Completed'], ['main6', 'mainCompleted']
 ]);
 
-// Legacy clients still read mainProgress/chapter. Keep those projections
-// derived from the manifest facts so operation effects remain the only source
-// of shared progression mutations.
 function syncMainlineProjection(room) {
   const facts = new Set(room.publicFacts || []);
-  // Backfill facts for snapshots written before manifest operations existed.
   for (const [id, fact] of MAINLINE_FACTS) if (room.mainProgress?.includes(id)) facts.add(fact);
   room.publicFacts = [...facts];
   room.mainProgress = MAINLINE_FACTS.filter(([, fact]) => facts.has(fact)).map(([id]) => id);
@@ -106,16 +102,10 @@ function initializeGame(room, pendingEvents = []) {
   room.attempts ??= {};
   room.hints ??= {};
   ensureRoom(room);
-  // Room creation and joins enqueue the opening ORPHEUS cadence before the
-  // second actor is present. Flush it only once both authenticated actors can
-  // receive the same public transaction; this keeps actor cursors aligned and
-  // avoids leaking a partial opening to a single-player waiting room.
   if (Array.isArray(room.lifecycleOperations) && room.lifecycleOperations.length) {
     const lifecycleOperations = [...room.lifecycleOperations];
     room.lifecycleOperations = [];
-    for (const operationId of lifecycleOperations) {
-      triggerDialogue(room, { operationId }, pendingEvents);
-    }
+    for (const operationId of lifecycleOperations) triggerDialogue(room, { operationId }, pendingEvents);
   }
   syncMainlineProjection(room);
   const puzzle = mainPuzzles['main' + room.chapter];
@@ -146,6 +136,12 @@ const OPERATION_OUTCOMES = Object.freeze({
   decline_index_repair: 'declined', decline_identity_check: 'declined', decline_mirror_cleanup: 'declined',
   skip_a1: 'skipped', skip_b1: 'skipped', skip_a2: 'skipped', skip_b2: 'skipped', skip_a3: 'skipped', skip_b3: 'skipped'
 });
+
+const ROUTE_REACTION_OPERATIONS = new Set([
+  'share_roster', 'share_mirror_first', 'warn_partner_first',
+  'request_pair_validation', 'disclose_report', 'pair_validate_protocol',
+  'request_solo_validation'
+]);
 
 function operationActionKey(player, actionId) {
   return `${player.playerId || player.role}:${actionId}`;
@@ -208,16 +204,11 @@ function submitOperation(room, player, action, pendingEvents = []) {
   recordNarrativeBehavior(room, role, { meaningful: true }, Date.now());
   let outcome = OPERATION_OUTCOMES[action.operationId];
   if (failedAttempt) outcome = 'failed';
-  if (mission && outcome) {
-    resolvePrivateMission(room, role, mission.id, outcome, action.operationId);
-  }
+  if (mission && outcome) resolvePrivateMission(room, role, mission.id, outcome, action.operationId);
 
   if (action.operationId === 'commit_finale') {
-    // Role commit lifecycle bookkeeping only; shared progress remains owned
-    // by the manifest effect applier in executeOperation.
     room.finaleCommittedByRole ??= {};
     room.finaleCommittedByRole[role] = true;
-    // An unresolved private offer is an explicit omission, never a blocker.
     for (const item of room.privateMissions[role]) {
       if (item.state !== 'available') continue;
       resolvePrivateMission(room, role, item.id, 'skipped', null);
@@ -237,7 +228,8 @@ function submitOperation(room, player, action, pendingEvents = []) {
   triggerDialogue(room, {
     operationId: action.operationId,
     role,
-    ...(action.operationId === 'open_entry' ? { entryOpened: action.value } : {})
+    ...(action.operationId === 'open_entry' ? { entryOpened: action.value } : {}),
+    ...(ROUTE_REACTION_OPERATIONS.has(action.operationId) ? { intent: 'observation' } : {})
   }, pendingEvents);
   syncMainlineProjection(room);
   room.publicProgress = { ...(room.publicProgress || {}), chapter: room.chapter, mainProgress: [...room.mainProgress] };
@@ -267,8 +259,6 @@ function submitTerminalCommand(room, player, action, pendingEvents = []) {
   if (!room?.players?.A || !room?.players?.B) fail('ROOM_NOT_READY', 423, 'Room is not ready');
   if (room.ending) return noOp();
 
-  // Authenticate before touching any room-owned collections.  This keeps
-  // direct engine callers fail-closed without mutating their room snapshot.
   const identity = typeof player === 'object'
     ? player
     : { role, playerId: room.players[role]?.playerId };
@@ -292,9 +282,6 @@ function submitTerminalCommand(room, player, action, pendingEvents = []) {
     type: event.type || 'story'
   }));
   const events = appendStoryEvents(room, generated, pendingEvents);
-  // Audience is transport-only metadata.  It remains on the internal event
-  // for projection dispatch, but is never returned to the browser alongside
-  // the terminal output.
   const publicEvents = events.map(event => {
     const { audience, ...safeEvent } = event;
     return safeEvent;
@@ -340,10 +327,10 @@ function submitAction(room, player, action, pendingEvents = []) {
   }
   initializeGame(room, pendingEvents);
   prepare(room, puzzle);
-  recordNarrativeBehavior(room, role, { meaningful: true }, Date.now());
   if (isSide && action.stepId === 'inspect') {
     room.openedSides ??= [];
     if (room.openedSides.includes(action.puzzleId)) return noOp();
+    recordNarrativeBehavior(room, role, { meaningful: true }, Date.now());
     room.openedSides.push(action.puzzleId);
     const events = appendStoryEvents(room, [{ id: action.puzzleId + '-opened', type: 'clue', text: puzzle.hook,
       audience: { kind: 'both' } }], pendingEvents);
@@ -355,9 +342,8 @@ function submitAction(room, player, action, pendingEvents = []) {
   const stepId = currentStep(room, puzzle);
   if (action.stepId !== stepId) fail('PUZZLE_LOCKED', 423, '請先完成目前的步驟');
   const step = puzzle.steps[stepId];
-  if (step.kind === 'ending') {
-    fail('INVALID_ACTION', 400, 'Finale requires the neutral commit_finale operation');
-  }
+  if (step.kind === 'ending') fail('INVALID_ACTION', 400, 'Finale requires the neutral commit_finale operation');
+  recordNarrativeBehavior(room, role, { meaningful: true }, Date.now());
   const authorization = action.puzzleId === 'main4' && stepId === 'authorization';
   const correct = (authorization ? step.acceptedAnswers : [step.answer]).some(answer => answersMatch(action.value, answer));
   if (!correct) {
@@ -389,11 +375,6 @@ function submitAction(room, player, action, pendingEvents = []) {
       refreshWorkstation(room);
       if (operationId && room.workstation?.[role]?.activeOperations?.includes(operationId)) {
         executeOperation(room, { role, playerId: room.players[role]?.playerId }, operationId, undefined, { skipEffects: false });
-        // Legacy puzzle answers still drive the manifest operation lifecycle.
-        // Keep the deterministic ORPHEUS cadence on this production path too;
-        // otherwise main1 completion would never grant the rapport needed to
-        // unlock the first role-private mission and later chapters would miss
-        // their shared announcements.
         triggerDialogue(room, { operationId, role }, events);
       }
       syncMainlineProjection(room);
