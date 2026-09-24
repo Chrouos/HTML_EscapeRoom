@@ -2,6 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { createRoomState } = require('../../game/createRoomState');
+const { submitOperation } = require('../../game/gameEngine');
+const { refreshWorkstation } = require('../../game/terminalEngine');
 const {
   triggerDialogue,
   ensureDialogueState,
@@ -70,4 +72,21 @@ test('meaningful narrative triggers advance only the acting role idle clock', ()
 
   assert.equal(room.narrativeBehavior.lastMeaningfulActionAt.A, 9000);
   assert.equal(room.narrativeBehavior.lastMeaningfulActionAt.B, beforeB);
+});
+
+test('game engine preserves repeated open attempts for narrative observation', () => {
+  const room = readyRoom();
+  refreshWorkstation(room);
+  const player = { role: 'A', playerId: 'player-a' };
+
+  for (let index = 1; index <= 3; index += 1) {
+    submitOperation(room, player, {
+      actionId: `reopen-${index}`,
+      operationId: 'open_entry',
+      value: 'archive.protocol_versions'
+    }, []);
+  }
+
+  assert.equal(room.narrativeBehavior.entryOpenCount.A['archive.protocol_versions'], 3);
+  assert.ok(room.directDialogueState.A.deliveredContentIds.includes('echo.behavior.protocol_recheck'));
 });
