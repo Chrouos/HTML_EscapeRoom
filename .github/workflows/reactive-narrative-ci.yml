@@ -6,8 +6,8 @@ on:
       - 'feat/reactive-narrative-reveal-*'
   workflow_dispatch:
 
-# Keep manual dispatch available after one-shot authoring patches so the latest
-# branch head can always receive a fresh verification run.
+# Branch-only implementation gate. It remains manually dispatchable so the
+# latest feature head can always receive a fresh verification run.
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -63,6 +63,28 @@ jobs:
           cat ci-e2e.log
           echo "$status" > ci-e2e.status
           exit 0
+      - name: Full project gate
+        if: steps.install.outputs.status == '0'
+        shell: bash
+        run: |
+          set +e
+          npm run check > ci-full.log 2>&1
+          status=$?
+          cat ci-full.log
+          echo "$status" > ci-full.status
+          exit 0
+      - name: Scan stale narrative copy
+        if: steps.install.outputs.status == '0'
+        shell: bash
+        run: |
+          set +e
+          pattern='事故發生後.*偷偷|偷偷接進|林研究員.*咖啡杯|Recorded decision|included in the final resolution'
+          grep -R -n -E "$pattern" game docs/novel/ORPHEUS-ECHO > ci-stale.log 2>&1
+          grep_status=$?
+          cat ci-stale.log
+          if [ "$grep_status" -eq 1 ]; then status=0; else status=1; fi
+          echo "$status" > ci-stale.status
+          exit 0
       - name: Upload diagnostic logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -76,6 +98,10 @@ jobs:
             ci-test.status
             ci-e2e.log
             ci-e2e.status
+            ci-full.log
+            ci-full.status
+            ci-stale.log
+            ci-stale.status
           if-no-files-found: ignore
       - name: Enforce results
         shell: bash
@@ -84,4 +110,11 @@ jobs:
           validate_status=$(cat ci-validate.status 2>/dev/null || echo 1)
           test_status=$(cat ci-test.status 2>/dev/null || echo 1)
           e2e_status=$(cat ci-e2e.status 2>/dev/null || echo 1)
-          test "$install_status" = "0" && test "$validate_status" = "0" && test "$test_status" = "0" && test "$e2e_status" = "0"
+          full_status=$(cat ci-full.status 2>/dev/null || echo 1)
+          stale_status=$(cat ci-stale.status 2>/dev/null || echo 1)
+          test "$install_status" = "0" \
+            && test "$validate_status" = "0" \
+            && test "$test_status" = "0" \
+            && test "$e2e_status" = "0" \
+            && test "$full_status" = "0" \
+            && test "$stale_status" = "0"
