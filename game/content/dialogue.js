@@ -52,6 +52,15 @@ const dialogue = Object.freeze([
   line('orpheus.observation.b', 'direct', 'observation', guest, { all: [{ publicFact: 'main1Completed' }, { roleFact: 'rapportCount2' }, { entryOpened: 'doc.b_incident_report' }] }, [
     'ECHO：那份報告的附件版本比主索引晚了一次更新。'
   ], { verificationEntries: [{ entryId: 'audio.original_incident_timestamp', sourceGroup: 'raw_audio' }] }),
+  line('echo.behavior.protocol_recheck', 'direct', 'observation', host, {
+    all: [
+      { publicFact: 'main1Completed' },
+      { entryOpenedTimes: { entryId: 'archive.protocol_versions', atLeast: 3 } },
+      { reactionFactMissing: 'echo.behavior.protocol_recheck' }
+    ]
+  }, [
+    'ECHO：第三次了。你不是在找新內容，而是在確認我有沒有漏掉什麼。保留這個習慣。'
+  ]),
   line('echo.protocol_versions.a', 'direct', 'observation', host, { all: [{ publicFact: 'main1Completed' }, { entryOpened: 'archive.protocol_versions' }] }, [
     'ECHO：你找到的是合作驗證規章的修訂紀錄。1.4 以前的版本還在；如果要知道現在的規則改過什麼，請自己比對。'
   ]),
