@@ -1,6 +1,7 @@
 const MODES = new Set(['websocket', 'polling', 'resyncing']);
 const BASE_DELAY = 1200;
 const MAX_DELAY = 10000;
+const HEARTBEAT_MS = 15_000;
 
 class StateValidationError extends TypeError {
   constructor() {
@@ -116,6 +117,7 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
   let socket;
   let pollTimer;
   let reconnectTimer;
+  let heartbeatTimer;
   let pollDelay = BASE_DELAY;
   let reconnectDelay = BASE_DELAY;
   let resyncPromise;
@@ -137,6 +139,11 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
   function clearReconnectTimer() {
     if (reconnectTimer) window.clearTimeout(reconnectTimer);
     reconnectTimer = undefined;
+  }
+
+  function clearHeartbeatTimer() {
+    if (heartbeatTimer) window.clearTimeout(heartbeatTimer);
+    heartbeatTimer = undefined;
   }
 
   function emitSnapshot(response) {
@@ -190,7 +197,18 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
     if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(frame));
   }
 
+  function scheduleHeartbeat() {
+    if (stopped || mode !== 'websocket' || heartbeatTimer) return;
+    heartbeatTimer = window.setTimeout(() => {
+      heartbeatTimer = undefined;
+      if (stopped || mode !== 'websocket' || socket?.readyState !== WebSocket.OPEN) return;
+      send({ type: 'heartbeat', cursor });
+      scheduleHeartbeat();
+    }, HEARTBEAT_MS);
+  }
+
   function discardSocket() {
+    clearHeartbeatTimer();
     const staleSocket = socket;
     socket = undefined;
     generation += 1;
@@ -239,6 +257,7 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
 
   function enterPolling() {
     if (stopped) return;
+    clearHeartbeatTimer();
     clearPollTimer();
     setMode('polling');
     onStatus('lost');
@@ -249,6 +268,7 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
 
   function resync(initial = false) {
     if (resyncPromise) return resyncPromise;
+    clearHeartbeatTimer();
     setMode('resyncing');
     clearPollTimer();
     generation += 1;
@@ -264,6 +284,7 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
           generation += 1;
           setMode('websocket');
           send({ type: 'resume', cursor });
+          scheduleHeartbeat();
           onStatus('ready');
         } else if (!initial) {
           enterPolling();
@@ -330,6 +351,7 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
       if (resyncPromise || stateFlight?.kind === 'snapshot') {
         clearPollTimer();
         clearReconnectTimer();
+        clearHeartbeatTimer();
         setMode('resyncing');
         return;
       }
@@ -340,6 +362,7 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
       pollDelay = reconnectDelay = BASE_DELAY;
       setMode('websocket');
       send({ type: 'resume', cursor });
+      scheduleHeartbeat();
       onStatus('ready');
     });
     candidate.addEventListener('message', event => {
@@ -368,6 +391,7 @@ export function createLiveTransport({ roomCode, onSnapshot, onCountdown, onStatu
     },
     stop() {
       stopped = true;
+      clearHeartbeatTimer();
       clearPollTimer();
       clearReconnectTimer();
       stateFlight?.controller.abort();
