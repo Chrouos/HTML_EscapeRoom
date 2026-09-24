@@ -51,11 +51,16 @@ function nextFrame(socket, timeoutMs = 1500) {
   });
 }
 
-function makeIdleDue(code, role = 'A') {
-  const now = Date.now();
+function enableIdleNarrative(code) {
   app.locals.roomStore.transact(code, draft => {
     draft.publicFacts ??= [];
     if (!draft.publicFacts.includes('main1Completed')) draft.publicFacts.push('main1Completed');
+  }, { events: [] });
+}
+
+function makeIdleDue(code, role = 'A') {
+  const now = Date.now();
+  app.locals.roomStore.transact(code, draft => {
     const behavior = ensureNarrativeBehavior(draft, now);
     behavior.lastMeaningfulActionAt[role] = now - 61_000;
   }, { events: [] });
@@ -63,6 +68,7 @@ function makeIdleDue(code, role = 'A') {
 
 test('valid heartbeat emits one actor-private idle observation and strict frame shape rejects extras', async () => {
   const { a, b, code, base } = await roomPair();
+  enableIdleNarrative(code);
   const beforeA = await read(a, base);
   const beforeB = await read(b, base);
   makeIdleDue(code, 'A');
@@ -96,6 +102,7 @@ test('valid heartbeat emits one actor-private idle observation and strict frame 
 
 test('GET state acts as polling fallback for a due idle observation exactly once', async () => {
   const { a, b, code, base } = await roomPair();
+  enableIdleNarrative(code);
   const beforeA = await read(a, base);
   const beforeB = await read(b, base);
   makeIdleDue(code, 'A');
