@@ -177,6 +177,11 @@ function createLiveHub({ server, roomStore, allowedOrigins, now = () => Date.now
           socket.close(1008);
           return;
         }
+        const occupant = room.players?.[actor.role];
+        if (!occupant || occupant.playerId !== actor.playerId) {
+          socket.close(1008);
+          return;
+        }
         const currentTime = now();
         if (!shouldTriggerIdleObservation(room, actor.role, currentTime)) return;
         const events = [];

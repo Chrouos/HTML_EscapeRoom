@@ -463,7 +463,8 @@ function idleReactionIds(room, role, now = Date.now()) {
 
 function shouldTriggerIdleObservation(room, role, now = Date.now()) {
   const normalized = normalizeRole(role);
-  if (!normalized || room?.ending || !room?.publicFacts?.includes('main1Completed')) return false;
+  if (!normalized || !room?.players?.A || !room?.players?.B || room?.ending
+    || !room?.publicFacts?.includes('main1Completed')) return false;
   if (!Number.isFinite(now) || now < 0) return false;
   const behavior = ensureNarrativeBehavior(room, now);
   const lastMeaningful = Number(behavior.lastMeaningfulActionAt[normalized]);
