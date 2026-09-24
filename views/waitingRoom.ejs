@@ -34,6 +34,32 @@
         <% } %>
         <a href="/">回到大廳</a>
       </section>
+      <% if (!canJoin && state?.occupancy?.count === 1) { %>
+        <script>
+          (() => {
+            const roomCode = <%- JSON.stringify(roomCode) %>;
+            let stopped = false;
+            async function checkReady() {
+              if (stopped) return;
+              try {
+                const response = await fetch(`/api/rooms/${roomCode}/state`, { cache: 'no-store' });
+                if (response.ok) {
+                  const result = await response.json();
+                  if (result?.state?.occupancy?.ready) {
+                    window.location.reload();
+                    return;
+                  }
+                }
+              } catch {
+                // Waiting view is best-effort; the next poll retries silently.
+              }
+              window.setTimeout(checkReady, 700);
+            }
+            window.addEventListener('pagehide', () => { stopped = true; }, { once: true });
+            window.setTimeout(checkReady, 300);
+          })();
+        </script>
+      <% } %>
     <% } %>
   </main>
   <%- include('partials/footer') %>
