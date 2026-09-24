@@ -11,6 +11,7 @@ const {
   refreshPrivateMissions,
   missionForOperation,
   resolvePrivateMission,
+  recordNarrativeBehavior,
   triggerDialogue
 } = require('./privateEventEngine');
 
@@ -204,6 +205,7 @@ function submitOperation(room, player, action, pendingEvents = []) {
     return response;
   }
 
+  recordNarrativeBehavior(room, role, { meaningful: true }, Date.now());
   let outcome = OPERATION_OUTCOMES[action.operationId];
   if (failedAttempt) outcome = 'failed';
   if (mission && outcome) {
@@ -235,7 +237,7 @@ function submitOperation(room, player, action, pendingEvents = []) {
   triggerDialogue(room, {
     operationId: action.operationId,
     role,
-    ...(action.operationId === 'open_entry' ? { entryOpened: action.value, meaningful: true } : {})
+    ...(action.operationId === 'open_entry' ? { entryOpened: action.value } : {})
   }, pendingEvents);
   syncMainlineProjection(room);
   room.publicProgress = { ...(room.publicProgress || {}), chapter: room.chapter, mainProgress: [...room.mainProgress] };
@@ -282,6 +284,7 @@ function submitTerminalCommand(room, player, action, pendingEvents = []) {
   }
 
   const result = executeTerminalCommand(room, identity, action.value);
+  recordNarrativeBehavior(room, role, { meaningful: true }, Date.now());
   room.terminalActionResults ??= {};
   const generated = (result.publicEvents || []).map((event, index) => ({
     ...event,
@@ -337,6 +340,7 @@ function submitAction(room, player, action, pendingEvents = []) {
   }
   initializeGame(room, pendingEvents);
   prepare(room, puzzle);
+  recordNarrativeBehavior(room, role, { meaningful: true }, Date.now());
   if (isSide && action.stepId === 'inspect') {
     room.openedSides ??= [];
     if (room.openedSides.includes(action.puzzleId)) return noOp();
