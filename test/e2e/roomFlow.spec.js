@@ -1,5 +1,13 @@
 const { test, expect } = require('@playwright/test');
 
+function answerInput(page) {
+  return page.getByLabel('SECURE RESPONSE / 解鎖密碼');
+}
+
+function answerSubmit(page) {
+  return page.getByRole('button', { name: 'VERIFY RESPONSE', exact: true });
+}
+
 async function openAnswerGate(page, puzzleId, actionId) {
   const result = await page.evaluate(async ({ puzzleId, actionId }) => {
     const roomCode = document.querySelector('[data-game-room]').dataset.gameRoom;
@@ -11,7 +19,10 @@ async function openAnswerGate(page, puzzleId, actionId) {
   }, { puzzleId, actionId });
   expect(result.status).toBe(200);
   expect(result.body.success).toBe(true);
-  await expect(page.getByRole('button', { name: '送出', exact: true })).toBeEnabled();
+  const requestApp = page.getByRole('button', { name: 'Request', exact: true });
+  await expect(requestApp).toBeEnabled();
+  await requestApp.click();
+  await expect(answerSubmit(page)).toBeEnabled();
 }
 
 test('two browsers exchange clues, solve initialization and recover on refresh', async ({ browser }) => {
@@ -39,14 +50,14 @@ test('two browsers exchange clues, solve initialization and recover on refresh',
 
     await openAnswerGate(a, 'main1', 'room-flow-open-a-main1');
     await openAnswerGate(b, 'main1', 'room-flow-open-b-main1');
-    await b.getByLabel('提交答案').fill('old identity draft');
-    await a.getByLabel('提交答案').fill('ORPHEUS-17');
-    await a.getByRole('button', { name: '送出', exact: true }).click();
+    await answerInput(b).fill('old identity draft');
+    await answerInput(a).fill('ORPHEUS-17');
+    await answerSubmit(a).click();
     await expect(b.locator('[data-prompt]')).toContainText('啟動');
-    await expect(b.getByLabel('提交答案')).toHaveValue('');
-    await expect(b.getByRole('button', { name: '送出', exact: true })).toBeEnabled();
-    await b.getByLabel('提交答案').fill('AUX CORE EMERGENCY');
-    await b.getByRole('button', { name: '送出', exact: true }).click();
+    await expect(answerInput(b)).toHaveValue('');
+    await expect(answerSubmit(b)).toBeEnabled();
+    await answerInput(b).fill('AUX CORE EMERGENCY');
+    await answerSubmit(b).click();
     await expect(b.getByRole('log')).toContainText('電力');
     await a.reload();
     await expect(a.getByRole('log')).toContainText('電力');
