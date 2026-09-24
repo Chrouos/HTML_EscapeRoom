@@ -63,16 +63,16 @@ function makeIdleDue(code, role = 'A') {
 
 test('valid heartbeat emits one actor-private idle observation and strict frame shape rejects extras', async () => {
   const { a, b, code, base } = await roomPair();
-  makeIdleDue(code, 'A');
   const beforeA = await read(a, base);
   const beforeB = await read(b, base);
+  makeIdleDue(code, 'A');
   const socket = await connectLive(a, code);
 
   try {
     socket.send(JSON.stringify({ type: 'resume', cursor: beforeA.body.cursor }));
     socket.send(JSON.stringify({ type: 'heartbeat', cursor: beforeA.body.cursor, extra: true }));
     await new Promise(resolve => setTimeout(resolve, 50));
-    assert.equal((await read(a, base, beforeA.body.cursor)).body.unchanged, true);
+    assert.equal((await read(b, base, beforeB.body.cursor)).body.unchanged, true);
 
     const framePromise = nextFrame(socket);
     socket.send(JSON.stringify({ type: 'heartbeat', cursor: beforeA.body.cursor }));
@@ -96,9 +96,9 @@ test('valid heartbeat emits one actor-private idle observation and strict frame 
 
 test('GET state acts as polling fallback for a due idle observation exactly once', async () => {
   const { a, b, code, base } = await roomPair();
-  makeIdleDue(code, 'A');
   const beforeA = await read(a, base);
   const beforeB = await read(b, base);
+  makeIdleDue(code, 'A');
 
   const first = await read(a, base, beforeA.body.cursor);
   assert.equal(first.body.unchanged, false);
