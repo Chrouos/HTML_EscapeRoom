@@ -71,10 +71,11 @@ test('both players commit neutrally and the server resolves one immutable ending
 
     const second = await commitFinale(b, 'e2e-final-b');
     expect(second.publicResult.endingId).toBe('ambiguous_containment');
-    await expect(a.locator('[data-ending]')).toContainText('不明收容');
+    await expect(a.locator('[data-ending]')).toContainText('判定權仍有缺口');
     await b.reload();
-    await expect(b.locator('[data-ending]')).toContainText('不明收容');
-    await expect(a.locator('[data-ending]')).toContainText('Recorded decision');
+    await expect(b.locator('[data-ending]')).toContainText('判定權仍有缺口');
+    await expect(a.locator('[data-ending]')).toContainText(/ECHO|證據|判定/);
+    await expect(a.locator('[data-ending]')).not.toContainText('Recorded decision');
   } finally {
     await aContext.close();
     await bContext.close();
