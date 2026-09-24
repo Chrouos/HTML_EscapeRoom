@@ -6,15 +6,10 @@ on:
       - 'feat/reactive-narrative-reveal-*'
   workflow_dispatch:
 
-# Only the newest verification for a branch is useful. When another commit is
-# pushed, cancel the older queued/running job instead of letting it finish later
-# and send a stale failure notification.
 concurrency:
   group: reactive-narrative-ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Keep manual dispatch available after one-shot authoring patches so the latest
-# branch head can always receive a fresh verification run.
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -44,7 +39,7 @@ jobs:
           cat ci-validate.log
           echo "$status" > ci-validate.status
           exit 0
-      - name: Run tests
+      - name: Run unit and integration tests
         if: steps.install.outputs.status == '0'
         shell: bash
         run: |
@@ -60,12 +55,12 @@ jobs:
       - name: Install Chromium
         if: steps.install.outputs.status == '0'
         run: npx playwright install --with-deps chromium
-      - name: Verify private narrative privacy in browser
+      - name: Run full Playwright suite
         if: steps.install.outputs.status == '0'
         shell: bash
         run: |
           set +e
-          npx playwright test test/e2e/privateNarrative.spec.js > ci-e2e.log 2>&1
+          npx playwright test > ci-e2e.log 2>&1
           status=$?
           cat ci-e2e.log
           echo "$status" > ci-e2e.status
