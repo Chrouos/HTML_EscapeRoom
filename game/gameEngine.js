@@ -187,7 +187,22 @@ function submitOperation(room, player, action, pendingEvents = []) {
     && /^(failed|invalid|error)$/i.test(action.value.trim());
   const result = executeOperation(room, typeof player === 'object' ? player : { role }, action.operationId, action.value,
     { skipEffects: Boolean(failedAttempt) });
-  if (!result.stateChanged) return result;
+  if (!result.stateChanged) {
+    if (action.operationId !== 'open_entry') return result;
+    triggerDialogue(room, {
+      operationId: action.operationId,
+      role,
+      entryOpened: action.value,
+      meaningful: true
+    }, pendingEvents);
+    const response = {
+      stateChanged: true,
+      events: pendingEvents,
+      publicResult: { operationId: action.operationId, narrativeOnly: true }
+    };
+    room.operationActionResults[key] = structuredClone(response);
+    return response;
+  }
 
   let outcome = OPERATION_OUTCOMES[action.operationId];
   if (failedAttempt) outcome = 'failed';
@@ -220,7 +235,7 @@ function submitOperation(room, player, action, pendingEvents = []) {
   triggerDialogue(room, {
     operationId: action.operationId,
     role,
-    ...(action.operationId === 'open_entry' ? { entryOpened: action.value } : {})
+    ...(action.operationId === 'open_entry' ? { entryOpened: action.value, meaningful: true } : {})
   }, pendingEvents);
   syncMainlineProjection(room);
   room.publicProgress = { ...(room.publicProgress || {}), chapter: room.chapter, mainProgress: [...room.mainProgress] };
