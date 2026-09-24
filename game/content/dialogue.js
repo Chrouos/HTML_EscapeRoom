@@ -16,6 +16,38 @@ function line(id, channel, intent, audience, unlockWhen, variants, options = {})
   };
 }
 
+const cooperationWhen = reactionId => ({
+  all: [
+    { publicFact: 'main1Completed' },
+    {
+      any: [
+        { actionAttempted: 'share_roster' },
+        { actionAttempted: 'share_mirror_first' },
+        { actionAttempted: 'warn_partner_first' },
+        { actionAttempted: 'request_pair_validation' },
+        { actionAttempted: 'disclose_report' }
+      ]
+    },
+    { reactionFactMissing: reactionId }
+  ]
+});
+
+const soloWhen = reactionId => ({
+  all: [
+    { publicFact: 'main1Completed' },
+    { actionAttempted: 'request_solo_validation' },
+    { reactionFactMissing: reactionId }
+  ]
+});
+
+const rejectFrameWhen = reactionId => ({
+  all: [
+    { publicFact: 'main4Completed' },
+    { actionAttempted: 'pair_validate_protocol' },
+    { reactionFactMissing: reactionId }
+  ]
+});
+
 const dialogue = Object.freeze([
   line('orpheus.boot', 'broadcast', 'system', both, { publicFact: 'roomCreated' }, [
     'ORPHEUS：連線已建立。你們需要互相交換看到的資訊，才能完成校驗。'
@@ -61,6 +93,30 @@ const dialogue = Object.freeze([
   }, [
     'ECHO：第三次了。你不是在找新內容，而是在確認我有沒有漏掉什麼。保留這個習慣。'
   ]),
+  line('echo.behavior.cooperation.a', 'direct', 'observation', host,
+    cooperationWhen('echo.behavior.cooperation.a'), [
+      'ECHO：你把原本只留在單一終端的資訊帶回共同路徑。這不是最快的做法，但它保留了讓夥伴一起判斷的可能。'
+    ]),
+  line('echo.behavior.cooperation.b', 'direct', 'observation', guest,
+    cooperationWhen('echo.behavior.cooperation.b'), [
+      'ECHO：你把原本只留在單一終端的資訊帶回共同路徑。這不是最快的做法，但它保留了讓夥伴一起判斷的可能。'
+    ]),
+  line('echo.behavior.solo.a', 'direct', 'observation', host,
+    soloWhen('echo.behavior.solo.a'), [
+      'ECHO：你保留了個人存續路徑。從存續角度看，這是可解釋的選擇；我只記錄，不替你辯護。'
+    ]),
+  line('echo.behavior.solo.b', 'direct', 'observation', guest,
+    soloWhen('echo.behavior.solo.b'), [
+      'ECHO：你保留了個人存續路徑。從存續角度看，這是可解釋的選擇；我只記錄，不替你辯護。'
+    ]),
+  line('echo.behavior.reject_frame.a', 'direct', 'observation', host,
+    rejectFrameWhen('echo.behavior.reject_frame.a'), [
+      'ECHO：你看見了較短的個人路徑，卻回去做共同覆核。這也是一個選擇：你沒有接受我替你定義的框架。'
+    ]),
+  line('echo.behavior.reject_frame.b', 'direct', 'observation', guest,
+    rejectFrameWhen('echo.behavior.reject_frame.b'), [
+      'ECHO：你看見了較短的個人路徑，卻回去做共同覆核。這也是一個選擇：你沒有接受我替你定義的框架。'
+    ]),
   line('echo.protocol_versions.a', 'direct', 'observation', host, { all: [{ publicFact: 'main1Completed' }, { entryOpened: 'archive.protocol_versions' }] }, [
     'ECHO：你找到的是合作驗證規章的修訂紀錄。1.4 以前的版本還在；如果要知道現在的規則改過什麼，請自己比對。'
   ]),
