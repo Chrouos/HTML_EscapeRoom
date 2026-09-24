@@ -2,13 +2,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { createRoomState } = require('../../game/createRoomState');
+const { ensureNarrativeBehavior } = require('../../game/privateEventEngine');
 const {
   IDLE_THRESHOLD_MS,
   IDLE_COOLDOWN_MS,
-  ensureNarrativeBehavior,
   shouldTriggerIdleObservation,
   triggerIdleObservation
-} = require('../../game/privateEventEngine');
+} = require('../../game/idleNarrative');
 
 function readyRoom() {
   const room = createRoomState('ROOM-IDLE', 1000);
