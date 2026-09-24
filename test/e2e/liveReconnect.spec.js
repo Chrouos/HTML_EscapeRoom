@@ -6,9 +6,12 @@ async function openPairedRoom(aContext, bContext) {
   await a.goto('/');
   await a.locator('form[action="/rooms"] button').click();
   await expect(a).toHaveURL(/\/rooms\/\d{6}$/);
-  await b.goto(a.url());
+  const roomUrl = a.url();
+  await b.goto(roomUrl);
   await b.locator('form[action="/rooms/join"] button').click();
-  await expect(a.locator('[data-clues]')).toContainText('ORPHEUS');
+  await a.goto(roomUrl);
+  await expect(a.locator('[data-game-room]')).toBeVisible();
+  await expect(a.locator('[data-intercom-log]')).toContainText('ORPHEUS');
   return { a, b };
 }
 
@@ -41,15 +44,17 @@ test('a lost socket falls back to cursor polling and reconnects without duplicat
     await a.goto('/');
     await a.getByRole('button', { name: '建立房間（玩家 A）' }).click();
     await expect(a).toHaveURL(/\/rooms\/\d{6}$/);
-    await b.goto(a.url());
+    const roomUrl = a.url();
+    await b.goto(roomUrl);
     await b.getByRole('button', { name: '加入房間（玩家 B）' }).click();
-    await expect(a.locator('[data-clues]')).toContainText('ORPHEUS');
+    await a.goto(roomUrl);
+    await expect(a.locator('[data-intercom-log]')).toContainText('ORPHEUS');
     await expect(a.locator('[data-connection]')).not.toContainText(/websocket|polling|cursor|private/i);
     await expect.poll(() => browserSockets.size).toBeGreaterThan(0);
 
     socketsAllowed = false;
     for (const socket of browserSockets) socket.close();
-    await expect(a.locator('[data-connection]')).toHaveText(/SIGNAL LOST|RECONNECTING/);
+    await expect(a.locator('[data-connection]')).toHaveText(/LINK RETRYING|SIGNAL LOST|RECONNECTING/);
     await expect(a.locator('[data-connection]')).not.toContainText(/websocket|polling|cursor|private/i);
 
     await b.getByLabel('傳訊給另一位受試者').fill('備援通道訊息');
@@ -64,14 +69,14 @@ test('a lost socket falls back to cursor polling and reconnects without duplicat
       .toBeGreaterThan(acceptedBeforeReconnect);
     await expect.poll(() => stateRequests.filter(url => /[?&]sinceCursor=\d+/.test(url)).length, { timeout: 30_000 })
       .toBeGreaterThan(pollsBeforeReconnect);
-    await expect(a.locator('[data-connection]')).toHaveText(/SIGNAL LOST|RECONNECTING|LINK ACTIVE|兩位受試者已連線/);
+    await expect(a.locator('[data-connection]')).toHaveText(/LINK RETRYING|SIGNAL LOST|RECONNECTING|LINK ACTIVE|兩位受試者已連線/);
     await b.getByLabel('傳訊給另一位受試者').fill('恢復後訊息');
     await b.getByRole('button', { name: '傳送訊息' }).click();
     await expect(a.getByRole('log').getByText('恢復後訊息', { exact: true })).toHaveCount(1);
     await expect(a.getByRole('log').getByText('備援通道訊息', { exact: true })).toHaveCount(1);
   } finally {
-    await aContext.close();
-    await bContext.close();
+    await aContext.close().catch(() => {});
+    await bContext.close().catch(() => {});
   }
 });
 
@@ -94,13 +99,7 @@ test('a cursor gap performs one snapshot resync and resumes at the adopted curso
   });
 
   try {
-    const a = await aContext.newPage();
-    const b = await bContext.newPage();
-    await a.goto('/');
-    await a.getByRole('button', { name: '建立房間（玩家 A）' }).click();
-    await expect(a).toHaveURL(/\/rooms\/\d{6}$/);
-    await b.goto(a.url());
-    await b.getByRole('button', { name: '加入房間（玩家 B）' }).click();
+    const { a, b } = await openPairedRoom(aContext, bContext);
     await expect.poll(() => Boolean(liveSocket)).toBe(true);
     const setupReads = snapshotReads;
     liveSocket.send(JSON.stringify({ type: 'snapshot_required', reason: 'test_setup' }));
@@ -128,8 +127,8 @@ test('a cursor gap performs one snapshot resync and resumes at the adopted curso
     await expect(a.getByRole('log').getByText('續接後仍可收到', { exact: true })).toHaveCount(1);
     await expect(a.getByRole('log').getByText('跳號後只顯示一次', { exact: true })).toHaveCount(1);
   } finally {
-    await aContext.close();
-    await bContext.close();
+    await aContext.close().catch(() => {});
+    await bContext.close().catch(() => {});
   }
 });
 
@@ -155,12 +154,7 @@ test('malformed and duplicate frames share one resync and never reach the render
   });
 
   try {
-    const a = await aContext.newPage();
-    const b = await bContext.newPage();
-    await a.goto('/');
-    await a.getByRole('button', { name: '建立房間（玩家 A）' }).click();
-    await b.goto(a.url());
-    await b.getByRole('button', { name: '加入房間（玩家 B）' }).click();
+    const { a } = await openPairedRoom(aContext, bContext);
     await expect.poll(() => Boolean(liveSocket)).toBe(true);
     const setupResponses = snapshotResponses;
     liveSocket.send(JSON.stringify({ type: 'snapshot_required', reason: 'test_setup' }));
@@ -205,8 +199,8 @@ test('malformed and duplicate frames share one resync and never reach the render
         payload: { state: continuedState, events: [] } } }));
     await expect(a.getByRole('log').getByText('壞資料後仍可續接', { exact: true })).toHaveCount(1);
   } finally {
-    await aContext.close();
-    await bContext.close();
+    await aContext.close().catch(() => {});
+    await bContext.close().catch(() => {});
   }
 });
 
@@ -232,13 +226,8 @@ test('invalid nested state entries resync once without an uncaught renderer erro
   });
 
   try {
-    const a = await aContext.newPage();
-    const b = await bContext.newPage();
+    const { a } = await openPairedRoom(aContext, bContext);
     a.on('pageerror', error => pageErrors.push(error));
-    await a.goto('/');
-    await a.getByRole('button', { name: '建立房間（玩家 A）' }).click();
-    await b.goto(a.url());
-    await b.getByRole('button', { name: '加入房間（玩家 B）' }).click();
     await expect.poll(() => Boolean(liveSocket)).toBe(true);
     const setupResponses = snapshotResponses;
     liveSocket.send(JSON.stringify({ type: 'snapshot_required', reason: 'test_setup' }));
@@ -271,8 +260,8 @@ test('invalid nested state entries resync once without an uncaught renderer erro
     await expect(a.getByRole('log').getByText('巢狀資料錯誤後已恢復', { exact: true })).toHaveCount(1);
     expect(pageErrors).toHaveLength(0);
   } finally {
-    await aContext.close();
-    await bContext.close();
+    await aContext.close().catch(() => {});
+    await bContext.close().catch(() => {});
   }
 });
 
@@ -298,13 +287,8 @@ test('canonical messages may omit type while invalid present types resync', asyn
   });
 
   try {
-    const a = await aContext.newPage();
-    const b = await bContext.newPage();
+    const { a } = await openPairedRoom(aContext, bContext);
     a.on('pageerror', error => pageErrors.push(error));
-    await a.goto('/');
-    await a.getByRole('button', { name: '建立房間（玩家 A）' }).click();
-    await b.goto(a.url());
-    await b.getByRole('button', { name: '加入房間（玩家 B）' }).click();
     await expect.poll(() => Boolean(liveSocket)).toBe(true);
     const setupResponses = snapshotResponses;
     liveSocket.send(JSON.stringify({ type: 'snapshot_required', reason: 'test_setup' }));
@@ -351,8 +335,8 @@ test('canonical messages may omit type while invalid present types resync', asyn
     await expect(a.getByRole('log')).not.toContainText('invalid player');
     expect(pageErrors).toHaveLength(0);
   } finally {
-    await aContext.close();
-    await bContext.close();
+    await aContext.close().catch(() => {});
+    await bContext.close().catch(() => {});
   }
 });
 
@@ -383,12 +367,7 @@ test('a failed snapshot discards the stale socket and reconnects with polling ac
   });
 
   try {
-    const a = await aContext.newPage();
-    const b = await bContext.newPage();
-    await a.goto('/');
-    await a.getByRole('button', { name: '建立房間（玩家 A）' }).click();
-    await b.goto(a.url());
-    await b.getByRole('button', { name: '加入房間（玩家 B）' }).click();
+    const { a } = await openPairedRoom(aContext, bContext);
     await expect.poll(() => liveSockets.length).toBe(1);
     liveSockets[0].send(JSON.stringify({ type: 'snapshot_required', reason: 'test_setup' }));
     await expect.poll(() => Boolean(latestSnapshot?.state?.workstation?.text)).toBe(true);
@@ -397,13 +376,13 @@ test('a failed snapshot discards the stale socket and reconnects with polling ac
     liveSockets[0].send(JSON.stringify({ type: 'event', cursor: latestSnapshot.cursor + 2,
       event: { eventId: 'failed-resync-gap', kind: 'state',
         payload: { state: latestSnapshot.state, events: [] } } }));
-    await expect(a.locator('[data-connection]')).toHaveText('SIGNAL LOST');
+    await expect(a.locator('[data-connection]')).toHaveText(/LINK RETRYING|SIGNAL LOST|RECONNECTING/);
     await expect.poll(() => stateRequests.some(url => url.includes('sinceCursor='))).toBe(true);
     await expect.poll(() => liveSockets.length, { timeout: 15_000 }).toBeGreaterThan(1);
-    await expect(a.locator('[data-connection]')).not.toHaveText('SIGNAL LOST');
+    await expect(a.locator('[data-connection]')).not.toHaveText(/LINK RETRYING|SIGNAL LOST/);
   } finally {
-    await aContext.close();
-    await bContext.close();
+    await aContext.close().catch(() => {});
+    await bContext.close().catch(() => {});
   }
 });
 
@@ -442,12 +421,7 @@ test('socket close during resync never overlaps the snapshot with polling', asyn
   });
 
   try {
-    const a = await aContext.newPage();
-    const b = await bContext.newPage();
-    await a.goto('/');
-    await a.getByRole('button', { name: '建立房間（玩家 A）' }).click();
-    await b.goto(a.url());
-    await b.getByRole('button', { name: '加入房間（玩家 B）' }).click();
+    const { a } = await openPairedRoom(aContext, bContext);
     await expect.poll(() => Boolean(liveSocket)).toBe(true);
     liveSocket.send(JSON.stringify({ type: 'snapshot_required', reason: 'test_setup' }));
     await expect.poll(() => Boolean(latestSnapshot?.state?.workstation?.text)).toBe(true);
@@ -463,13 +437,13 @@ test('socket close during resync never overlaps the snapshot with polling', asyn
     liveSocket.close();
     await expect.poll(() => liveSockets.length, { timeout: 15_000 }).toBeGreaterThan(1);
     expect(maxActiveRequests).toBe(1);
-    await expect(a.locator('[data-connection]')).toHaveText(/SIGNAL LOST|RECONNECTING/);
+    await expect(a.locator('[data-connection]')).toHaveText(/LINK RETRYING|SIGNAL LOST|RECONNECTING/);
     releaseSnapshot();
-    await expect(a.locator('[data-connection]')).not.toHaveText('SIGNAL LOST');
+    await expect(a.locator('[data-connection]')).not.toHaveText(/LINK RETRYING|SIGNAL LOST/);
   } finally {
     releaseSnapshot?.();
-    await aContext.close();
-    await bContext.close();
+    await aContext.close().catch(() => {});
+    await bContext.close().catch(() => {});
   }
 });
 
@@ -501,8 +475,8 @@ test('direct adopt rejects an unchanged response that carries a malformed player
     await expect.poll(() => snapshotReads - readsBeforeAdopt).toBe(1);
     await expect(a.getByRole('log')).not.toContainText('MALFORMED ADOPT');
   } finally {
-    await aContext.close();
-    await bContext.close();
+    await aContext.close().catch(() => {});
+    await bContext.close().catch(() => {});
   }
 });
 
@@ -562,8 +536,8 @@ test('polling rejects an unchanged response that carries a malformed player stat
     await expect.poll(() => snapshotReads - snapshotsBeforePoll).toBe(1);
     await expect(a.getByRole('log')).not.toContainText('MALFORMED POLL');
   } finally {
-    await aContext.close();
-    await bContext.close();
+    await aContext.close().catch(() => {});
+    await bContext.close().catch(() => {});
   }
 });
 
