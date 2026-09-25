@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a development/test-only, read-only ORPHEUS Story Map that derives the existing game content into a human-readable A/B/shared/ECHO reveal flow with diagnostics and technical drill-down.
+**Goal:** Build a development/test-only, read-only ORPHEUS Story Map that turns the existing game content into a human-readable A/B/shared/ECHO reveal flow with structural diagnostics and optional technical drill-down.
 
-**Architecture:** A pure server-side adapter derives a technical graph from canonical content, a presentation layer collapses implementation-only facts into human story nodes, and a diagnostics layer reports structural problems without mutating game state. Express exposes the resulting model only outside production; an EJS + vanilla JavaScript + SVG viewer renders deterministic reveal-stage columns and A/B/shared/ECHO swimlanes.
+**Architecture:** A pure server-side adapter derives a canonical technical graph from the current content modules. A presentation layer collapses facts/gates into story-language nodes and edges, while a separate diagnostics layer reports structural issues. Express exposes the model only outside production; EJS + vanilla JavaScript + SVG render deterministic reveal-stage columns and A/B/shared/ECHO swimlanes.
 
 **Tech Stack:** Node.js >=20, CommonJS, Express 4, EJS, vanilla JavaScript, SVG, CSS, `node:test`, `node:assert/strict`, Playwright 1.63. No new graph dependency.
 
@@ -12,97 +12,86 @@
 
 ## Global Constraints
 
-- The existing game content remains the only gameplay source of truth.
-- The viewer is read-only and must never mutate content modules, room state, ending state, or player-visible gameplay behavior.
-- Default presentation is human story language; canonical IDs and predicates are secondary technical details.
-- Author routes return 404 when `app.get('env') === 'production'`.
-- V1 uses EJS, CSS, vanilla JavaScript, and SVG; do not add Cytoscape, D3, Mermaid, Graphviz, or another graph library.
-- Do not duplicate `game/endingEngine.js` ending precedence or encode a second ending-condition table.
-- Do not infer gameplay logic by scraping prose.
-- Complex `all` / `any` / `not` predicates must preserve the same semantics already used by `game/content/contentSchema.js`.
-- The existing `npm run check` suite must continue to pass.
+- Existing game content is the only gameplay source of truth.
+- Graph generation is pure/read-only and must not mutate content modules, room state, ending state, or player-visible behavior.
+- Default presentation uses story language; canonical IDs, predicates, facts, and raw source references are secondary technical details.
+- `GET /author/reveal-graph` and `GET /author/api/reveal-graph` return 404 when `app.get('env') === 'production'`.
+- V1 uses EJS, CSS, vanilla JavaScript, and SVG; do not add Cytoscape, D3, Mermaid, Graphviz, or another graph dependency.
+- Do not duplicate `game/endingEngine.js` precedence or maintain a second ending-condition table.
+- Do not scrape prose to infer gameplay logic.
+- `all` / `any` / `not` and leaf predicates use the same semantics already accepted by `game/content/contentSchema.js`.
+- Exact ending resolution remains labeled `runtime-calculated`.
+- The existing `npm run check` suite must remain green.
 
 ## Review Focus
 
-- Deeply nested predicates and one-time reaction guards must remain inspectable without creating misleading visible story nodes; Task 1 pins nested `all`/`any`/`not` behavior.
-- Missing presentation metadata must fall back to deterministic readable labels instead of blank cards or crashes; Task 2 pins fallback behavior.
-- Private A/B dependencies must not be reported as leaks when an explicit sharing action returns information to the shared path; Task 3 pins both the true-positive and allowed-sharing cases.
-- Production must not expose either HTML or JSON author endpoints even though the router is mounted in the app; Task 4 pins both routes to 404 in production mode.
-- A sparse or malformed graph response must leave the viewer usable and show a human-readable partial-data message rather than throwing client-side; Task 5 pins empty/partial rendering and Task 6 verifies it in-browser.
+- Deeply nested predicates and one-time guards: preserve semantics without exposing noisy fact/gate nodes in the default UI; Task 1 tests nested `all`/`any`/`not` and reaction guards.
+- Missing presentation metadata: fall back to a deterministic readable label rather than blank cards or crashes; Task 2 tests fallback behavior.
+- A/B privacy boundaries: true leaks must warn, while explicit share actions must not create false positives; Task 3 tests both cases.
+- Production isolation: both author endpoints must be unreachable even though the router is mounted; Task 4 tests both routes at 404.
+- Sparse/malformed graph data: keep the author page usable and show a human-readable partial-data state; Tasks 4 and 5 test server and browser fallbacks.
 
 ---
 
 ## File Structure
 
-Create focused modules with one responsibility each:
-
 ```text
 game/authoring/storyGraph.js
-  Canonical technical graph derivation. No UI labels beyond deterministic identity fields.
+  Canonical technical graph derivation from content modules.
 
 game/authoring/storyGraphPresentation.js
-  Human labels, story categories, reveal stages, swimlane assignment, and simple-view edge collapsing.
+  Story labels, reveal stages, swimlanes, hidden technical-node collapse.
 
 game/authoring/storyGraphMetadata.js
-  Presentation-only overrides. No gameplay conditions or ending precedence.
+  Presentation-only authored labels/summaries/stage overrides.
 
 game/authoring/storyGraphDiagnostics.js
-  Static graph checks and human-readable diagnostic messages.
+  Structural checks and human-first diagnostic messages.
 
 routes/authorRoutes.js
-  Development/test-only Story Map page and graph JSON routes.
+  Development/test-only HTML + JSON routes.
 
 views/author/revealGraph.ejs
-  Page shell and accessible controls.
+  Accessible page shell and controls.
 
 public/js/authorRevealGraph.js
-  Fetch model, apply filters, deterministic SVG layout, inspector, technical-details toggle, diagnostic focus.
+  Model loading, filtering, SVG layout, inspector, diagnostic focus.
 
 public/css/authorRevealGraph.css
-  Readable story-map layout and responsive author-tool styling.
+  Readable Story Map layout.
 
 test/unit/authorStoryGraph.test.js
-  Technical graph and presentation tests.
+  Technical graph + presentation behavior.
 
 test/unit/authorStoryGraphDiagnostics.test.js
-  Diagnostics tests.
+  Diagnostics behavior.
 
 test/integration/authorStoryGraphRoutes.test.js
-  Environment isolation and API/page contract tests.
+  Environment isolation + route/API fallback behavior.
 
 test/e2e/authorRevealGraph.spec.js
   Human-facing Story Map behavior.
 ```
 
-Modify:
-
-```text
-app.js
-  Mount the author router under `/author`.
-```
+Modify `app.js` only to mount `createAuthorRoutes()` before generic page/404 handling.
 
 ---
 
-### Task 1: Derive a canonical technical story graph
+### Task 1: Derive the canonical technical graph
 
 **Files:**
 - Create: `game/authoring/storyGraph.js`
 - Create: `test/unit/authorStoryGraph.test.js`
-- Read/consume: `game/content/contentSchema.js`
-- Read/consume: `game/content/terminalEntries.js`
-- Read/consume: `game/content/dialogue.js`
-- Read/consume: `game/content/operations.js`
-- Read/consume: `game/content/endings.js`
 
 **Interfaces:**
 - Consumes: `content` and `isPredicateShapeValid` from `game/content/contentSchema.js`, plus `endings` from `game/content/endings.js`.
-- Produces: `buildTechnicalStoryGraph({ contentBundle, endingCatalog }) -> { nodes, edges, stats }`.
-- Produces: `normalizePredicate(predicate, ownerId) -> { gates, edges }` for testable recursive predicate normalization.
-- Node IDs are namespaced: `fact:*`, `file:*`, `action:*`, `echo:*`, `gate:*`, `ending:*`.
+- Produces: `buildTechnicalStoryGraph({ contentBundle, endingCatalog }) -> { nodes, edges, stats, errors }`.
+- Produces: `normalizePredicate(predicate, ownerId, path?) -> { gates, edges, errors }`.
+- Namespaces: `fact:*`, `roleFact:*`, `file:*`, `action:*`, `echo:*`, `gate:*`, `completion:*`, `content:*`, `ending:*`, `reaction:*`, `idle:*`, `chapter:*`.
 
-- [ ] **Step 1: Write failing tests for namespaced nodes, effects, and simple predicates**
+- [ ] **Step 1: Write failing tests for canonical nodes, operation effects, and immutability**
 
-Add to `test/unit/authorStoryGraph.test.js`:
+Create `test/unit/authorStoryGraph.test.js`:
 
 ```js
 const test = require('node:test');
@@ -115,7 +104,7 @@ const {
   normalizePredicate
 } = require('../../game/authoring/storyGraph');
 
-test('builds namespaced file, action, echo, fact, and ending nodes', () => {
+test('builds namespaced story and internal nodes from canonical content', () => {
   const graph = buildTechnicalStoryGraph({ contentBundle: content, endingCatalog: endings });
   const ids = new Set(graph.nodes.map(node => node.id));
 
@@ -123,11 +112,11 @@ test('builds namespaced file, action, echo, fact, and ending nodes', () => {
   assert.ok(ids.has('action:complete_main5'));
   assert.ok(ids.has('echo:echo.behavior.protocol_recheck'));
   assert.ok(ids.has('fact:main5Completed'));
+  assert.ok(ids.has('roleFact:aRequestedSoloRoute'));
   assert.ok(ids.has('ending:cooperative_escape'));
 });
 
-test('operation effects create causal edges without mutating canonical content', () => {
-  const before = structuredClone(content.operations);
+test('maps every operation effect family into technical edges', () => {
   const graph = buildTechnicalStoryGraph({ contentBundle: content, endingCatalog: endings });
 
   assert.ok(graph.edges.some(edge =>
@@ -136,33 +125,35 @@ test('operation effects create causal edges without mutating canonical content',
       && edge.kind === 'PRODUCES'
   ));
   assert.ok(graph.edges.some(edge =>
+    edge.from === 'action:request_solo_validation'
+      && edge.to === 'roleFact:aRequestedSoloRoute'
+      && edge.kind === 'PRODUCES_PRIVATE'
+  ));
+  assert.ok(graph.edges.some(edge =>
     edge.from === 'action:complete_main5'
       && edge.to === 'file:log.a_partner_unknown_access'
       && edge.kind === 'UNLOCKS'
   ));
-  assert.deepEqual(content.operations, before);
+  assert.ok(graph.edges.some(edge =>
+    edge.from === 'action:complete_main5'
+      && edge.to === 'completion:main5Completed'
+      && edge.kind === 'COMPLETES'
+  ));
+  assert.ok(graph.edges.some(edge =>
+    edge.from === 'action:commit_finale'
+      && edge.to === 'content:neutral_finale'
+      && edge.kind === 'APPENDS'
+  ));
 });
 
-test('simple predicate points prerequisite state at its owner', () => {
-  const normalized = normalizePredicate(
-    { publicFact: 'main5Completed' },
-    'file:archive.history_timeline'
-  );
-
-  assert.deepEqual(normalized.gates, []);
-  assert.deepEqual(normalized.edges, [{
-    from: 'fact:main5Completed',
-    to: 'file:archive.history_timeline',
-    kind: 'REQUIRES',
-    polarity: 'positive',
-    detail: null
-  }]);
+test('graph generation does not mutate canonical content', () => {
+  const before = structuredClone(content);
+  buildTechnicalStoryGraph({ contentBundle: content, endingCatalog: endings });
+  assert.deepEqual(content, before);
 });
 ```
 
-- [ ] **Step 2: Run the focused unit test and verify the module is missing**
-
-Run:
+- [ ] **Step 2: Run the focused test and verify the module is missing**
 
 ```bash
 node --test test/unit/authorStoryGraph.test.js
@@ -170,61 +161,45 @@ node --test test/unit/authorStoryGraph.test.js
 
 Expected: FAIL because `game/authoring/storyGraph.js` does not exist.
 
-- [ ] **Step 3: Implement the minimal graph builder and leaf predicate normalizer**
+- [ ] **Step 3: Implement the minimal technical graph builder**
 
-Create `game/authoring/storyGraph.js` with these public shapes:
+Create `game/authoring/storyGraph.js` around these exact public functions:
 
 ```js
 const { isPredicateShapeValid } = require('../content/contentSchema');
 
-function namespacedPredicateNode(predicate) {
-  if (predicate.publicFact) return `fact:${predicate.publicFact}`;
-  if (predicate.roleFact) return `roleFact:${predicate.roleFact}`;
-  if (predicate.entryOpened) return `file:${predicate.entryOpened}`;
-  if (predicate.actionAttempted) return `action:${predicate.actionAttempted}`;
-  if (predicate.entryOpenedTimes) return `file:${predicate.entryOpenedTimes.entryId}`;
-  if (predicate.reactionFactMissing) return `reaction:${predicate.reactionFactMissing}`;
-  if (predicate.chapterAtLeast !== undefined) return `chapter:${predicate.chapterAtLeast}`;
-  if (predicate.elapsedSinceMeaningfulAction !== undefined) {
-    return `idle:${predicate.elapsedSinceMeaningfulAction}`;
-  }
-  return null;
+function addNode(map, node) {
+  if (!map.has(node.id)) map.set(node.id, node);
 }
 
-function normalizePredicate(predicate, ownerId, path = 'unlock') {
-  if (!isPredicateShapeValid(predicate)) {
-    return { gates: [], edges: [], errors: [{ code: 'INVALID_PREDICATE', ownerId, predicate }] };
-  }
+function effectNode(kind, value) {
+  const prefix = {
+    publicFacts: 'fact',
+    roleFacts: 'roleFact',
+    unlockEntryIds: 'file',
+    completeNodeIds: 'completion',
+    appendContentIds: 'content'
+  }[kind];
+  return `${prefix}:${value}`;
+}
 
-  const leaf = namespacedPredicateNode(predicate);
-  if (leaf) {
-    const detail = predicate.entryOpenedTimes
-      ? { atLeast: predicate.entryOpenedTimes.atLeast }
-      : predicate.elapsedSinceMeaningfulAction !== undefined
-        ? { milliseconds: predicate.elapsedSinceMeaningfulAction }
-        : null;
-    return {
-      gates: [],
-      edges: [{
-        from: leaf,
-        to: ownerId,
-        kind: 'REQUIRES',
-        polarity: predicate.reactionFactMissing ? 'negative' : 'positive',
-        detail
-      }],
-      errors: []
-    };
-  }
-
-  return { gates: [], edges: [], errors: [] };
+function effectEdgeKind(kind) {
+  return {
+    publicFacts: 'PRODUCES',
+    roleFacts: 'PRODUCES_PRIVATE',
+    unlockEntryIds: 'UNLOCKS',
+    completeNodeIds: 'COMPLETES',
+    appendContentIds: 'APPENDS'
+  }[kind];
 }
 
 function buildTechnicalStoryGraph({ contentBundle, endingCatalog }) {
-  const nodes = [];
+  const nodeMap = new Map();
   const edges = [];
+  const errors = [];
 
   for (const entry of contentBundle.terminalEntries || []) {
-    nodes.push({
+    addNode(nodeMap, {
       id: `file:${entry.id}`,
       refId: entry.id,
       technicalType: 'FILE',
@@ -235,24 +210,33 @@ function buildTechnicalStoryGraph({ contentBundle, endingCatalog }) {
   }
 
   for (const operation of contentBundle.operations || []) {
-    nodes.push({
-      id: `action:${operation.operationId}`,
+    const actionId = `action:${operation.operationId}`;
+    addNode(nodeMap, {
+      id: actionId,
       refId: operation.operationId,
       technicalType: 'ACTION',
       source: { module: 'game/content/operations.js' },
       raw: operation
     });
-    for (const fact of operation.effects?.publicFacts || []) {
-      nodes.push({ id: `fact:${fact}`, refId: fact, technicalType: 'FACT', audience: { kind: 'both' } });
-      edges.push({ from: `action:${operation.operationId}`, to: `fact:${fact}`, kind: 'PRODUCES' });
-    }
-    for (const entryId of operation.effects?.unlockEntryIds || []) {
-      edges.push({ from: `action:${operation.operationId}`, to: `file:${entryId}`, kind: 'UNLOCKS' });
+
+    for (const effectKind of ['publicFacts', 'roleFacts', 'unlockEntryIds', 'completeNodeIds', 'appendContentIds']) {
+      for (const value of operation.effects?.[effectKind] || []) {
+        const target = effectNode(effectKind, value);
+        const technicalType = {
+          publicFacts: 'FACT',
+          roleFacts: 'ROLE_FACT',
+          unlockEntryIds: 'FILE',
+          completeNodeIds: 'COMPLETION',
+          appendContentIds: 'CONTENT'
+        }[effectKind];
+        addNode(nodeMap, { id: target, refId: value, technicalType });
+        edges.push({ from: actionId, to: target, kind: effectEdgeKind(effectKind), polarity: 'positive', detail: null });
+      }
     }
   }
 
   for (const line of contentBundle.dialogue || []) {
-    nodes.push({
+    addNode(nodeMap, {
       id: `echo:${line.id}`,
       refId: line.id,
       technicalType: 'ECHO',
@@ -263,7 +247,7 @@ function buildTechnicalStoryGraph({ contentBundle, endingCatalog }) {
   }
 
   for (const ending of Object.values(endingCatalog || {})) {
-    nodes.push({
+    addNode(nodeMap, {
       id: `ending:${ending.id}`,
       refId: ending.id,
       technicalType: 'ENDING',
@@ -272,27 +256,37 @@ function buildTechnicalStoryGraph({ contentBundle, endingCatalog }) {
     });
   }
 
-  // Deduplicate synthetic facts that are produced more than once.
-  const byId = new Map(nodes.map(node => [node.id, node]));
   return {
-    nodes: [...byId.values()],
+    nodes: [...nodeMap.values()],
     edges,
-    stats: { nodes: byId.size, edges: edges.length }
+    errors,
+    stats: { nodes: nodeMap.size, edges: edges.length }
   };
 }
 
 module.exports = { buildTechnicalStoryGraph, normalizePredicate };
 ```
 
-Then extend `buildTechnicalStoryGraph()` so every entry, dialogue line, and operation `unlockWhen` contributes `normalizePredicate()` edges.
+`normalizePredicate` is intentionally referenced before implementation so the next test drives it.
 
-- [ ] **Step 4: Add failing recursive predicate tests**
+- [ ] **Step 4: Write failing tests for leaf predicates, nested gates, negative guards, and thresholds**
 
 Append:
 
 ```js
+test('normalizes a simple fact prerequisite', () => {
+  const result = normalizePredicate({ publicFact: 'main5Completed' }, 'file:archive.history_timeline');
+  assert.deepEqual(result.edges, [{
+    from: 'fact:main5Completed',
+    to: 'file:archive.history_timeline',
+    kind: 'REQUIRES',
+    polarity: 'positive',
+    detail: null
+  }]);
+});
+
 test('nested all and any predicates become explicit technical gates', () => {
-  const normalized = normalizePredicate({
+  const result = normalizePredicate({
     all: [
       { publicFact: 'main1Completed' },
       { any: [
@@ -302,52 +296,64 @@ test('nested all and any predicates become explicit technical gates', () => {
     ]
   }, 'echo:example');
 
-  assert.equal(normalized.errors.length, 0);
-  assert.ok(normalized.gates.some(gate => gate.operator === 'ALL'));
-  assert.ok(normalized.gates.some(gate => gate.operator === 'ANY'));
-  assert.ok(normalized.edges.some(edge => edge.from === 'fact:main1Completed'));
-  assert.ok(normalized.edges.some(edge => edge.from === 'action:share_roster'));
-  assert.ok(normalized.edges.some(edge => edge.from === 'action:warn_partner_first'));
+  assert.equal(result.errors.length, 0);
+  assert.ok(result.gates.some(gate => gate.operator === 'ALL'));
+  assert.ok(result.gates.some(gate => gate.operator === 'ANY'));
+  assert.ok(result.edges.some(edge => edge.from === 'fact:main1Completed'));
+  assert.ok(result.edges.some(edge => edge.from === 'action:share_roster'));
+  assert.ok(result.edges.some(edge => edge.from === 'action:warn_partner_first'));
 });
 
-test('not and one-time reaction guards preserve negative polarity', () => {
-  const normalized = normalizePredicate({
+test('not and reactionFactMissing preserve negative polarity', () => {
+  const result = normalizePredicate({
     all: [
       { not: { publicFact: 'mainCompleted' } },
       { reactionFactMissing: 'echo.behavior.protocol_recheck' }
     ]
   }, 'echo:example');
 
-  const negativeEdges = normalized.edges.filter(edge => edge.polarity === 'negative');
-  assert.ok(negativeEdges.some(edge => edge.from === 'fact:mainCompleted'));
-  assert.ok(negativeEdges.some(edge => edge.from === 'reaction:echo.behavior.protocol_recheck'));
+  const negative = result.edges.filter(edge => edge.polarity === 'negative');
+  assert.ok(negative.some(edge => edge.from === 'fact:mainCompleted'));
+  assert.ok(negative.some(edge => edge.from === 'reaction:echo.behavior.protocol_recheck'));
 });
 
-test('entry-open count keeps its threshold as edge detail', () => {
-  const normalized = normalizePredicate({
+test('entryOpenedTimes and idle predicates keep human-useful details', () => {
+  const openCount = normalizePredicate({
     entryOpenedTimes: { entryId: 'archive.protocol_versions', atLeast: 3 }
-  }, 'echo:echo.behavior.protocol_recheck');
+  }, 'echo:example');
+  assert.deepEqual(openCount.edges[0].detail, { atLeast: 3 });
 
-  assert.deepEqual(normalized.edges[0].detail, { atLeast: 3 });
+  const idle = normalizePredicate({ elapsedSinceMeaningfulAction: 60000 }, 'echo:idle');
+  assert.deepEqual(idle.edges[0].detail, { milliseconds: 60000 });
 });
 ```
 
-- [ ] **Step 5: Run the recursive tests and verify they fail**
-
-Run:
+- [ ] **Step 5: Run the focused test and verify predicate cases fail**
 
 ```bash
 node --test test/unit/authorStoryGraph.test.js
 ```
 
-Expected: FAIL on missing gate recursion / polarity propagation.
+Expected: FAIL because `normalizePredicate` is incomplete/missing.
 
-- [ ] **Step 6: Implement recursive `all` / `any` / `not` normalization**
+- [ ] **Step 6: Implement recursive predicate normalization and attach it to all unlock owners**
 
-Use deterministic gate IDs based on owner plus predicate path:
+Use this shape:
 
 ```js
-function normalizePredicate(predicate, ownerId, path = 'unlock', inheritedPolarity = 'positive') {
+function leafPredicateNode(predicate) {
+  if (predicate.publicFact !== undefined) return `fact:${predicate.publicFact}`;
+  if (predicate.roleFact !== undefined) return `roleFact:${predicate.roleFact}`;
+  if (predicate.entryOpened !== undefined) return `file:${predicate.entryOpened}`;
+  if (predicate.actionAttempted !== undefined) return `action:${predicate.actionAttempted}`;
+  if (predicate.entryOpenedTimes !== undefined) return `file:${predicate.entryOpenedTimes.entryId}`;
+  if (predicate.reactionFactMissing !== undefined) return `reaction:${predicate.reactionFactMissing}`;
+  if (predicate.chapterAtLeast !== undefined) return `chapter:${predicate.chapterAtLeast}`;
+  if (predicate.elapsedSinceMeaningfulAction !== undefined) return `idle:${predicate.elapsedSinceMeaningfulAction}`;
+  return null;
+}
+
+function normalizePredicate(predicate, ownerId, path = 'unlock', polarity = 'positive') {
   if (!isPredicateShapeValid(predicate)) {
     return { gates: [], edges: [], errors: [{ code: 'INVALID_PREDICATE', ownerId, predicate }] };
   }
@@ -357,7 +363,7 @@ function normalizePredicate(predicate, ownerId, path = 'unlock', inheritedPolari
       predicate.not,
       ownerId,
       `${path}.not`,
-      inheritedPolarity === 'positive' ? 'negative' : 'positive'
+      polarity === 'positive' ? 'negative' : 'positive'
     );
   }
 
@@ -366,11 +372,11 @@ function normalizePredicate(predicate, ownerId, path = 'unlock', inheritedPolari
     const items = operator === 'ALL' ? predicate.all : predicate.any;
     const gateId = `gate:${ownerId}:${path}`;
     const gates = [{ id: gateId, operator, ownerId }];
-    const edges = [{ from: gateId, to: ownerId, kind: 'REQUIRES', polarity: inheritedPolarity, detail: null }];
+    const edges = [{ from: gateId, to: ownerId, kind: 'REQUIRES', polarity, detail: null }];
     const errors = [];
 
     items.forEach((item, index) => {
-      const child = normalizePredicate(item, gateId, `${path}.${operator.toLowerCase()}.${index}`, inheritedPolarity);
+      const child = normalizePredicate(item, gateId, `${path}.${operator.toLowerCase()}.${index}`, polarity);
       gates.push(...child.gates);
       edges.push(...child.edges);
       errors.push(...child.errors);
@@ -378,24 +384,31 @@ function normalizePredicate(predicate, ownerId, path = 'unlock', inheritedPolari
     return { gates, edges, errors };
   }
 
-  const leaf = namespacedPredicateNode(predicate);
-  // Return leaf -> owner edge with inherited polarity and threshold/idle details.
-  // Use the exact object shape asserted above.
+  const from = leafPredicateNode(predicate);
+  const detail = predicate.entryOpenedTimes
+    ? { atLeast: predicate.entryOpenedTimes.atLeast }
+    : predicate.elapsedSinceMeaningfulAction !== undefined
+      ? { milliseconds: predicate.elapsedSinceMeaningfulAction }
+      : null;
+
+  return {
+    gates: [],
+    edges: [{ from, to: ownerId, kind: 'REQUIRES', polarity: predicate.reactionFactMissing ? 'negative' : polarity, detail }],
+    errors: []
+  };
 }
 ```
 
-Add gate nodes returned by predicate normalization to the technical graph with `technicalType: 'GATE'`.
+Call it for every `terminalEntry.unlockWhen`, `dialogue.unlockWhen`, and `operation.unlockWhen`. Add gate nodes as `technicalType: 'GATE'` and add referenced leaf nodes when they are not already present.
 
-- [ ] **Step 7: Run Task 1 tests and existing unit suite**
-
-Run:
+- [ ] **Step 7: Run Task 1 and the existing unit suite**
 
 ```bash
 node --test test/unit/authorStoryGraph.test.js
 npm run test:unit
 ```
 
-Expected: all tests PASS.
+Expected: PASS.
 
 - [ ] **Step 8: Commit Task 1**
 
@@ -406,7 +419,7 @@ git commit -m "feat: derive canonical author story graph"
 
 ---
 
-### Task 2: Convert the technical graph into a human-readable Story Map model
+### Task 2: Build the human-readable Story Map presentation
 
 **Files:**
 - Create: `game/authoring/storyGraphPresentation.js`
@@ -414,12 +427,12 @@ git commit -m "feat: derive canonical author story graph"
 - Modify: `test/unit/authorStoryGraph.test.js`
 
 **Interfaces:**
-- Consumes: technical graph from `buildTechnicalStoryGraph()`.
+- Consumes: technical graph from Task 1.
 - Produces: `buildStoryMapModel(technicalGraph, metadata) -> { nodes, edges, stages, lanes, stats }`.
-- Produces presentation nodes with `{ id, refId, storyType, label, summary, audience, lane, stage, importance, source, technical }`.
-- `storyGraphMetadata.js` exports presentation-only `{ nodes: { [canonicalId]: override } }`; no unlock or ending rules.
+- Visible story types: `DISCOVERY`, `ECHO`, `ACTION`, `TRUTH`, `ENDING`.
+- Visible lanes: `shared`, `A`, `B`, `ECHO`.
 
-- [ ] **Step 1: Write failing presentation tests**
+- [ ] **Step 1: Write failing tests for hidden implementation nodes, labels, lanes, and fallback labels**
 
 Append to `test/unit/authorStoryGraph.test.js`:
 
@@ -427,57 +440,39 @@ Append to `test/unit/authorStoryGraph.test.js`:
 const { storyGraphMetadata } = require('../../game/authoring/storyGraphMetadata');
 const { buildStoryMapModel } = require('../../game/authoring/storyGraphPresentation');
 
-test('simple Story Map hides implementation-only fact and gate nodes', () => {
+test('simple Story Map hides implementation-only facts and gates', () => {
   const technical = buildTechnicalStoryGraph({ contentBundle: content, endingCatalog: endings });
   const story = buildStoryMapModel(technical, storyGraphMetadata);
-
-  assert.equal(story.nodes.some(node => node.technicalType === 'FACT'), false);
-  assert.equal(story.nodes.some(node => node.technicalType === 'GATE'), false);
-  assert.ok(story.nodes.some(node => node.refId === 'archive.history_timeline'));
+  assert.equal(story.nodes.some(node => ['FACT', 'ROLE_FACT', 'GATE', 'COMPLETION', 'CONTENT'].includes(node.technicalType)), false);
 });
 
-test('known canonical IDs use human labels and stage names', () => {
+test('core reveal spine uses human labels, story stages, and lanes', () => {
   const technical = buildTechnicalStoryGraph({ contentBundle: content, endingCatalog: endings });
   const story = buildStoryMapModel(technical, storyGraphMetadata);
-  const history = story.nodes.find(node => node.refId === 'archive.history_timeline');
+  const byRef = new Map(story.nodes.map(node => [node.refId, node]));
 
-  assert.equal(history.label, '找到 ORPHEUS 完整歷史');
-  assert.equal(history.stage, 'R4');
-  assert.equal(history.lane, 'shared');
+  assert.equal(byRef.get('files.mainline').label, '讀到 Unit 17 案件摘要');
+  assert.equal(byRef.get('files.experiment_roster').label, 'B 發現受試者名冊異常');
+  assert.equal(byRef.get('doc.a_incident_report').lane, 'A');
+  assert.equal(byRef.get('doc.b_incident_report').lane, 'B');
+  assert.equal(byRef.get('archive.history_timeline').label, '找到 ORPHEUS 完整歷史');
+  assert.equal(byRef.get('archive.history_timeline').storyType, 'TRUTH');
+  assert.equal(byRef.get('archive.history_timeline').stage, 'R4');
+  assert.equal(byRef.get('request_solo_validation').stage, 'R5');
+  assert.equal(byRef.get('cooperative_escape').stage, 'R6');
 });
 
 test('missing metadata falls back to a deterministic readable label', () => {
   const technical = {
-    nodes: [{
-      id: 'action:verify_incident_timestamp',
-      refId: 'verify_incident_timestamp',
-      technicalType: 'ACTION',
-      source: { module: 'game/content/operations.js' },
-      raw: {}
-    }],
-    edges: [],
-    stats: {}
+    nodes: [{ id: 'action:verify_incident_timestamp', refId: 'verify_incident_timestamp', technicalType: 'ACTION', raw: {} }],
+    edges: [], stats: {}
   };
   const story = buildStoryMapModel(technical, { nodes: {} });
-
   assert.equal(story.nodes[0].label, 'Verify incident timestamp');
-  assert.equal(story.nodes[0].storyType, 'ACTION');
-});
-
-test('A, B, both, and ECHO content map to stable swimlanes', () => {
-  const technical = buildTechnicalStoryGraph({ contentBundle: content, endingCatalog: endings });
-  const story = buildStoryMapModel(technical, storyGraphMetadata);
-
-  assert.equal(story.nodes.find(node => node.refId === 'doc.a_survival_task_01').lane, 'A');
-  assert.equal(story.nodes.find(node => node.refId === 'doc.b_survival_task_01').lane, 'B');
-  assert.equal(story.nodes.find(node => node.refId === 'archive.history_timeline').lane, 'shared');
-  assert.equal(story.nodes.find(node => node.refId === 'echo.behavior.protocol_recheck').lane, 'ECHO');
 });
 ```
 
-- [ ] **Step 2: Run tests and verify presentation modules are missing**
-
-Run:
+- [ ] **Step 2: Run the focused test and verify presentation modules are missing**
 
 ```bash
 node --test test/unit/authorStoryGraph.test.js
@@ -485,45 +480,44 @@ node --test test/unit/authorStoryGraph.test.js
 
 Expected: FAIL because presentation modules do not exist.
 
-- [ ] **Step 3: Add presentation-only metadata for the core reveal spine**
+- [ ] **Step 3: Create the fixed v1 story-stage catalog and authored core metadata**
 
-Create `game/authoring/storyGraphMetadata.js`:
+Create `game/authoring/storyGraphMetadata.js` with at least this exact v1 core set:
 
 ```js
 const storyGraphMetadata = Object.freeze({
   nodes: Object.freeze({
-    'file:archive.history_timeline': Object.freeze({
-      label: '找到 ORPHEUS 完整歷史',
-      summary: '玩家取得 Unit 17 與過往研究的完整時間線。',
-      storyType: 'DISCOVERY',
-      stage: 'R4',
-      importance: 'major'
-    }),
-    'action:request_solo_validation': Object.freeze({
-      label: 'A 選擇個人存續驗證',
-      summary: 'A 開始接受 ECHO 提出的個體存續框架。',
-      storyType: 'ACTION',
-      stage: 'R5',
-      importance: 'major'
-    }),
-    'echo:echo.behavior.reject_frame.a': Object.freeze({
-      label: 'ECHO 注意到 A 拒絕個人框架',
-      summary: 'A 看見較短的個人路徑後仍回到共同覆核。',
-      storyType: 'ECHO',
-      stage: 'R5',
-      importance: 'major'
-    })
+    'file:files.mainline': { label: '讀到 Unit 17 案件摘要', summary: '兩名參與者先理解設施、事故與合作需求。', storyType: 'DISCOVERY', stage: 'R0', importance: 'major' },
+    'file:files.experiment_roster': { label: 'B 發現受試者名冊異常', summary: 'B 看到名冊中的身份欄位曾被修改。', storyType: 'DISCOVERY', stage: 'R2', importance: 'major' },
+    'file:doc.a_incident_report': { label: 'A 發現事故報告時間異常', summary: 'A 看到事故報告與其他時間證據不一致。', storyType: 'DISCOVERY', stage: 'R2', importance: 'major' },
+    'file:doc.b_incident_report': { label: 'B 發現事故附件曾被更新', summary: 'B 發現附件版本晚於主索引。', storyType: 'DISCOVERY', stage: 'R2', importance: 'major' },
+    'file:archive.protocol_versions': { label: '找到合作驗證規章修訂紀錄', summary: '玩家開始看見正式合作規則曾被修改。', storyType: 'DISCOVERY', stage: 'R3', importance: 'major' },
+    'echo:echo.behavior.protocol_recheck': { label: 'ECHO 注意到你反覆確認規則', summary: 'ECHO 不只回答問題，也開始觀察玩家的查證習慣。', storyType: 'ECHO', stage: 'R3', importance: 'major' },
+    'file:archive.history_timeline': { label: '找到 ORPHEUS 完整歷史', summary: '玩家取得 Unit 17 與過往研究的完整時間線，足以重新理解自己的身份。', storyType: 'TRUTH', stage: 'R4', importance: 'major' },
+    'file:doc.a_solo_protocol': { label: 'A 看到個人存續協定', summary: 'A 第一次清楚看見 ECHO 提供的個體存續框架。', storyType: 'DISCOVERY', stage: 'R5', importance: 'major' },
+    'file:doc.b_solo_protocol': { label: 'B 看到個人存續協定', summary: 'B 看見可能把共同驗證拆成個體判定的路徑。', storyType: 'DISCOVERY', stage: 'R5', importance: 'major' },
+    'action:request_solo_validation': { label: 'A 選擇個人存續驗證', summary: 'A 接受 ECHO 提出的個體存續路徑。', storyType: 'ACTION', stage: 'R5', importance: 'major' },
+    'action:request_pair_validation': { label: 'A 把選擇帶回共同覆核', summary: 'A 拒絕只走個人路徑，要求回到合作驗證。', storyType: 'ACTION', stage: 'R5', importance: 'major' },
+    'action:disclose_report': { label: 'B 公開完整報告給夥伴', summary: 'B 把原本可私藏的資訊帶回共同判斷。', storyType: 'ACTION', stage: 'R5', importance: 'major' },
+    'action:pair_validate_protocol': { label: '兩人共同覆核協定', summary: '兩人用共同路徑檢查 ECHO 改寫後的規則。', storyType: 'ACTION', stage: 'R5', importance: 'major' },
+    'echo:echo.behavior.reject_frame.a': { label: 'ECHO 注意到 A 拒絕個人框架', summary: 'A 看見較短的個人路徑後仍回到共同覆核。', storyType: 'ECHO', stage: 'R5', importance: 'major' },
+    'echo:echo.behavior.reject_frame.b': { label: 'ECHO 注意到 B 拒絕個人框架', summary: 'B 的行動顯示它沒有完全接受 ECHO 的個體判定方式。', storyType: 'ECHO', stage: 'R5', importance: 'major' },
+    'ending:cooperative_escape': { label: '共同存續', storyType: 'ENDING', stage: 'R6', importance: 'major' },
+    'ending:a_solo_escape': { label: 'A 的個別存續', storyType: 'ENDING', stage: 'R6', importance: 'major' },
+    'ending:b_solo_escape': { label: 'B 的個別存續', storyType: 'ENDING', stage: 'R6', importance: 'major' },
+    'ending:exposed_ai_deception': { label: '判定權被揭露', storyType: 'ENDING', stage: 'R6', importance: 'major' },
+    'ending:ambiguous_containment': { label: '解釋權未移交', storyType: 'ENDING', stage: 'R6', importance: 'major' }
   })
 });
 
 module.exports = { storyGraphMetadata };
 ```
 
-During implementation, extend this same object only for high-value story nodes that need authored labels. Do not add gameplay conditions.
+This metadata is presentation-only: it contains no unlock predicate, role fact, operation effect, or ending precedence.
 
-- [ ] **Step 4: Implement deterministic fallback labels, lanes, story types, and stage propagation**
+- [ ] **Step 4: Implement presentation helpers and milestone stage inference**
 
-Create `game/authoring/storyGraphPresentation.js` around these helpers:
+Create `game/authoring/storyGraphPresentation.js`:
 
 ```js
 const STAGES = Object.freeze([
@@ -544,92 +538,81 @@ function humanizeId(refId = '') {
     .replace(/^\w/, char => char.toUpperCase());
 }
 
-function audienceLane(node) {
+function laneFor(node) {
   if (node.technicalType === 'ECHO') return 'ECHO';
   if (node.audience?.kind === 'role') return node.audience.role === 'host' ? 'A' : 'B';
   if (node.audience?.kind === 'player') return node.audience.player === 'A' ? 'A' : 'B';
   return 'shared';
 }
 
-function defaultStoryType(node) {
+function storyTypeFor(node) {
   if (node.technicalType === 'FILE') return 'DISCOVERY';
   if (node.technicalType === 'ECHO') return 'ECHO';
   if (node.technicalType === 'ACTION') return 'ACTION';
   if (node.technicalType === 'ENDING') return 'ENDING';
   return null;
 }
-
-function buildStoryMapModel(technicalGraph, metadata = { nodes: {} }) {
-  const visible = technicalGraph.nodes
-    .filter(node => !['FACT', 'GATE'].includes(node.technicalType))
-    .map(node => {
-      const override = metadata.nodes?.[node.id] || {};
-      return {
-        id: node.id,
-        refId: node.refId,
-        technicalType: node.technicalType,
-        storyType: override.storyType || defaultStoryType(node),
-        label: override.label || humanizeId(node.refId),
-        summary: override.summary || '',
-        lane: override.lane || audienceLane(node),
-        stage: override.stage || 'R0',
-        importance: override.importance || 'normal',
-        source: node.source || null,
-        technical: { raw: node.raw || null }
-      };
-    });
-
-  return { nodes: visible, edges: [], stages: STAGES, lanes: ['shared', 'A', 'B', 'ECHO'], stats: technicalGraph.stats };
-}
-
-module.exports = { buildStoryMapModel, humanizeId };
 ```
 
-Then implement stage inference for the mainline chain rather than leaving every fallback at `R0`:
-
-```text
-roomCreated -> R0
-main1Completed -> R1
-main2Completed -> R2
-main3Completed -> R3
-main4Completed -> R4
-main5Completed -> R5
-mainCompleted/finale_ready/endings -> R6
-```
-
-Derive those milestone levels by reading `complete_mainN` operation outputs from the technical graph. Presentation metadata may override a node when its story meaning intentionally differs from the mechanical milestone.
-
-- [ ] **Step 5: Collapse technical dependency chains into human edges**
-
-Add tests:
+Use the canonical mainline milestones as default mechanical stage anchors:
 
 ```js
-test('fact intermediates collapse into a direct human-readable story edge', () => {
+const MILESTONE_STAGE = Object.freeze({
+  roomCreated: 'R0',
+  main1Completed: 'R1',
+  main2Completed: 'R2',
+  main3Completed: 'R3',
+  main4Completed: 'R4',
+  main5Completed: 'R5',
+  mainCompleted: 'R6',
+  finale_ready: 'R6'
+});
+```
+
+Infer a node's fallback stage from its positive prerequisite paths and operation effects; authored metadata may override the stage when story meaning differs from mechanical timing.
+
+- [ ] **Step 5: Write failing tests for technical-node collapse and runtime-calculated endings**
+
+Append:
+
+```js
+test('hidden fact chains collapse into direct human story edges', () => {
   const technical = buildTechnicalStoryGraph({ contentBundle: content, endingCatalog: endings });
   const story = buildStoryMapModel(technical, storyGraphMetadata);
+  const history = story.nodes.find(node => node.refId === 'archive.history_timeline');
 
-  assert.ok(story.edges.some(edge =>
-    edge.to === 'file:archive.history_timeline'
-      && edge.label === '解鎖'
-      && !edge.from.startsWith('fact:')
-  ));
+  assert.ok(story.edges.some(edge => edge.to === history.id && edge.label === '解鎖'));
+  assert.equal(story.edges.some(edge => edge.from.startsWith('fact:') || edge.to.startsWith('fact:')), false);
 });
 
-test('ending nodes are marked runtime-calculated rather than given copied conditions', () => {
+test('ending nodes expose runtime-calculated resolution without copied conditions', () => {
   const technical = buildTechnicalStoryGraph({ contentBundle: content, endingCatalog: endings });
   const story = buildStoryMapModel(technical, storyGraphMetadata);
   const ending = story.nodes.find(node => node.id === 'ending:cooperative_escape');
 
   assert.equal(ending.technical.endingResolution, 'runtime-calculated');
-  assert.equal(ending.technical.condition, undefined);
+  assert.equal(Object.hasOwn(ending.technical, 'condition'), false);
 });
 ```
 
-Implement collapsing by following hidden FACT/GATE nodes between visible endpoints. Use a visited set to avoid cycles. Preserve a `technicalPath` array on each collapsed edge for inspector drill-down.
+- [ ] **Step 6: Implement visible-edge collapsing with `technicalPath` preservation**
 
-- [ ] **Step 6: Run Task 2 tests and full unit suite**
+For every visible target, walk incoming technical edges backwards through hidden nodes (`FACT`, `ROLE_FACT`, `GATE`, `COMPLETION`, `CONTENT`, `REACTION`, `IDLE`, `CHAPTER`) until another visible node is found. Use a visited set to prevent cycles. Produce edges shaped like:
 
-Run:
+```js
+{
+  id: 'story-edge:<from>:<to>:<index>',
+  from: 'action:complete_main5',
+  to: 'file:archive.history_timeline',
+  label: '解鎖',
+  kind: 'STORY_FLOW',
+  technicalPath: ['COMPLETES', 'REQUIRES']
+}
+```
+
+When no visible upstream node exists, keep the prerequisite in the target node's `technical.prerequisites` so the inspector can still explain it without rendering an orphan fact card.
+
+- [ ] **Step 7: Run Task 2 tests and full unit suite**
 
 ```bash
 node --test test/unit/authorStoryGraph.test.js
@@ -638,16 +621,16 @@ npm run test:unit
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit Task 2**
+- [ ] **Step 8: Commit Task 2**
 
 ```bash
 git add game/authoring/storyGraphPresentation.js game/authoring/storyGraphMetadata.js test/unit/authorStoryGraph.test.js
-git commit -m "feat: present story graph in human language"
+git commit -m "feat: present author graph as human story map"
 ```
 
 ---
 
-### Task 3: Add structural story diagnostics with human-first messages
+### Task 3: Add complete structural diagnostics
 
 **Files:**
 - Create: `game/authoring/storyGraphDiagnostics.js`
@@ -655,12 +638,11 @@ git commit -m "feat: present story graph in human language"
 - Modify: `game/authoring/storyGraphPresentation.js`
 
 **Interfaces:**
-- Consumes: technical graph + presented Story Map.
 - Produces: `runStoryGraphDiagnostics({ technicalGraph, storyMap, contentBundle, endingCatalog }) -> Diagnostic[]`.
 - Diagnostic shape: `{ id, code, severity, title, message, nodeIds, edgeIds, technical }`.
-- Presentation model exposes `diagnostics` and summary counts; diagnostics never alter reachability or gameplay.
+- Required codes: `BROKEN_REFERENCE`, `UNREACHABLE`, `ORPHAN`, `AUDIENCE_LEAK`, `MISSING_VERIFICATION`, `ENDING_DEBRIEF_GAP`, `SUSPICIOUS_EARLY_REVEAL`.
 
-- [ ] **Step 1: Write failing tests for broken references and unreachable story content**
+- [ ] **Step 1: Write failing tests for all required diagnostic families**
 
 Create `test/unit/authorStoryGraphDiagnostics.test.js`:
 
@@ -674,51 +656,91 @@ const { buildTechnicalStoryGraph } = require('../../game/authoring/storyGraph');
 const { buildStoryMapModel } = require('../../game/authoring/storyGraphPresentation');
 const { runStoryGraphDiagnostics } = require('../../game/authoring/storyGraphDiagnostics');
 
-function diagnosticsFor(contentBundle) {
-  const technicalGraph = buildTechnicalStoryGraph({ contentBundle, endingCatalog: endings });
+function run(contentBundle = content, endingCatalog = endings) {
+  const technicalGraph = buildTechnicalStoryGraph({ contentBundle, endingCatalog });
   const storyMap = buildStoryMapModel(technicalGraph, { nodes: {} });
-  return runStoryGraphDiagnostics({ technicalGraph, storyMap, contentBundle, endingCatalog: endings });
+  return runStoryGraphDiagnostics({ technicalGraph, storyMap, contentBundle, endingCatalog });
 }
 
-test('reports a missing entry reference in human language', () => {
+test('BROKEN_REFERENCE covers operation, predicate, and verification references', () => {
   const broken = structuredClone(content);
-  broken.operations.find(op => op.operationId === 'complete_main1')
-    .effects.unlockEntryIds.push('missing.entry');
+  broken.operations.find(op => op.operationId === 'complete_main1').effects.unlockEntryIds.push('missing.operation.entry');
+  broken.dialogue[0].unlockWhen = { entryOpened: 'missing.predicate.entry' };
+  broken.dialogue.find(line => line.id === 'orpheus.observation.a').verificationEntries = [
+    { entryId: 'missing.verification.entry', sourceGroup: 'raw_audio' }
+  ];
 
-  const issue = diagnosticsFor(broken).find(item => item.code === 'BROKEN_REFERENCE');
-  assert.ok(issue);
-  assert.equal(issue.severity, 'error');
-  assert.match(issue.message, /不存在|找不到/);
+  const issues = run(broken).filter(issue => issue.code === 'BROKEN_REFERENCE');
+  assert.ok(issues.some(issue => issue.technical.missingRef === 'missing.operation.entry'));
+  assert.ok(issues.some(issue => issue.technical.missingRef === 'missing.predicate.entry'));
+  assert.ok(issues.some(issue => issue.technical.missingRef === 'missing.verification.entry'));
 });
 
-test('reports story content that has no reachable dependency path', () => {
+test('UNREACHABLE reports visible content whose prerequisite is never produced', () => {
   const broken = structuredClone(content);
   broken.terminalEntries.push({
-    id: 'doc.unreachable',
-    sourceEntryId: 'doc.unreachable',
-    sourceGroup: 'test',
-    audience: { kind: 'both' },
-    unlockWhen: { publicFact: 'neverProduced' },
-    verificationEntries: [],
-    requiresPrivateFacts: [],
-    mainlineFallbackOperationIds: [],
-    debriefFactIds: [],
-    kind: 'document',
-    filename: 'unreachable.md',
-    text: 'test'
+    id: 'doc.unreachable', sourceEntryId: 'doc.unreachable', sourceGroup: 'test',
+    audience: { kind: 'both' }, unlockWhen: { publicFact: 'neverProduced' },
+    verificationEntries: [], requiresPrivateFacts: [], mainlineFallbackOperationIds: [],
+    debriefFactIds: [], kind: 'document', filename: 'unreachable.md', text: 'test'
   });
 
-  const issue = diagnosticsFor(broken).find(item =>
-    item.code === 'UNREACHABLE' && item.nodeIds.includes('file:doc.unreachable')
-  );
+  assert.ok(run(broken).some(issue =>
+    issue.code === 'UNREACHABLE' && issue.nodeIds.includes('file:doc.unreachable')
+  ));
+});
+
+test('ORPHAN reports isolated visible content but excludes intentional initial content', () => {
+  const isolated = structuredClone(content);
+  isolated.terminalEntries.push({
+    id: 'doc.isolated', sourceEntryId: 'doc.isolated', sourceGroup: 'test',
+    audience: { kind: 'both' }, unlockWhen: { all: [] },
+    verificationEntries: [], requiresPrivateFacts: [], mainlineFallbackOperationIds: [],
+    debriefFactIds: [], kind: 'document', filename: 'isolated.md', text: 'test'
+  });
+
+  const issues = run(isolated);
+  assert.ok(issues.some(issue => issue.code === 'ORPHAN' && issue.nodeIds.includes('file:doc.isolated')));
+  assert.equal(issues.some(issue => issue.code === 'ORPHAN' && issue.nodeIds.includes('file:files.mainline')), false);
+});
+
+test('AUDIENCE_LEAK warns on direct A-private to shared dependency', () => {
+  const broken = structuredClone(content);
+  broken.dialogue.find(line => line.id === 'orpheus.common_progress').unlockWhen = {
+    entryOpened: 'doc.a_survival_task_01'
+  };
+  assert.ok(run(broken).some(issue => issue.code === 'AUDIENCE_LEAK'));
+});
+
+test('AUDIENCE_LEAK does not flag canonical explicit sharing actions', () => {
+  const issues = run(content);
+  const allowed = new Set(['share_roster', 'share_mirror_first', 'warn_partner_first', 'request_pair_validation', 'disclose_report']);
+  assert.equal(issues.some(issue => issue.code === 'AUDIENCE_LEAK' && allowed.has(issue.technical.viaAction)), false);
+});
+
+test('MISSING_VERIFICATION applies to factual ECHO observation/manipulation only', () => {
+  const broken = structuredClone(content);
+  broken.dialogue.find(line => line.id === 'orpheus.observation.a').verificationEntries = [];
+  const issue = run(broken).find(item => item.code === 'MISSING_VERIFICATION' && item.nodeIds.includes('echo:orpheus.observation.a'));
   assert.ok(issue);
-  assert.match(issue.message, /可能永遠看不到/);
+  assert.ok(['hint', 'warning'].includes(issue.severity));
+});
+
+test('ENDING_DEBRIEF_GAP reports a missing debrief catalog fact', () => {
+  const catalog = structuredClone(endings);
+  catalog.cooperative_escape.debriefFactIds = ['missingDebriefFact'];
+  assert.ok(run(content, catalog).some(issue => issue.code === 'ENDING_DEBRIEF_GAP'));
+});
+
+test('SUSPICIOUS_EARLY_REVEAL is advisory when late verification is exposed much earlier', () => {
+  const broken = structuredClone(content);
+  const early = broken.terminalEntries.find(entry => entry.id === 'files.mainline');
+  early.verificationEntries = [{ entryId: 'archive.history_timeline', sourceGroup: 'history_timeline' }];
+  assert.ok(run(broken).some(issue => issue.code === 'SUSPICIOUS_EARLY_REVEAL' && issue.severity === 'hint'));
 });
 ```
 
-- [ ] **Step 2: Run diagnostics tests and verify the module is missing**
-
-Run:
+- [ ] **Step 2: Run the diagnostics test and verify the module is missing**
 
 ```bash
 node --test test/unit/authorStoryGraphDiagnostics.test.js
@@ -726,12 +748,12 @@ node --test test/unit/authorStoryGraphDiagnostics.test.js
 
 Expected: FAIL because the diagnostics module does not exist.
 
-- [ ] **Step 3: Implement broken-reference and reachability checks**
+- [ ] **Step 3: Implement human-first diagnostics**
 
-Create `game/authoring/storyGraphDiagnostics.js`:
+Create `game/authoring/storyGraphDiagnostics.js` with this factory and exact user-facing titles:
 
 ```js
-function diagnostic(code, severity, title, message, nodeIds = [], technical = {}) {
+function makeIssue(code, severity, title, message, nodeIds = [], technical = {}) {
   return {
     id: `${code}:${nodeIds.join('|') || 'graph'}`,
     code,
@@ -744,97 +766,47 @@ function diagnostic(code, severity, title, message, nodeIds = [], technical = {}
   };
 }
 
-function runStoryGraphDiagnostics({ technicalGraph, storyMap, contentBundle, endingCatalog }) {
-  const issues = [];
-  const entryIds = new Set((contentBundle.terminalEntries || []).map(entry => entry.id));
-
-  for (const operation of contentBundle.operations || []) {
-    for (const entryId of operation.effects?.unlockEntryIds || []) {
-      if (!entryIds.has(entryId)) {
-        issues.push(diagnostic(
-          'BROKEN_REFERENCE',
-          'error',
-          '故事引用失效',
-          `這段故事引用了一個不存在的內容：${entryId}`,
-          [`action:${operation.operationId}`],
-          { missingRef: entryId }
-        ));
-      }
-    }
-  }
-
-  // Build reachability from roomCreated and nodes with intentionally empty predicates.
-  // Traverse positive technical edges only; negative guards do not create reachability.
-  // Emit UNREACHABLE for visible story nodes that cannot be reached.
-
-  return issues;
-}
-
-module.exports = { runStoryGraphDiagnostics };
-```
-
-Reuse the technical graph rather than re-evaluating game rules independently.
-
-- [ ] **Step 4: Add failing audience-leak tests including the explicit-sharing exception**
-
-Append:
-
-```js
-test('warns when shared content directly depends on A-only information', () => {
-  const broken = structuredClone(content);
-  const shared = broken.dialogue.find(line => line.id === 'orpheus.common_progress');
-  shared.unlockWhen = { entryOpened: 'doc.a_survival_task_01' };
-
-  const issue = diagnosticsFor(broken).find(item => item.code === 'AUDIENCE_LEAK');
-  assert.ok(issue);
-  assert.match(issue.message, /私人資訊|提前知道/);
-});
-
-test('does not call an explicit sharing action an audience leak', () => {
-  const issues = diagnosticsFor(content);
-  const falsePositive = issues.find(item =>
-    item.code === 'AUDIENCE_LEAK'
-      && item.technical?.viaAction === 'share_roster'
-  );
-  assert.equal(falsePositive, undefined);
+const HUMAN_TITLES = Object.freeze({
+  BROKEN_REFERENCE: '這段故事引用了一個不存在的內容',
+  UNREACHABLE: '這段故事可能永遠看不到',
+  ORPHAN: '這段內容和其他故事節點沒有明確關係',
+  AUDIENCE_LEAK: '私人資訊可能被另一方提前知道',
+  MISSING_VERIFICATION: 'ECHO 說了一件目前沒有證據支持的事',
+  ENDING_DEBRIEF_GAP: '這個結局提到的事實沒有找到可追溯來源',
+  SUSPICIOUS_EARLY_REVEAL: '這份資訊可能比預期更早揭露後期真相'
 });
 ```
 
-Implement audience tracing so `share_roster`, `share_mirror_first`, `warn_partner_first`, `request_pair_validation`, and `disclose_report` act as explicit sharing boundaries because they are canonical actions already used by the narrative.
+Implementation rules:
 
-- [ ] **Step 5: Add debrief and ECHO verification tests**
+```text
+BROKEN_REFERENCE
+  Validate unlockEntryIds, entryOpened/entryOpenedTimes predicate refs, and verificationEntries against terminal entry IDs.
 
-Append:
+UNREACHABLE
+  Start from intentionally initial/default content plus `roomCreated`; traverse positive dependency/effect edges only. Negative guards never make a node reachable.
 
-```js
-test('reports ending debrief facts that are absent from the debrief catalog', () => {
-  const endingCatalog = structuredClone(endings);
-  endingCatalog.cooperative_escape.debriefFactIds = ['missingDebriefFact'];
-  const technicalGraph = buildTechnicalStoryGraph({ contentBundle: content, endingCatalog });
-  const storyMap = buildStoryMapModel(technicalGraph, { nodes: {} });
-  const issues = runStoryGraphDiagnostics({ technicalGraph, storyMap, contentBundle: content, endingCatalog });
+ORPHAN
+  Visible node has no meaningful incoming/outgoing story relationship after collapse. Exclude explicit initial/default content and ending nodes.
 
-  assert.ok(issues.some(item => item.code === 'ENDING_DEBRIEF_GAP'));
-});
+AUDIENCE_LEAK
+  Shared node depends directly on A/B-private input without a canonical share action boundary. Treat share_roster, share_mirror_first, warn_partner_first, request_pair_validation, disclose_report as allowed sharing actions.
 
-test('flags factual ECHO observation without verification as advisory', () => {
-  const broken = structuredClone(content);
-  const line = broken.dialogue.find(item => item.id === 'orpheus.observation.a');
-  line.verificationEntries = [];
+MISSING_VERIFICATION
+  Dialogue intent is observation/manipulation, text is non-empty, and verificationEntries is empty.
 
-  const issue = diagnosticsFor(broken).find(item =>
-    item.code === 'MISSING_VERIFICATION' && item.nodeIds.includes('echo:orpheus.observation.a')
-  );
-  assert.ok(issue);
-  assert.ok(['hint', 'warning'].includes(issue.severity));
-});
+ENDING_DEBRIEF_GAP
+  Every ending.debriefFactIds value must exist in contentBundle.debrief by factId.
+
+SUSPICIOUS_EARLY_REVEAL
+  A node's verification target is at least two reveal stages later than the node. Severity is always hint.
 ```
 
-Use `contentBundle.debrief` to validate ending `debriefFactIds`. Restrict missing-verification advice to dialogue intents `observation` and `manipulation`.
+Use graph relationships and canonical metadata; do not create gameplay state or call `endingEngine.evaluate()`.
 
-- [ ] **Step 6: Attach diagnostics to the Story Map model**
+- [ ] **Step 4: Attach diagnostics and summary counts to the Story Map**
 
-Add a composition function to `storyGraphPresentation.js` or a small exported helper:
+Add to `storyGraphPresentation.js`:
 
 ```js
 function attachDiagnostics(storyMap, diagnostics) {
@@ -849,11 +821,9 @@ function attachDiagnostics(storyMap, diagnostics) {
 }
 ```
 
-Do not let diagnostic generation throw away an otherwise renderable graph; convert malformed optional presentation data into a graph-level diagnostic where possible.
+Export it. Diagnostics must not remove or rewrite valid story nodes/edges.
 
-- [ ] **Step 7: Run diagnostics and full unit suites**
-
-Run:
+- [ ] **Step 5: Run diagnostics tests and full unit suite**
 
 ```bash
 node --test test/unit/authorStoryGraphDiagnostics.test.js
@@ -862,16 +832,16 @@ npm run test:unit
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit Task 3**
+- [ ] **Step 6: Commit Task 3**
 
 ```bash
 git add game/authoring/storyGraphDiagnostics.js game/authoring/storyGraphPresentation.js test/unit/authorStoryGraphDiagnostics.test.js
-git commit -m "feat: add story graph diagnostics"
+git commit -m "feat: add human story graph diagnostics"
 ```
 
 ---
 
-### Task 4: Expose the Story Map through development/test-only routes
+### Task 4: Expose development/test-only HTML and JSON routes
 
 **Files:**
 - Create: `routes/authorRoutes.js`
@@ -880,21 +850,25 @@ git commit -m "feat: add story graph diagnostics"
 - Modify: `app.js`
 
 **Interfaces:**
-- Produces: `createAuthorRoutes({ buildModel }) -> express.Router`.
-- Page: `GET /author/reveal-graph`.
-- JSON: `GET /author/api/reveal-graph`.
-- Both call `next()` in production so existing HTML 404 handling remains authoritative.
+- Produces: `createAuthorRoutes({ buildModel? }) -> express.Router`.
+- `GET /author/reveal-graph` -> EJS shell outside production.
+- `GET /author/api/reveal-graph` -> Story Map JSON outside production.
+- Graph build failure -> status 200 partial model with `GRAPH_BUILD_ERROR` diagnostic in development/test, keeping the viewer inspectable.
+- Production -> `next('router')`, then existing app 404 handling.
 
-- [ ] **Step 1: Write failing integration tests for test/development access**
+- [ ] **Step 1: Write failing integration tests for normal author access and production isolation**
 
 Create `test/integration/authorStoryGraphRoutes.test.js`:
 
 ```js
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const path = require('node:path');
+const express = require('express');
 
 const app = require('../../app');
 const testServer = require('../helpers/testServer');
+const { createAuthorRoutes } = require('../../routes/authorRoutes');
 
 let runningServer;
 
@@ -906,38 +880,25 @@ test.after(async () => {
   if (runningServer) await runningServer.close();
 });
 
-test('author Story Map page is available in test environment', async () => {
-  const response = await fetch(`${runningServer.baseUrl}/author/reveal-graph`);
-  const body = await response.text();
+test('author page and API are available in test environment', async () => {
+  const page = await fetch(`${runningServer.baseUrl}/author/reveal-graph`);
+  const html = await page.text();
+  const api = await fetch(`${runningServer.baseUrl}/author/api/reveal-graph`);
+  const model = await api.json();
 
-  assert.equal(response.status, 200);
-  assert.match(body, /ORPHEUS Story Map/);
-  assert.match(body, /進入實驗/);
+  assert.equal(page.status, 200);
+  assert.match(html, /ORPHEUS Story Map/);
+  assert.equal(api.status, 200);
+  assert.ok(model.nodes.some(node => node.label === '找到 ORPHEUS 完整歷史'));
+  assert.ok(model.stages.some(stage => stage.label === '身分揭露'));
 });
 
-test('author graph API returns human story nodes and technical detail', async () => {
-  const response = await fetch(`${runningServer.baseUrl}/author/api/reveal-graph`);
-  const body = await response.json();
-
-  assert.equal(response.status, 200);
-  assert.ok(body.nodes.some(node => node.label === '找到 ORPHEUS 完整歷史'));
-  assert.ok(body.stages.some(stage => stage.label === '身分揭露'));
-});
-```
-
-- [ ] **Step 2: Add failing production-isolation tests**
-
-Append:
-
-```js
-test('production hides both author endpoints behind normal 404 behavior', async () => {
+test('production returns 404 for both author endpoints', async () => {
   const originalEnv = app.get('env');
   app.set('env', 'production');
-
   try {
     const page = await fetch(`${runningServer.baseUrl}/author/reveal-graph`);
     const api = await fetch(`${runningServer.baseUrl}/author/api/reveal-graph`);
-
     assert.equal(page.status, 404);
     assert.equal(api.status, 404);
   } finally {
@@ -946,17 +907,45 @@ test('production hides both author endpoints behind normal 404 behavior', async 
 });
 ```
 
-- [ ] **Step 3: Run integration test and verify routes are missing**
+- [ ] **Step 2: Add a failing integration test for graph-build failure fallback**
 
-Run:
+Append:
+
+```js
+test('graph build failure returns a usable partial diagnostic model', async () => {
+  const probe = express();
+  probe.set('env', 'test');
+  probe.set('views', path.resolve(__dirname, '../../views'));
+  probe.set('view engine', 'ejs');
+  probe.use('/author', createAuthorRoutes({
+    buildModel() {
+      throw new Error('fixture graph failure');
+    }
+  }));
+  const server = await testServer(probe);
+
+  try {
+    const response = await fetch(`${server.baseUrl}/author/api/reveal-graph`);
+    const model = await response.json();
+    assert.equal(response.status, 200);
+    assert.deepEqual(model.nodes, []);
+    assert.ok(model.diagnostics.some(issue => issue.code === 'GRAPH_BUILD_ERROR'));
+    assert.match(model.diagnostics[0].message, /部分故事資料無法解析/);
+  } finally {
+    await server.close();
+  }
+});
+```
+
+- [ ] **Step 3: Run the integration test and verify routes are missing**
 
 ```bash
 node --test test/integration/authorStoryGraphRoutes.test.js
 ```
 
-Expected: FAIL with 404 for test-environment author routes.
+Expected: FAIL because `routes/authorRoutes.js` does not exist.
 
-- [ ] **Step 4: Implement `createAuthorRoutes()` and graph composition**
+- [ ] **Step 4: Implement graph composition, fallback model, and author-only middleware**
 
 Create `routes/authorRoutes.js`:
 
@@ -972,46 +961,55 @@ const { runStoryGraphDiagnostics } = require('../game/authoring/storyGraphDiagno
 function defaultBuildModel() {
   const technicalGraph = buildTechnicalStoryGraph({ contentBundle: content, endingCatalog: endings });
   const storyMap = buildStoryMapModel(technicalGraph, storyGraphMetadata);
-  const diagnostics = runStoryGraphDiagnostics({
-    technicalGraph,
-    storyMap,
-    contentBundle: content,
-    endingCatalog: endings
-  });
+  const diagnostics = runStoryGraphDiagnostics({ technicalGraph, storyMap, contentBundle: content, endingCatalog: endings });
   return attachDiagnostics(storyMap, diagnostics);
+}
+
+function failedModel(error) {
+  return {
+    nodes: [], edges: [],
+    stages: [
+      { id: 'R0', label: '進入實驗' }, { id: 'R1', label: '建立合作' },
+      { id: 'R2', label: '產生矛盾' }, { id: 'R3', label: 'ECHO 介入' },
+      { id: 'R4', label: '身分揭露' }, { id: 'R5', label: '選擇框架' },
+      { id: 'R6', label: '結果' }
+    ],
+    lanes: ['shared', 'A', 'B', 'ECHO'], stats: {},
+    diagnostics: [{
+      id: 'GRAPH_BUILD_ERROR:graph', code: 'GRAPH_BUILD_ERROR', severity: 'error',
+      title: '部分故事資料無法解析',
+      message: '部分故事資料無法解析；請查看技術細節確認內容格式。',
+      nodeIds: [], edgeIds: [], technical: { message: error.message }
+    }]
+  };
 }
 
 function createAuthorRoutes({ buildModel = defaultBuildModel } = {}) {
   const router = express.Router();
-
-  router.use((request, response, next) => {
-    if (request.app.get('env') === 'production') return next();
-    return next('route');
-  });
-
-  // Use an explicit guard per route instead of relying on next('route') from router middleware.
-  function authorOnly(request, response, next) {
+  const authorOnly = (request, response, next) => {
     if (request.app.get('env') === 'production') return next('router');
     return next();
-  }
+  };
 
   router.get('/reveal-graph', authorOnly, (request, response) => {
     response.render('author/revealGraph');
   });
 
   router.get('/api/reveal-graph', authorOnly, (request, response) => {
-    response.json(buildModel());
+    try {
+      response.json(buildModel());
+    } catch (error) {
+      response.json(failedModel(error));
+    }
   });
 
   return router;
 }
 
-module.exports = { createAuthorRoutes, defaultBuildModel };
+module.exports = { createAuthorRoutes, defaultBuildModel, failedModel };
 ```
 
-When implementing, remove the illustrative `router.use()` block above and keep only the explicit `authorOnly` middleware so production behavior is unambiguous.
-
-- [ ] **Step 5: Mount the router and create the minimal page shell**
+- [ ] **Step 5: Mount the router and create the minimal EJS page shell**
 
 Modify `app.js`:
 
@@ -1019,7 +1017,7 @@ Modify `app.js`:
 const { createAuthorRoutes } = require('./routes/authorRoutes');
 ```
 
-Mount before the generic page router / 404 handlers:
+Mount before `pageRoutes` and before 404 handlers:
 
 ```js
 app.use('/author', createAuthorRoutes());
@@ -1042,15 +1040,6 @@ Create `views/author/revealGraph.ejs`:
       <h1>ORPHEUS Story Map</h1>
       <p>玩家現在知道什麼、為什麼知道、誰知道，以及接下來可能發生什麼。</p>
     </header>
-    <nav aria-label="故事階段">
-      <span>進入實驗</span>
-      <span>建立合作</span>
-      <span>產生矛盾</span>
-      <span>ECHO 介入</span>
-      <span>身分揭露</span>
-      <span>選擇框架</span>
-      <span>結果</span>
-    </nav>
     <section data-story-map-status aria-live="polite">載入故事地圖…</section>
     <section data-story-map-root></section>
   </main>
@@ -1059,11 +1048,7 @@ Create `views/author/revealGraph.ejs`:
 </html>
 ```
 
-Task 5 will create the referenced CSS/JS assets.
-
-- [ ] **Step 6: Run integration and full server-side tests**
-
-Run:
+- [ ] **Step 6: Run Task 4 and full server-side tests**
 
 ```bash
 node --test test/integration/authorStoryGraphRoutes.test.js
@@ -1081,7 +1066,7 @@ git commit -m "feat: expose development author story map"
 
 ---
 
-### Task 5: Render the human-readable SVG swimlane map
+### Task 5: Render deterministic SVG story swimlanes
 
 **Files:**
 - Create: `public/js/authorRevealGraph.js`
@@ -1090,41 +1075,48 @@ git commit -m "feat: expose development author story map"
 - Create: `test/e2e/authorRevealGraph.spec.js`
 
 **Interfaces:**
-- Browser loads `GET /author/api/reveal-graph`.
-- Rendering entry point: `renderStoryMap(model, root)`.
-- Pure helpers exported to `window.AuthorRevealGraph` for browser testing/debugging: `filterModel`, `layoutNodes`, `renderStoryMap`.
-- Deterministic layout axes: columns = stages R0-R6; rows = `shared`, `A`, `B`, `ECHO`.
+- Browser fetches `/author/api/reveal-graph`.
+- Layout columns: stages R0-R6.
+- Layout rows: `shared`, `A`, `B`, `ECHO`.
+- Export browser helpers on `window.AuthorRevealGraph`: `filterModel`, `layoutNodes`, `renderStoryMap`.
 
-- [ ] **Step 1: Write the first failing Playwright test for readable content**
+- [ ] **Step 1: Write failing E2E tests for readable map and empty-data fallback**
 
 Create `test/e2e/authorRevealGraph.spec.js`:
 
 ```js
 const { test, expect } = require('@playwright/test');
 
-test('Story Map loads human-readable reveal stages and story nodes', async ({ page }) => {
+test('Story Map loads human-readable stages and core story nodes', async ({ page }) => {
   await page.goto('/author/reveal-graph');
-
   await expect(page.getByRole('heading', { name: 'ORPHEUS Story Map' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'A 視角' })).toBeVisible();
   await expect(page.getByText('找到 ORPHEUS 完整歷史')).toBeVisible();
   await expect(page.locator('[data-story-node="archive.history_timeline"]')).toBeVisible();
 });
+
+test('empty graph data keeps the page usable', async ({ page }) => {
+  await page.route('**/author/api/reveal-graph', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ nodes: [], edges: [], stages: [], lanes: ['shared', 'A', 'B', 'ECHO'], diagnostics: [], stats: {} })
+  }));
+  await page.goto('/author/reveal-graph');
+  await expect(page.getByText('這個篩選條件下沒有故事節點。')).toBeVisible();
+});
 ```
 
-- [ ] **Step 2: Run the focused E2E test and verify the interactive map is absent**
-
-Run:
+- [ ] **Step 2: Run the focused E2E and verify the interactive UI is absent**
 
 ```bash
 npx playwright test test/e2e/authorRevealGraph.spec.js
 ```
 
-Expected: FAIL because filters/nodes have not been rendered.
+Expected: FAIL because filters and SVG nodes are not rendered.
 
-- [ ] **Step 3: Expand the EJS shell with accessible filters and inspector landmarks**
+- [ ] **Step 3: Expand EJS with accessible filters, canvas, inspector, and diagnostics regions**
 
-Use controls with stable labels/data attributes:
+Replace the simple root with:
 
 ```html
 <section class="story-map-toolbar" aria-label="Story Map 篩選器">
@@ -1136,19 +1128,23 @@ Use controls with stable labels/data attributes:
     <button type="button" data-viewpoint="shared" aria-pressed="false">共同資訊</button>
     <button type="button" data-viewpoint="ECHO" aria-pressed="false">ECHO</button>
   </fieldset>
-  <label>
-    故事階段
+  <label>故事階段
     <select data-stage-filter>
       <option value="all">全部</option>
-      <option value="R0">進入實驗</option>
-      <option value="R1">建立合作</option>
-      <option value="R2">產生矛盾</option>
-      <option value="R3">ECHO 介入</option>
-      <option value="R4">身分揭露</option>
-      <option value="R5">選擇框架</option>
+      <option value="R0">進入實驗</option><option value="R1">建立合作</option>
+      <option value="R2">產生矛盾</option><option value="R3">ECHO 介入</option>
+      <option value="R4">身分揭露</option><option value="R5">選擇框架</option>
       <option value="R6">結果</option>
     </select>
   </label>
+  <label>類型
+    <select data-story-type-filter>
+      <option value="all">全部</option><option value="DISCOVERY">發現</option>
+      <option value="ECHO">ECHO</option><option value="ACTION">行動</option>
+      <option value="TRUTH">真相</option><option value="ENDING">結局</option>
+    </select>
+  </label>
+  <label><input type="checkbox" data-diagnostics-only> 只看需要注意的地方</label>
 </section>
 
 <section class="story-map-workspace">
@@ -1158,13 +1154,12 @@ Use controls with stable labels/data attributes:
     <p>點擊節點後，這裡會說明玩家如何看到它以及後續可能發生什麼。</p>
   </aside>
 </section>
-
 <footer data-story-map-diagnostics></footer>
 ```
 
-- [ ] **Step 4: Implement resilient model loading and deterministic layout**
+- [ ] **Step 4: Implement resilient loading, filtering, and deterministic node layout**
 
-Create `public/js/authorRevealGraph.js` with:
+Create `public/js/authorRevealGraph.js` with these core helpers:
 
 ```js
 (() => {
@@ -1172,31 +1167,37 @@ Create `public/js/authorRevealGraph.js` with:
   const STAGE_ORDER = ['R0', 'R1', 'R2', 'R3', 'R4', 'R5', 'R6'];
 
   function filterModel(model, filters = {}) {
-    const nodes = model.nodes.filter(node => {
+    const diagnosticNodeIds = new Set((model.diagnostics || []).flatMap(item => item.nodeIds || []));
+    const nodes = (model.nodes || []).filter(node => {
       if (filters.viewpoint && filters.viewpoint !== 'all' && node.lane !== filters.viewpoint) return false;
       if (filters.stage && filters.stage !== 'all' && node.stage !== filters.stage) return false;
       if (filters.storyType && filters.storyType !== 'all' && node.storyType !== filters.storyType) return false;
+      if (filters.diagnosticsOnly && !diagnosticNodeIds.has(node.id)) return false;
       return true;
     });
     const visibleIds = new Set(nodes.map(node => node.id));
-    const edges = model.edges.filter(edge => visibleIds.has(edge.from) && visibleIds.has(edge.to));
-    return { ...model, nodes, edges };
+    return {
+      ...model,
+      nodes,
+      edges: (model.edges || []).filter(edge => visibleIds.has(edge.from) && visibleIds.has(edge.to))
+    };
   }
 
   function layoutNodes(model) {
     const counters = new Map();
-    return model.nodes.map(node => {
+    return (model.nodes || []).map(node => {
       const stageIndex = Math.max(0, STAGE_ORDER.indexOf(node.stage));
       const laneIndex = Math.max(0, LANE_ORDER.indexOf(node.lane));
       const bucket = `${node.stage}:${node.lane}`;
       const offset = counters.get(bucket) || 0;
       counters.set(bucket, offset + 1);
-      return {
-        ...node,
-        x: 160 + stageIndex * 260,
-        y: 110 + laneIndex * 190 + offset * 76
-      };
+      return { ...node, x: 160 + stageIndex * 260, y: 110 + laneIndex * 190 + offset * 76 };
     });
+  }
+
+  function escapeHtml(value = '') {
+    return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
   }
 
   function renderStoryMap(model, root) {
@@ -1205,179 +1206,52 @@ Create `public/js/authorRevealGraph.js` with:
       root.innerHTML = '<p data-empty-story-map>這個篩選條件下沒有故事節點。</p>';
       return;
     }
-
-    const width = 1900;
+    const byId = new Map(nodes.map(node => [node.id, node]));
     const height = Math.max(820, ...nodes.map(node => node.y + 100));
-    const nodeById = new Map(nodes.map(node => [node.id, node]));
-    const paths = model.edges
-      .map(edge => [edge, nodeById.get(edge.from), nodeById.get(edge.to)])
+    const paths = (model.edges || []).map(edge => [edge, byId.get(edge.from), byId.get(edge.to)])
       .filter(([, from, to]) => from && to)
-      .map(([edge, from, to]) => `
-        <path class="story-edge" data-edge-kind="${edge.kind || ''}"
-          d="M ${from.x + 170} ${from.y + 28} C ${from.x + 205} ${from.y + 28}, ${to.x - 35} ${to.y + 28}, ${to.x} ${to.y + 28}" />
-      `).join('');
-
-    const cards = nodes.map(node => `
-      <g class="story-node" tabindex="0" role="button"
-         data-story-node="${node.refId}" data-node-id="${node.id}"
-         transform="translate(${node.x} ${node.y})">
-        <rect width="170" height="58" rx="10"></rect>
-        <text x="12" y="24">${escapeHtml(node.label)}</text>
-        <text class="story-node-meta" x="12" y="43">${escapeHtml(node.stage)} · ${escapeHtml(node.lane)}</text>
-      </g>
-    `).join('');
-
-    root.innerHTML = `<svg class="story-map-svg" viewBox="0 0 ${width} ${height}" aria-label="ORPHEUS 故事流程圖">${paths}${cards}</svg>`;
-  }
-
-  function escapeHtml(value = '') {
-    return String(value)
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#039;');
-  }
-
-  async function load() {
-    const root = document.querySelector('[data-story-map-root]');
-    const status = document.querySelector('[data-story-map-status]');
-    try {
-      const response = await fetch('/author/api/reveal-graph');
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const model = await response.json();
-      window.__AUTHOR_STORY_MAP_MODEL__ = model;
-      renderStoryMap(model, root);
-      status.textContent = `已載入 ${model.nodes.length} 段故事。`;
-    } catch (error) {
-      status.textContent = '部分故事資料無法解析。';
-      root.innerHTML = '<p data-story-map-error>故事地圖目前無法完整載入，技術細節請查看開發者工具。</p>';
-      console.error(error);
-    }
+      .map(([edge, from, to]) => `<path class="story-edge" data-edge-id="${escapeHtml(edge.id)}" d="M ${from.x + 170} ${from.y + 28} C ${from.x + 205} ${from.y + 28}, ${to.x - 35} ${to.y + 28}, ${to.x} ${to.y + 28}" />`)
+      .join('');
+    const cards = nodes.map(node => `<g class="story-node" tabindex="0" role="button" data-node-id="${escapeHtml(node.id)}" data-story-node="${escapeHtml(node.refId)}" data-lane="${escapeHtml(node.lane)}" data-stage="${escapeHtml(node.stage)}" transform="translate(${node.x} ${node.y})"><rect width="170" height="58" rx="10"></rect><text x="12" y="24">${escapeHtml(node.label)}</text><text class="story-node-meta" x="12" y="43">${escapeHtml(node.stage)} · ${escapeHtml(node.lane)}</text></g>`).join('');
+    root.innerHTML = `<svg class="story-map-svg" viewBox="0 0 1900 ${height}" aria-label="ORPHEUS 故事流程圖">${paths}${cards}</svg>`;
   }
 
   window.AuthorRevealGraph = { filterModel, layoutNodes, renderStoryMap };
-  window.addEventListener('DOMContentLoaded', load);
 })();
 ```
 
-Use DOM creation or escaping for every user/content-derived string. Do not concatenate unescaped authored prose into HTML.
+Then add `load()` to fetch `/author/api/reveal-graph`, put the model in local state, render it, and on fetch/parse failure show `部分故事資料無法解析。` in `[data-story-map-status]` without throwing away the page shell.
 
-- [ ] **Step 5: Add CSS for readable lanes and focus states**
+- [ ] **Step 5: Add the base readable CSS**
 
-Create `public/css/authorRevealGraph.css` with layout requirements rather than decorative complexity:
+Create `public/css/authorRevealGraph.css`:
 
 ```css
-:root {
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color-scheme: dark;
-}
-
-body {
-  margin: 0;
-  background: #0d1016;
-  color: #f4f6fb;
-}
-
-.story-map-workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  min-height: 70vh;
-}
-
-.story-map-canvas {
-  overflow: auto;
-  border-block: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.story-map-inspector {
-  padding: 20px;
-  border-left: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.story-map-svg {
-  width: max(100%, 1500px);
-  min-height: 760px;
-}
-
-.story-node rect {
-  fill: #171c27;
-  stroke: rgba(255, 255, 255, 0.24);
-}
-
-.story-node:focus rect,
-.story-node:hover rect,
-.story-node.is-selected rect {
-  stroke-width: 2;
-  stroke: currentColor;
-}
-
-.story-node text {
-  fill: currentColor;
-  font-size: 12px;
-  pointer-events: none;
-}
-
-.story-node-meta {
-  opacity: 0.65;
-  font-size: 10px;
-}
-
-.story-edge {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.28);
-  stroke-width: 1.5;
-}
-
-@media (max-width: 900px) {
-  .story-map-workspace {
-    grid-template-columns: 1fr;
-  }
-
-  .story-map-inspector {
-    border-left: 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.12);
-  }
-}
+:root { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color-scheme: dark; }
+body { margin: 0; background: #0d1016; color: #f4f6fb; }
+main > header, .story-map-toolbar, [data-story-map-status], [data-story-map-diagnostics] { padding: 16px 20px; }
+.story-map-toolbar { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; }
+.story-map-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 340px; min-height: 70vh; }
+.story-map-canvas { overflow: auto; border-block: 1px solid rgba(255,255,255,.12); }
+.story-map-inspector { padding: 20px; border-left: 1px solid rgba(255,255,255,.12); }
+.story-map-svg { width: max(100%, 1500px); min-height: 760px; }
+.story-node rect { fill: #171c27; stroke: rgba(255,255,255,.24); }
+.story-node:focus rect, .story-node:hover rect, .story-node.is-selected rect { stroke-width: 2; stroke: currentColor; }
+.story-node text { fill: currentColor; font-size: 12px; pointer-events: none; }
+.story-node-meta { opacity: .65; font-size: 10px; }
+.story-edge { fill: none; stroke: rgba(255,255,255,.28); stroke-width: 1.5; }
+@media (max-width: 900px) { .story-map-workspace { grid-template-columns: 1fr; } .story-map-inspector { border-left: 0; border-top: 1px solid rgba(255,255,255,.12); } }
 ```
 
-Specific visual colors may be refined during implementation without changing the semantic layout; accessibility/focus contrast remains required.
-
-- [ ] **Step 6: Pin sparse/partial model behavior in-browser**
-
-Add a Playwright route override:
-
-```js
-test('partial graph data keeps the page usable', async ({ page }) => {
-  await page.route('**/author/api/reveal-graph', route => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({
-      nodes: [],
-      edges: [],
-      stages: [],
-      lanes: ['shared', 'A', 'B', 'ECHO'],
-      diagnostics: [],
-      stats: {}
-    })
-  }));
-
-  await page.goto('/author/reveal-graph');
-  await expect(page.getByText('這個篩選條件下沒有故事節點。')).toBeVisible();
-});
-```
-
-- [ ] **Step 7: Run focused Story Map E2E**
-
-Run:
+- [ ] **Step 6: Run Task 5 E2E**
 
 ```bash
 npx playwright test test/e2e/authorRevealGraph.spec.js
 ```
 
-Expected: PASS.
+Expected: PASS for human-readable node rendering and empty-model fallback.
 
-- [ ] **Step 8: Commit Task 5**
+- [ ] **Step 7: Commit Task 5**
 
 ```bash
 git add public/js/authorRevealGraph.js public/css/authorRevealGraph.css views/author/revealGraph.ejs test/e2e/authorRevealGraph.spec.js
@@ -1386,46 +1260,48 @@ git commit -m "feat: render author story map swimlanes"
 
 ---
 
-### Task 6: Add filtering, inspector, diagnostics focus, and technical drill-down
+### Task 6: Add inspector, filters, diagnostic focus, and technical drill-down
 
 **Files:**
 - Modify: `public/js/authorRevealGraph.js`
 - Modify: `public/css/authorRevealGraph.css`
-- Modify: `views/author/revealGraph.ejs`
 - Modify: `test/e2e/authorRevealGraph.spec.js`
-- Modify as needed after verification: `game/authoring/storyGraphMetadata.js`
+- Modify only if test coverage reveals missing human copy: `game/authoring/storyGraphMetadata.js`
 
 **Interfaces:**
-- Selecting a story node populates the inspector sections: `這是什麼？`, `玩家怎麼看到？`, `這會改變什麼？`, `後面可能發生？`.
-- Technical details are collapsed by default and reveal canonical ID, source, audience, predicate path, operation effects, and raw edge kinds when available.
-- Diagnostic controls focus/highlight related nodes; they never modify the graph.
+- Inspector sections appear in this order: `這是什麼？`, `玩家怎麼看到？`, `這會改變什麼？`, `後面可能發生？`.
+- Technical details are collapsed by default.
+- Diagnostic click clears conflicting filters, focuses the first related story node, highlights it, and shows the human diagnostic message.
 
-- [ ] **Step 1: Write failing E2E tests for viewpoint/stage filtering**
+- [ ] **Step 1: Write failing E2E tests for viewpoint/stage/type filters**
 
 Append:
 
 ```js
-test('viewpoint and stage filters keep the story readable', async ({ page }) => {
+test('viewpoint, stage, and type filters narrow the story without exposing technical nodes', async ({ page }) => {
   await page.goto('/author/reveal-graph');
-
   await page.getByRole('button', { name: 'A 視角' }).click();
   await expect(page.locator('[data-lane="B"]')).toHaveCount(0);
 
   await page.locator('[data-stage-filter]').selectOption('R4');
   await expect(page.getByText('找到 ORPHEUS 完整歷史')).toBeVisible();
+
+  await page.locator('[data-story-type-filter]').selectOption('TRUTH');
+  await expect(page.locator('[data-story-node="archive.history_timeline"]')).toBeVisible();
+  await expect(page.locator('[data-story-node^="main5Completed"]')).toHaveCount(0);
 });
 ```
 
-Ensure rendered story nodes receive `data-lane` and `data-stage` attributes so the test checks semantic output rather than SVG coordinates.
-
-- [ ] **Step 2: Write failing inspector and technical-details E2E tests**
+- [ ] **Step 2: Write failing E2E tests for story-first inspector and keyboard selection**
 
 Append:
 
 ```js
-test('node inspector explains story meaning before technical implementation', async ({ page }) => {
+test('inspector explains story meaning before technical implementation', async ({ page }) => {
   await page.goto('/author/reveal-graph');
-  await page.locator('[data-story-node="archive.history_timeline"]').click();
+  const node = page.locator('[data-story-node="archive.history_timeline"]');
+  await node.focus();
+  await node.press('Enter');
 
   const inspector = page.locator('[data-story-map-inspector]');
   await expect(inspector.getByRole('heading', { name: '這是什麼？' })).toBeVisible();
@@ -1438,67 +1314,55 @@ test('node inspector explains story meaning before technical implementation', as
 });
 ```
 
-- [ ] **Step 3: Implement filter state and rerendering**
-
-Add state and event handlers:
-
-```js
-const state = {
-  model: null,
-  filters: { viewpoint: 'all', stage: 'all', storyType: 'all' },
-  selectedNodeId: null
-};
-
-function renderCurrentView() {
-  const root = document.querySelector('[data-story-map-root]');
-  const filtered = filterModel(state.model, state.filters);
-  renderStoryMap(filtered, root);
-  bindNodeInteractions(root);
-}
-
-function bindFilters() {
-  document.querySelectorAll('[data-viewpoint]').forEach(button => {
-    button.addEventListener('click', () => {
-      state.filters.viewpoint = button.dataset.viewpoint;
-      document.querySelectorAll('[data-viewpoint]').forEach(item => {
-        item.setAttribute('aria-pressed', String(item === button));
-      });
-      renderCurrentView();
-    });
-  });
-
-  document.querySelector('[data-stage-filter]')?.addEventListener('change', event => {
-    state.filters.stage = event.target.value;
-    renderCurrentView();
-  });
-}
-```
-
-- [ ] **Step 4: Implement story-first inspector with technical details collapsed**
+- [ ] **Step 3: Implement local filter state and re-rendering**
 
 Add:
 
 ```js
-function renderInspector(node, model) {
+const state = {
+  model: null,
+  filters: { viewpoint: 'all', stage: 'all', storyType: 'all', diagnosticsOnly: false },
+  selectedNodeId: null
+};
+
+function renderCurrentView() {
+  const filtered = filterModel(state.model, state.filters);
+  const root = document.querySelector('[data-story-map-root]');
+  renderStoryMap(filtered, root);
+  bindNodeInteractions(root);
+}
+```
+
+Bind `[data-viewpoint]`, `[data-stage-filter]`, `[data-story-type-filter]`, and `[data-diagnostics-only]`; update `aria-pressed` on viewpoint buttons.
+
+- [ ] **Step 4: Implement story-first inspector using DOM APIs**
+
+Add:
+
+```js
+function section(titleText, bodyText) {
+  const section = document.createElement('section');
+  const title = document.createElement('h3');
+  const body = document.createElement('p');
+  title.textContent = titleText;
+  body.textContent = bodyText;
+  section.append(title, body);
+  return section;
+}
+
+function renderInspector(node, model, diagnostic = null) {
   const inspector = document.querySelector('[data-story-map-inspector]');
-  const incoming = model.edges.filter(edge => edge.to === node.id);
-  const outgoing = model.edges.filter(edge => edge.from === node.id);
-  const later = outgoing
-    .map(edge => model.nodes.find(candidate => candidate.id === edge.to))
-    .filter(Boolean)
-    .slice(0, 4);
+  const incoming = (model.edges || []).filter(edge => edge.to === node.id);
+  const outgoing = (model.edges || []).filter(edge => edge.from === node.id);
+  const later = outgoing.map(edge => model.nodes.find(candidate => candidate.id === edge.to)).filter(Boolean).slice(0, 4);
 
   inspector.replaceChildren();
-
-  const title = document.createElement('h2');
-  title.textContent = node.label;
-  inspector.append(title);
-
+  if (diagnostic) inspector.append(section(diagnostic.title, diagnostic.message));
   inspector.append(
-    inspectorSection('這是什麼？', node.summary || '這是一個故事流程中的關鍵節點。'),
-    inspectorSection('玩家怎麼看到？', humanIncoming(incoming, model)),
-    inspectorSection('這會改變什麼？', humanOutgoing(outgoing, model)),
-    inspectorSection('後面可能發生？', later.map(item => item.label).join('、') || '目前沒有更後面的可見故事節點。')
+    section('這是什麼？', node.summary || '這是一個故事流程中的關鍵節點。'),
+    section('玩家怎麼看到？', incoming.map(edge => edge.label || '前置故事條件').join('、') || '從目前故事階段即可看到。'),
+    section('這會改變什麼？', outgoing.map(edge => edge.label || '影響後續流程').join('、') || '主要提供理解，不直接改變下一步。'),
+    section('後面可能發生？', later.map(item => item.label).join('、') || '目前沒有更後面的可見故事節點。')
   );
 
   const toggle = document.createElement('button');
@@ -1523,88 +1387,71 @@ function renderInspector(node, model) {
 }
 ```
 
-Implement `inspectorSection()` with DOM APIs and make `humanIncoming()` / `humanOutgoing()` prefer edge human labels such as `解鎖`, `因為看過`, `因為選擇`, `ECHO 注意到`, `帶回共同路徑`, `可能導向`.
+`node.technical.prerequisites` from Task 2 must include hidden facts such as `main5Completed`, allowing the technical-details assertion to pass without rendering that fact in the canvas.
 
-- [ ] **Step 5: Add keyboard-equivalent node selection**
-
-Bind both click and Enter/Space on SVG node groups:
+- [ ] **Step 5: Implement click + Enter/Space node selection**
 
 ```js
 function bindNodeInteractions(root) {
   root.querySelectorAll('[data-node-id]').forEach(element => {
-    const select = () => selectNode(element.dataset.nodeId);
-    element.addEventListener('click', select);
+    const choose = () => selectNode(element.dataset.nodeId);
+    element.addEventListener('click', choose);
     element.addEventListener('keydown', event => {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        select();
+        choose();
       }
     });
   });
 }
 ```
 
-Add E2E assertion using `.press('Enter')` on one node and verify inspector update.
+`selectNode()` updates `state.selectedNodeId`, applies `.is-selected`, and calls `renderInspector()`.
 
-- [ ] **Step 6: Write and implement diagnostic focus behavior**
+- [ ] **Step 6: Write failing diagnostic-focus E2E test**
 
-Add E2E fixture:
+Append:
 
 ```js
-test('diagnostic selection explains the issue and focuses its story node', async ({ page }) => {
+test('diagnostic selection explains and focuses the affected story node', async ({ page }) => {
   await page.route('**/author/api/reveal-graph', async route => {
     const response = await route.fetch();
     const model = await response.json();
     model.diagnostics = [{
-      id: 'UNREACHABLE:file:archive.history_timeline',
-      code: 'UNREACHABLE',
-      severity: 'warning',
-      title: '這段故事可能永遠看不到',
-      message: '目前沒有找到可以抵達這段故事的路徑。',
-      nodeIds: ['file:archive.history_timeline'],
-      edgeIds: [],
-      technical: {}
+      id: 'UNREACHABLE:file:archive.history_timeline', code: 'UNREACHABLE', severity: 'warning',
+      title: '這段故事可能永遠看不到', message: '目前沒有找到可以抵達這段故事的路徑。',
+      nodeIds: ['file:archive.history_timeline'], edgeIds: [], technical: {}
     }];
     await route.fulfill({ response, json: model });
   });
 
   await page.goto('/author/reveal-graph');
   await page.getByRole('button', { name: /這段故事可能永遠看不到/ }).click();
-
   await expect(page.locator('[data-story-node="archive.history_timeline"]')).toHaveClass(/is-selected/);
   await expect(page.locator('[data-story-map-inspector]')).toContainText('目前沒有找到可以抵達這段故事的路徑');
 });
 ```
 
-Render diagnostics as buttons containing human title/message first, then a secondary technical code. Clicking one clears filters if necessary, selects the first related visible node, applies `.is-selected`, and shows the diagnostic message above the standard inspector sections.
+- [ ] **Step 7: Render diagnostics summary/buttons and implement focus behavior**
 
-- [ ] **Step 7: Add story-type and diagnostics-only controls**
+Render each diagnostic into `[data-story-map-diagnostics]` as a `<button>` whose accessible name begins with `diagnostic.title`; show `diagnostic.code` only as secondary text. On click:
 
-Extend EJS:
-
-```html
-<label>
-  類型
-  <select data-story-type-filter>
-    <option value="all">全部</option>
-    <option value="DISCOVERY">發現</option>
-    <option value="ECHO">ECHO</option>
-    <option value="ACTION">行動</option>
-    <option value="TRUTH">真相</option>
-    <option value="ENDING">結局</option>
-  </select>
-</label>
-<label>
-  <input type="checkbox" data-diagnostics-only>
-  只看需要注意的地方
-</label>
+```js
+function focusDiagnostic(issue) {
+  state.filters = { viewpoint: 'all', stage: 'all', storyType: 'all', diagnosticsOnly: false };
+  state.selectedNodeId = issue.nodeIds?.[0] || null;
+  renderCurrentView();
+  if (!state.selectedNodeId) return;
+  const node = state.model.nodes.find(item => item.id === state.selectedNodeId);
+  if (!node) return;
+  document.querySelector(`[data-node-id="${CSS.escape(node.id)}"]`)?.classList.add('is-selected');
+  renderInspector(node, state.model, issue);
+}
 ```
 
-When diagnostics-only is enabled, keep nodes listed in `diagnostic.nodeIds` plus direct connecting edges; do not invent new reachability.
+Diagnostics-only mode keeps nodes named by diagnostics and edges directly connecting retained nodes; it does not infer new story paths.
 
-- [ ] **Step 8: Run focused E2E and full project verification**
-
-Run:
+- [ ] **Step 8: Run focused E2E and complete verification**
 
 ```bash
 npx playwright test test/e2e/authorRevealGraph.spec.js
@@ -1614,30 +1461,21 @@ npm run test:e2e
 npm run check
 ```
 
-Expected: all commands PASS. `npm run check` is the final evidence before claiming implementation complete.
+Expected: all commands PASS.
 
-- [ ] **Step 9: Scan for accidental second sources of truth**
-
-Run:
+- [ ] **Step 9: Verify no second ending source of truth or graph dependency was introduced**
 
 ```bash
-grep -R "cooperative_escape.*aRequested\|a_solo_escape.*aRequested\|verifiedDifferences" game/authoring routes public/js/authorRevealGraph.js || true
-grep -R "Cytoscape\|cytoscape\|d3\|mermaid\|graphviz" package.json package-lock.json game/authoring public/js public/css || true
+grep -R "verifiedDifferences\|aSolo =\|bSolo =\|cooperativeFacts" game/authoring routes public/js/authorRevealGraph.js || true
+grep -R "cytoscape\|d3\|mermaid\|graphviz" package.json package-lock.json game/authoring public/js public/css || true
 ```
 
-Expected:
-
-```text
-(no copied ending-resolution condition table)
-(no newly added graph-library dependency)
-```
-
-References to ending IDs as display nodes are allowed; copied runtime predicates/precedence are not.
+Expected: no copied ending-resolution implementation and no newly added graph-library dependency. Display-only ending IDs/titles are allowed.
 
 - [ ] **Step 10: Commit Task 6**
 
 ```bash
-git add public/js/authorRevealGraph.js public/css/authorRevealGraph.css views/author/revealGraph.ejs test/e2e/authorRevealGraph.spec.js game/authoring/storyGraphMetadata.js
+git add public/js/authorRevealGraph.js public/css/authorRevealGraph.css test/e2e/authorRevealGraph.spec.js game/authoring/storyGraphMetadata.js
 git commit -m "feat: add story map filters inspector and diagnostics"
 ```
 
@@ -1645,22 +1483,20 @@ git commit -m "feat: add story map filters inspector and diagnostics"
 
 ## Completion Criteria
 
-Implementation is complete only when all of the following are demonstrated by tests or direct inspection:
-
 ```text
-[ ] /author/reveal-graph is readable by a human without knowing canonical IDs.
-[ ] A/B/shared/ECHO information asymmetry is visible through stable swimlanes.
-[ ] Reveal progression is organized by human stage names from 進入實驗 through 結果.
-[ ] Core story nodes use human labels; missing optional metadata degrades to readable fallback labels.
-[ ] Canonical IDs, predicate paths, and source files remain available through technical details.
-[ ] Complex predicates preserve canonical all/any/not semantics internally.
-[ ] Intermediate facts/gates are hidden in simple mode rather than overwhelming the map.
-[ ] Diagnostics use human-first messages and do not rate story quality.
-[ ] Explicit sharing actions do not trigger false private-information leak warnings.
-[ ] Ending nodes are shown as runtime-resolved possibilities; ending precedence is not duplicated.
-[ ] HTML and JSON author routes both return 404 in production mode.
-[ ] Empty/partial graph data keeps the page usable.
-[ ] No gameplay state or canonical content is mutated by graph generation.
+[ ] Default map is understandable without canonical IDs.
+[ ] A/B/shared/ECHO information asymmetry is visible through swimlanes.
+[ ] Human stage names run from 進入實驗 through 結果.
+[ ] Core reveal spine has authored human labels; missing metadata has readable fallback labels.
+[ ] Canonical IDs, source files, hidden predicates, and technical paths remain inspectable on demand.
+[ ] all/any/not semantics and reaction guards are preserved internally.
+[ ] Facts/gates/completion nodes are hidden from simple mode.
+[ ] All seven specified structural diagnostics exist with human-first messages.
+[ ] Explicit sharing actions do not create false audience-leak warnings.
+[ ] Exact ending resolution is labeled runtime-calculated; ending precedence is not duplicated.
+[ ] HTML and JSON author routes return 404 in production.
+[ ] Graph-build failure and empty graph data keep the author page usable.
+[ ] Graph generation does not mutate canonical content or gameplay state.
 [ ] No new graph library dependency is introduced.
 [ ] npm run check passes.
 ```
