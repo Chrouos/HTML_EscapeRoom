@@ -7,6 +7,11 @@ const {
   buildTechnicalStoryGraph,
   normalizePredicate
 } = require('../../game/authoring/storyGraph');
+const {
+  buildStoryMapModel,
+  fallbackLabel
+} = require('../../game/authoring/storyGraphPresentation');
+const { storyGraphMetadata } = require('../../game/authoring/storyGraphMetadata');
 
 test('builds canonical story/internal nodes including missions and runtime ending hub', () => {
   const graph = buildTechnicalStoryGraph({ contentBundle: content, endingCatalog: endings });
@@ -95,4 +100,53 @@ test('reaction guard is negative and thresholds retain detail', () => {
     normalizePredicate({ elapsedSinceMeaningfulAction: 60000 }, 'echo:x').edges[0].detail,
     { milliseconds: 60000 }
   );
+});
+
+test('presentation exposes human stages and hides implementation-only nodes', () => {
+  const technical = buildTechnicalStoryGraph({ contentBundle: content, endingCatalog: endings });
+  const story = buildStoryMapModel(technical, storyGraphMetadata);
+  assert.deepEqual(story.stages.map(stage => stage.label), [
+    '進入實驗', '建立合作', '產生矛盾', 'ECHO 介入', '身分揭露', '選擇框架', '結果'
+  ]);
+  assert.equal(story.nodes.some(node => ['FACT', 'ROLE_FACT', 'GATE', 'COMPLETION', 'CONTENT'].includes(node.technicalType)), false);
+  assert.equal(story.nodes.some(node => node.id.startsWith('fact:')), false);
+});
+
+test('important reveals use story language, stages, and A/B/ECHO swimlanes', () => {
+  const technical = buildTechnicalStoryGraph({ contentBundle: content, endingCatalog: endings });
+  const story = buildStoryMapModel(technical, storyGraphMetadata);
+  const byRef = new Map(story.nodes.map(node => [node.refId, node]));
+
+  assert.equal(byRef.get('archive.history_timeline').label, '找到 ORPHEUS 完整歷史');
+  assert.equal(byRef.get('archive.history_timeline').stage, 'R4');
+  assert.equal(byRef.get('archive.history_timeline').storyType, 'TRUTH');
+  assert.equal(byRef.get('archive.history_timeline').lane, 'shared');
+
+  assert.equal(byRef.get('doc.a_incident_report').lane, 'A');
+  assert.equal(byRef.get('files.experiment_roster').lane, 'B');
+  assert.equal(byRef.get('echo.behavior.protocol_recheck').lane, 'ECHO');
+  assert.equal(byRef.get('request_solo_validation').label, 'A 選擇個人存續驗證');
+});
+
+test('technical prerequisites remain inspectable without becoming visible cards', () => {
+  const technical = buildTechnicalStoryGraph({ contentBundle: content, endingCatalog: endings });
+  const story = buildStoryMapModel(technical, storyGraphMetadata);
+  const timeline = story.nodes.find(node => node.refId === 'archive.history_timeline');
+  assert.ok(timeline.technical.prerequisites.includes('fact:main5Completed'));
+  assert.equal(story.nodes.some(node => node.id === 'fact:main5Completed'), false);
+});
+
+test('ending cards stay human-readable and exact resolution remains runtime-calculated', () => {
+  const technical = buildTechnicalStoryGraph({ contentBundle: content, endingCatalog: endings });
+  const story = buildStoryMapModel(technical, storyGraphMetadata);
+  const ending = story.nodes.find(node => node.refId === 'cooperative_escape');
+  assert.equal(ending.storyType, 'ENDING');
+  assert.equal(ending.stage, 'R6');
+  assert.equal(ending.technical.endingResolution, 'runtime-calculated');
+  assert.equal(Object.hasOwn(ending.technical, 'condition'), false);
+});
+
+test('fallback labels remain readable when presentation metadata is absent', () => {
+  assert.equal(fallbackLabel('verify_incident_timestamp'), 'Verify incident timestamp');
+  assert.equal(fallbackLabel('archive.history_timeline'), 'Archive history timeline');
 });
