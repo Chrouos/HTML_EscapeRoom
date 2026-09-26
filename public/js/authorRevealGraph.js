@@ -8,13 +8,16 @@
   const summary = root.querySelector('[data-story-summary]');
   const inspector = root.querySelector('[data-story-inspector]');
   const diagnosticList = root.querySelector('[data-diagnostic-list]');
+  const diagnosticsOnlyInput = root.querySelector('[data-diagnostics-only]');
 
   const state = {
     model: null,
     stage: 'ALL',
     viewpoint: 'ALL',
     type: 'ALL',
-    selectedId: null
+    diagnosticsOnly: false,
+    selectedId: null,
+    selectedDiagnostic: null
   };
 
   function svg(tag, attrs = {}) {
@@ -44,9 +47,23 @@
     return state.type === 'ALL' || node.storyType === state.type;
   }
 
+  function diagnosticNodeIds() {
+    const ids = new Set();
+    for (const item of state.model?.diagnostics || []) {
+      if (item.nodeId) ids.add(item.nodeId);
+      for (const id of item.relatedNodeIds || []) ids.add(id);
+      for (const id of item.nodeIds || []) ids.add(id);
+    }
+    return ids;
+  }
+
   function filteredNodes() {
+    const diagnosticIds = state.diagnosticsOnly ? diagnosticNodeIds() : null;
     return (state.model?.nodes || []).filter(node =>
-      stageMatches(node) && viewpointMatches(node) && typeMatches(node)
+      stageMatches(node)
+      && viewpointMatches(node)
+      && typeMatches(node)
+      && (!diagnosticIds || diagnosticIds.has(node.id))
     );
   }
 
@@ -73,12 +90,20 @@
     }
   }
 
+  function syncFilterControls() {
+    activeButton('[data-stage-filters]', 'data-filter-stage', state.stage);
+    activeButton('[data-viewpoint-filters]', 'data-filter-viewpoint', state.viewpoint);
+    activeButton('[data-type-filters]', 'data-filter-type', state.type);
+    if (diagnosticsOnlyInput) diagnosticsOnlyInput.checked = state.diagnosticsOnly;
+  }
+
   function bindFilters() {
     root.querySelector('[data-stage-filters]')?.addEventListener('click', event => {
       const button = event.target.closest('[data-filter-stage]');
       if (!button) return;
       state.stage = button.dataset.filterStage;
-      activeButton('[data-stage-filters]', 'data-filter-stage', state.stage);
+      state.selectedDiagnostic = null;
+      syncFilterControls();
       render();
     });
 
@@ -86,7 +111,8 @@
       const button = event.target.closest('[data-filter-viewpoint]');
       if (!button) return;
       state.viewpoint = button.dataset.filterViewpoint;
-      activeButton('[data-viewpoint-filters]', 'data-filter-viewpoint', state.viewpoint);
+      state.selectedDiagnostic = null;
+      syncFilterControls();
       render();
     });
 
@@ -94,7 +120,14 @@
       const button = event.target.closest('[data-filter-type]');
       if (!button) return;
       state.type = button.dataset.filterType;
-      activeButton('[data-type-filters]', 'data-filter-type', state.type);
+      state.selectedDiagnostic = null;
+      syncFilterControls();
+      render();
+    });
+
+    diagnosticsOnlyInput?.addEventListener('change', () => {
+      state.diagnosticsOnly = diagnosticsOnlyInput.checked;
+      state.selectedDiagnostic = null;
       render();
     });
   }
@@ -117,8 +150,8 @@
 
   function renderGrid(stages, lanes, dimensions) {
     const { left, top, columnWidth, laneHeight, width, height } = dimensions;
-
     const background = svg('g', { class: 'story-grid' });
+
     lanes.forEach((lane, laneIndex) => {
       const y = top + laneIndex * laneHeight;
       const group = svg('g', {
@@ -126,17 +159,9 @@
         class: `story-lane story-lane-${lane.id}`
       });
       group.appendChild(svg('rect', {
-        x: 0,
-        y,
-        width,
-        height: laneHeight,
-        class: 'story-lane-bg'
+        x: 0, y, width, height: laneHeight, class: 'story-lane-bg'
       }));
-      const label = svg('text', {
-        x: 18,
-        y: y + 34,
-        class: 'story-lane-label'
-      });
+      const label = svg('text', { x: 18, y: y + 34, class: 'story-lane-label' });
       label.textContent = lane.label;
       group.appendChild(label);
       background.appendChild(group);
@@ -144,28 +169,13 @@
 
     stages.forEach((stage, stageIndex) => {
       const x = left + stageIndex * columnWidth;
-      const line = svg('line', {
-        x1: x,
-        y1: top - 12,
-        x2: x,
-        y2: height,
-        class: 'story-stage-line'
-      });
-      background.appendChild(line);
-
-      const stageLabel = svg('text', {
-        x: x + 16,
-        y: 30,
-        class: 'story-stage-label'
-      });
+      background.appendChild(svg('line', {
+        x1: x, y1: top - 12, x2: x, y2: height, class: 'story-stage-line'
+      }));
+      const stageLabel = svg('text', { x: x + 16, y: 30, class: 'story-stage-label' });
       stageLabel.textContent = stage.label;
       background.appendChild(stageLabel);
-
-      const stageId = svg('text', {
-        x: x + 16,
-        y: 49,
-        class: 'story-stage-id'
-      });
+      const stageId = svg('text', { x: x + 16, y: 49, class: 'story-stage-id' });
       stageId.textContent = stage.id;
       background.appendChild(stageId);
     });
@@ -228,18 +238,16 @@
       const from = positions.get(edge.from);
       const to = positions.get(edge.to);
       if (!from || !to) continue;
-
       const startX = from.x + from.width;
       const startY = from.y + from.height / 2;
       const endX = to.x;
       const endY = to.y + to.height / 2;
       const bend = Math.max(36, Math.abs(endX - startX) / 2);
-      const path = svg('path', {
+      group.appendChild(svg('path', {
         d: `M ${startX} ${startY} C ${startX + bend} ${startY}, ${endX - bend} ${endY}, ${endX} ${endY}`,
         class: 'story-edge',
         'marker-end': 'url(#story-map-arrow)'
-      });
-      group.appendChild(path);
+      }));
     }
 
     canvas.appendChild(group);
@@ -267,25 +275,15 @@
         'data-story-type': node.storyType
       });
       card.appendChild(svg('rect', {
-        width: pos.width,
-        height: pos.height,
-        rx: 10,
-        class: 'story-node-card'
+        width: pos.width, height: pos.height, rx: 10, class: 'story-node-card'
       }));
 
       const type = svg('text', { x: 14, y: 19, class: 'story-node-type' });
-      type.textContent = ({
-        DISCOVERY: '發現', ECHO: 'ECHO', ACTION: '行動', TRUTH: '真相', ENDING: '結局'
-      })[node.storyType] || node.storyType;
+      type.textContent = ({ DISCOVERY: '發現', ECHO: 'ECHO', ACTION: '行動', TRUTH: '真相', ENDING: '結局' })[node.storyType] || node.storyType;
       card.appendChild(type);
 
-      const lines = wrapText(node.label);
-      lines.forEach((line, index) => {
-        const label = svg('text', {
-          x: 14,
-          y: 40 + index * 17,
-          class: 'story-node-label'
-        });
+      wrapText(node.label).forEach((line, index) => {
+        const label = svg('text', { x: 14, y: 40 + index * 17, class: 'story-node-label' });
         label.textContent = line;
         card.appendChild(label);
       });
@@ -302,27 +300,107 @@
     canvas.appendChild(group);
   }
 
-  function renderInspector(node) {
+  function section(titleText, bodyText) {
+    const wrapper = document.createElement('section');
+    wrapper.className = 'inspector-section';
+    const title = document.createElement('h3');
+    title.textContent = titleText;
+    const body = document.createElement('p');
+    body.textContent = bodyText;
+    wrapper.append(title, body);
+    return wrapper;
+  }
+
+  function renderInspector(node, diagnostic = null) {
     clear(inspector);
     const kicker = document.createElement('p');
     kicker.className = 'panel-kicker';
     kicker.textContent = node ? `${node.stage} · ${node.lane}` : '節點說明';
     inspector.appendChild(kicker);
 
-    const heading = document.createElement('h2');
-    heading.textContent = node?.label || '選一段故事';
-    inspector.appendChild(heading);
+    if (!node) {
+      const heading = document.createElement('h2');
+      heading.textContent = '選一段故事';
+      const body = document.createElement('p');
+      body.textContent = '點擊地圖上的節點，查看玩家如何看到它，以及它可能影響什麼。';
+      inspector.append(heading, body);
+      return;
+    }
 
-    const body = document.createElement('p');
-    body.textContent = node?.summary || '點擊地圖上的節點，查看玩家如何看到它，以及它可能影響什麼。';
-    inspector.appendChild(body);
+    if (diagnostic) {
+      const alert = document.createElement('section');
+      alert.className = `inspector-diagnostic diagnostic-${diagnostic.severity || 'hint'}`;
+      const title = document.createElement('h2');
+      title.textContent = diagnostic.title || diagnostic.code || '故事結構提醒';
+      const message = document.createElement('p');
+      message.textContent = diagnostic.message || '';
+      alert.append(title, message);
+      inspector.appendChild(alert);
+    }
+
+    const incoming = (state.model?.edges || []).filter(edge => edge.to === node.id);
+    const outgoing = (state.model?.edges || []).filter(edge => edge.from === node.id);
+    const nodeById = new Map((state.model?.nodes || []).map(item => [item.id, item]));
+    const later = outgoing.map(edge => nodeById.get(edge.to)).filter(Boolean).slice(0, 4);
+
+    inspector.append(
+      section('這是什麼？', node.summary || '這是一個故事流程中的關鍵節點。'),
+      section('玩家怎麼看到？', incoming.map(edge => edge.label || '前置故事條件').join('、') || '從目前故事階段即可看到。'),
+      section('這會改變什麼？', outgoing.map(edge => edge.label || '影響後續流程').join('、') || '主要提供理解，不直接改變下一步。'),
+      section('後面可能發生？', later.map(item => item.label).join('、') || '目前沒有更後面的可見故事節點。')
+    );
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'technical-toggle';
+    toggle.textContent = '顯示技術細節';
+    toggle.setAttribute('aria-expanded', 'false');
+
+    const details = document.createElement('pre');
+    details.className = 'technical-details';
+    details.hidden = true;
+    details.textContent = JSON.stringify({
+      id: node.refId,
+      canonicalId: node.id,
+      stage: node.stage,
+      lane: node.lane,
+      storyType: node.storyType,
+      technical: node.technical || {},
+      incoming: incoming.map(edge => ({ from: edge.from, kind: edge.kind, technicalKinds: edge.technicalKinds })),
+      outgoing: outgoing.map(edge => ({ to: edge.to, kind: edge.kind, technicalKinds: edge.technicalKinds }))
+    }, null, 2);
+
+    toggle.addEventListener('click', () => {
+      details.hidden = !details.hidden;
+      toggle.textContent = details.hidden ? '顯示技術細節' : '隱藏技術細節';
+      toggle.setAttribute('aria-expanded', String(!details.hidden));
+    });
+    inspector.append(toggle, details);
   }
 
-  function selectNode(nodeId) {
+  function selectNode(nodeId, diagnostic = null) {
     state.selectedId = nodeId;
-    const node = state.model?.nodes?.find(item => item.id === nodeId) || null;
-    renderInspector(node);
+    state.selectedDiagnostic = diagnostic;
     renderCanvas();
+    const node = state.model?.nodes?.find(item => item.id === nodeId) || null;
+    renderInspector(node, diagnostic);
+  }
+
+  function focusDiagnostic(item) {
+    const targetId = item.nodeId || item.nodeIds?.[0] || item.relatedNodeIds?.[0] || null;
+    state.stage = 'ALL';
+    state.viewpoint = 'ALL';
+    state.type = 'ALL';
+    state.diagnosticsOnly = false;
+    state.selectedId = targetId;
+    state.selectedDiagnostic = item;
+    syncFilterControls();
+    renderCanvas();
+    const node = state.model?.nodes?.find(candidate => candidate.id === targetId) || null;
+    renderInspector(node, item);
+    if (targetId) {
+      root.querySelector(`[data-node-id="${CSS.escape(targetId)}"]`)?.focus();
+    }
   }
 
   function renderDiagnostics() {
@@ -337,15 +415,19 @@
     }
 
     for (const item of diagnostics) {
-      const article = document.createElement('article');
-      article.className = `diagnostic-card diagnostic-${item.severity || 'hint'}`;
-      article.dataset.diagnosticCode = item.code || '';
-      const title = document.createElement('h3');
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `diagnostic-card diagnostic-${item.severity || 'hint'}`;
+      button.dataset.diagnosticCode = item.code || '';
+      const title = document.createElement('strong');
       title.textContent = item.title || item.code || '故事結構提醒';
-      const message = document.createElement('p');
+      const message = document.createElement('span');
       message.textContent = item.message || '';
-      article.append(title, message);
-      diagnosticList.appendChild(article);
+      const code = document.createElement('small');
+      code.textContent = item.code || '';
+      button.append(title, message, code);
+      button.addEventListener('click', () => focusDiagnostic(item));
+      diagnosticList.appendChild(button);
     }
   }
 
@@ -364,11 +446,8 @@
     renderEdges(nodes, positions);
     renderNodes(nodes, positions);
 
-    if (!nodes.length) {
-      status.textContent = '這個篩選條件下沒有故事節點。';
-    } else {
-      status.textContent = `目前顯示 ${nodes.length} 段故事。點擊節點可查看詳細說明。`;
-    }
+    if (!nodes.length) status.textContent = '這個篩選條件下沒有故事節點。';
+    else status.textContent = `目前顯示 ${nodes.length} 段故事。點擊節點可查看詳細說明。`;
     summary.textContent = `${nodes.length} / ${state.model?.nodes?.length || 0} 個故事節點`;
   }
 
@@ -377,7 +456,7 @@
     renderCanvas();
     renderDiagnostics();
     const selected = state.model.nodes?.find(node => node.id === state.selectedId) || null;
-    renderInspector(selected);
+    renderInspector(selected, state.selectedDiagnostic);
   }
 
   async function load() {
@@ -389,8 +468,7 @@
     } catch (error) {
       state.model = {
         nodes: [], edges: [], stages: [], lanes: [], diagnostics: [{
-          code: 'GRAPH_LOAD_ERROR',
-          severity: 'error',
+          code: 'GRAPH_LOAD_ERROR', severity: 'error', nodeId: null,
           title: '部分故事資料無法解析',
           message: error instanceof Error ? error.message : String(error),
           relatedNodeIds: []
@@ -402,8 +480,6 @@
   }
 
   bindFilters();
-  activeButton('[data-stage-filters]', 'data-filter-stage', state.stage);
-  activeButton('[data-viewpoint-filters]', 'data-filter-viewpoint', state.viewpoint);
-  activeButton('[data-type-filters]', 'data-filter-type', state.type);
+  syncFilterControls();
   load();
 })();
