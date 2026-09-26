@@ -7,19 +7,71 @@
   <link rel="stylesheet" href="/css/authorRevealGraph.css">
 </head>
 <body>
-  <main data-author-story-map>
-    <header>
-      <p>AUTHOR TOOL</p>
-      <h1>ORPHEUS Story Map</h1>
-      <p>查看玩家此刻知道什麼、為什麼知道，以及下一步可能發生什麼。</p>
+  <main class="story-map-app" data-author-story-map>
+    <header class="story-map-header">
+      <div>
+        <p class="eyebrow">AUTHOR TOOL · READ ONLY</p>
+        <h1>ORPHEUS Story Map</h1>
+        <p class="lede">查看玩家此刻知道什麼、為什麼知道，以及下一步可能發生什麼。</p>
+      </div>
+      <div class="story-map-summary" data-story-summary aria-live="polite"></div>
     </header>
 
-    <section aria-label="故事流程" data-story-map-status>
-      <p>載入故事地圖…</p>
+    <section class="story-map-filters" aria-label="故事地圖篩選">
+      <div class="filter-group" data-stage-filters>
+        <span class="filter-label">故事階段</span>
+        <button type="button" class="filter-chip is-active" data-filter-stage="ALL">全部</button>
+        <button type="button" class="filter-chip" data-filter-stage="R0">進入實驗</button>
+        <button type="button" class="filter-chip" data-filter-stage="R1">建立合作</button>
+        <button type="button" class="filter-chip" data-filter-stage="R2">產生矛盾</button>
+        <button type="button" class="filter-chip" data-filter-stage="R3">ECHO 介入</button>
+        <button type="button" class="filter-chip" data-filter-stage="R4">身分揭露</button>
+        <button type="button" class="filter-chip" data-filter-stage="R5">選擇框架</button>
+        <button type="button" class="filter-chip" data-filter-stage="R6">結果</button>
+      </div>
+
+      <div class="filter-group" data-viewpoint-filters>
+        <span class="filter-label">視角</span>
+        <button type="button" class="filter-chip is-active" data-filter-viewpoint="ALL">全部</button>
+        <button type="button" class="filter-chip" data-filter-viewpoint="A">A 視角</button>
+        <button type="button" class="filter-chip" data-filter-viewpoint="B">B 視角</button>
+        <button type="button" class="filter-chip" data-filter-viewpoint="shared">共同資訊</button>
+        <button type="button" class="filter-chip" data-filter-viewpoint="ECHO">ECHO</button>
+      </div>
+
+      <div class="filter-group" data-type-filters>
+        <span class="filter-label">內容</span>
+        <button type="button" class="filter-chip is-active" data-filter-type="ALL">全部</button>
+        <button type="button" class="filter-chip" data-filter-type="DISCOVERY">發現</button>
+        <button type="button" class="filter-chip" data-filter-type="ECHO">ECHO</button>
+        <button type="button" class="filter-chip" data-filter-type="ACTION">行動</button>
+        <button type="button" class="filter-chip" data-filter-type="TRUTH">真相</button>
+        <button type="button" class="filter-chip" data-filter-type="ENDING">結局</button>
+      </div>
     </section>
 
-    <aside aria-label="故事節點詳情" data-story-inspector></aside>
-    <section aria-label="故事結構提醒" data-story-diagnostics></section>
+    <section class="story-map-workspace">
+      <div class="story-map-main">
+        <p class="story-map-status" data-story-map-status aria-live="polite">載入故事地圖…</p>
+        <div class="story-map-scroll" data-story-map-scroll>
+          <svg class="story-map-canvas" data-story-map-canvas role="img" aria-label="ORPHEUS 故事流程地圖"></svg>
+        </div>
+      </div>
+
+      <aside class="story-inspector" aria-label="故事節點詳情" data-story-inspector>
+        <p class="panel-kicker">節點說明</p>
+        <h2>選一段故事</h2>
+        <p>點擊地圖上的節點，查看玩家如何看到它，以及它可能影響什麼。</p>
+      </aside>
+    </section>
+
+    <section class="story-diagnostics" aria-label="故事結構提醒" data-story-diagnostics>
+      <div class="diagnostics-heading">
+        <p class="panel-kicker">STRUCTURE CHECK</p>
+        <h2>需要注意的地方</h2>
+      </div>
+      <div data-diagnostic-list></div>
+    </section>
   </main>
 
   <script src="/public/js/authorRevealGraph.js" defer></script>
