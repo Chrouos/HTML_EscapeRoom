@@ -16,8 +16,9 @@ function appFor(env = 'test', options = {}) {
   return app;
 }
 
-async function withServer(app, run) {
+async function withServer(app, run, env = 'test') {
   const server = await testServer(app);
+  app.set('env', env);
   try {
     await run(server);
   } finally {
@@ -49,7 +50,7 @@ test('production hides both author endpoints behind normal 404 handling', async 
       assert.equal(response.status, 404, pathname);
       assert.equal(await response.text(), '404');
     }
-  });
+  }, 'production');
 });
 
 test('a graph build failure returns a usable partial model instead of crashing the author tool', async () => {
