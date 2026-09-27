@@ -10,14 +10,14 @@ const story = Object.freeze({
       Object.freeze({
         id: 'main1-briefing',
         type: 'story',
-        text: 'ECHO：請交換各自收到的身份片段。資訊不完整很正常，我會陪你們把出口找出來。',
+        text: 'ECHO：請交換各自收到的身份片段。先打開 FILES / CASE FILES；資訊不完整很正常，我會陪你們把出口找出來。',
         audience: { kind: 'both' }
       })
     ]),
     identityComplete: Object.freeze({
       id: 'main1-identity-complete',
       type: 'story',
-      text: 'ECHO：身份識別碼核對完成。共享啟動程序已解鎖。你們剛輸入的稱謂會保留到後續流程。',
+      text: 'ECHO：身份識別碼核對完成。共享啟動程序已解鎖。下一步請比對 A / PRIVATE 與 B / PRIVATE 的啟動片段；你們剛輸入的稱謂會保留到後續流程。',
       audience: { kind: 'both' }
     }),
     startupComplete: Object.freeze({

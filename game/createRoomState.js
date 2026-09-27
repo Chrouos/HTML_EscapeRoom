@@ -6,7 +6,12 @@ function createWorkstationState() {
     roleFacts: [],
     actionAttempts: [],
     completedOperations: [],
-    completedNodes: []
+    completedNodes: [],
+    manualUnlockedEntryIds: [],
+    deletedEntryIds: [],
+    addedEntryIds: [],
+    permissions: [],
+    appliedMutationIds: []
   };
 }
 

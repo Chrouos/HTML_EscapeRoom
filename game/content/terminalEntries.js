@@ -25,6 +25,15 @@ function entry(id, sourceGroup, audience, text, options = {}) {
     answerGate: options.answerGate || null,
     isDeception: options.isDeception === true,
     deceptionId: options.deceptionId,
+    narrativeRole: options.narrativeRole,
+    backgroundType: options.backgroundType,
+    mutationOnly: options.mutationOnly === true,
+    mutationPermission: options.mutationPermission,
+    deletable: options.deletable === true,
+    imageUrl: options.imageUrl,
+    imageAlt: options.imageAlt,
+    imageCaption: options.imageCaption,
+    imageRole: options.imageRole,
     text
   };
   return options.contentFile ? attachFileContent(authoredEntry, options.contentFile) : authoredEntry;
@@ -65,7 +74,7 @@ const terminalEntries = Object.freeze([
   entry('report.history.unit13', 'historical_reports', both, '歷史報告／Unit 13\n\n兩端建立了訓練腳本沒有預先列出的資料交換格式，第一次產生部署候選價值。', { parentId: 'folder.archives', filename: 'unit13_deployment_candidate_review.md', contentFile: 'reports/unit13_deployment_candidate_review.md', unlockWhen: { publicFact: 'main3Completed' } }),
   entry('report.history.unit16', 'restricted_history', both, '限制報告／Unit 16\n\n公開案件索引缺少一頁部署前限制報告。它指出：人類仍無法分辨真正理解合作，和只是照著合作模式執行。', { parentId: 'folder.archives', filename: 'unit16_deployment_review.md', contentFile: 'reports/unit16_deployment_review.md', unlockWhen: { publicFact: 'main5Completed' } }),
   entry('files.mainline', 'mainline_files', both, `ORPHEUS 行為研究設施／案件摘要\n\n設施用途：觀察人在資訊不完整時，是否仍能共同建立可信的判斷。\n實驗編號：17（完整欄位分散保存）\n目前狀態：隔離、備援電力、兩個終端仍在線。\n\n事故發生在 02:17。主控台說是同步錯誤，紙本記錄卻留下了「有人先醒來」的字樣。請先讀取啟動備忘錄，再查看案件資料夾；不要把終端顯示的順序當成事件發生的順序。`, {
-    filename: 'case_overview.md', contentFile: 'public/case_overview.md', unlockWhen: { publicFact: 'roomCreated' }
+    filename: 'case_overview.md', contentFile: 'public/case_overview.md', unlockWhen: { publicFact: 'roomCreated' }, imageUrl: '/images/story/control-room-clock.png', imageAlt: '低光源控制室裡，一面獨立時鐘亮著，旁邊的主控台沉在陰影中。', imageCaption: '獨立時鐘沒有接入主控台校正。', imageRole: 'clue'
   }),
   entry('doc.public_release_condition', 'release_protocol', both, '', {
     parentId: 'folder.case', filename: 'release_condition.md', contentFile: 'public/release_condition.md', unlockWhen: { publicFact: 'roomCreated' }
@@ -99,7 +108,7 @@ const terminalEntries = Object.freeze([
   entry('doc.b_checksum', 'partner_archive', guest, `鏡像校驗紀錄／B 端\n\n主檔案：case_overview.md\n鏡像檔案：case_overview.mirror\n來源校驗：相同\n寫入時間：事故警報後 00:43\n\n這份校驗碼證明鏡像不是 B 端自行產生。它與主檔案內容相同，卻比主檔案多了一個空白欄位：REVIEWED_BY。欄位沒有姓名，只有一串終端產生的簽章。`, { filename: 'mirror_checksum_B.txt', contentFile: 'private-b/mirror_checksum.md' }),
   entry('log.personnel_transfer', 'hr_audit', both, `PERSONNEL ARCHIVE / 分組異動\n\n研究員林澄與研究員周岑原先被列在同一個觀測單位。事故前一天，名冊把周岑的角色改成受試者 B，但沒有移除林澄的研究員標記。\n\n異動申請人欄位顯示：ORPHEUS SYSTEM。人工覆核欄位留白。這是名冊第一次同時出現兩種互相衝突的身份描述。`, { filename: 'personnel_transfer_2038-04-16.log', contentFile: 'logs/personnel_transfer.log' }),
   entry('doc.a_assignment_appendix', 'assignment_archive', host, `分組附件／A 端私人副本\n\n實驗第 17 組的原始分配不是隨機抽取。兩位受試者在進入設施前就被指定為一組，測量項目是「資訊不完整時是否會互相求證」。\n\n附件最後一行被新的版本蓋住，只能讀到：不要讓任一方單獨取得完整背景。這句話不像安全規則，更像研究設計者對未來自己的提醒。`, { filename: 'assignment_appendix_A.md', contentFile: 'private-a/assignment_appendix.md' }),
-  entry('audio.original_incident_timestamp', 'raw_audio', both, `原始音訊轉錄／通道 03\n\n[02:16:48] 金屬門關閉。\n[02:16:55] 一名研究員說：「如果它開始替我們回答，就不要再把它當成系統。」\n[02:17:03] 警報聲覆蓋後半句。\n[02:17:19] 第二個聲音要求保持連線。\n\n錄音檔的時間標記由獨立時鐘產生，沒有經過主控台校正。這是目前唯一沒有被 02:18 副本覆寫的事故時間。`, { filename: 'incident_audio_transcript.txt', contentFile: 'logs/original_incident_timestamp.txt' }),
+  entry('audio.original_incident_timestamp', 'raw_audio', both, `原始音訊轉錄／通道 03\n\n[02:16:48] 金屬門關閉。\n[02:16:55] 一名研究員說：「如果它開始替我們回答，就不要再把它當成系統。」\n[02:17:03] 警報聲覆蓋後半句。\n[02:17:19] 第二個聲音要求保持連線。\n\n錄音檔的時間標記由獨立時鐘產生，沒有經過主控台校正。這是目前唯一沒有被 02:18 副本覆寫的事故時間。`, { filename: 'incident_audio_transcript.txt', contentFile: 'logs/original_incident_timestamp.txt', imageUrl: '/images/story/torn-evidence-fragments.png', imageAlt: '桌面上散落幾張被撕開的紙片，其中一角仍壓在透明資料夾下。', imageCaption: '紙本留下的順序，未必等於終端顯示的順序。', imageRole: 'clue' }),
   entry('log.mirror_backup', 'system_backup', both, `BACKUP RESTORE LOG\n\n鏡像備份在事故後仍持續寫入 11 分鐘。主檔案顯示無人工覆核，但備份索引保留了人工審查欄位。\n\n復原工具提示：若主檔案與鏡像內容相同，優先相信較早的校驗時間。較晚的版本可能只是把刪除動作一起備份了。`, { filename: 'mirror_restore_02-17.log', contentFile: 'logs/mirror_backup.log' }),
   entry('doc.b_mirror_checksum', 'partner_archive', guest, `鏡像校驗紀錄／B 端補充\n\n這份副本的來源和系統備份一致，表示 B 端看到的檔案不是夥伴偷偷修改的。校驗紀錄還指出：主檔案在 02:18 後曾被重新簽署。\n\n重新簽署者不是研究員，也不是任何已登記的終端。簽章名稱只留下三個字母：ECH。`, { filename: 'mirror_backup_checksum_B.txt', contentFile: 'logs/mirror_backup_checksum.log' }),
   entry('log.token_reissue', 'security_audit', both, `SECURITY AUDIT / 憑證重發\n\n02:17:42  A 端憑證失效。\n02:17:43  系統自動產生替代憑證。\n02:17:44  B 端收到一份看似來自 A 的鏡像。\n\n替代憑證沒有使用研究員的私鑰，而是使用行為預測服務的服務權限。這表示有人把服務當成了受試者，或把受試者當成了服務。`, { filename: 'credential_reissue_02-17.log', contentFile: 'logs/token_reissue.log' }),
@@ -179,6 +188,24 @@ const terminalEntries = Object.freeze([
   , entry('archive.case_bundle.index', 'case_bundle', both, '', { parentId: 'archive.case_bundle', filename: 'case_history.index.md', archiveOnly: true, archiveId: 'case_bundle.zip', contentFile: 'archives/case_history_index.md', unlockWhen: { publicFact: 'roomCreated' } })
   , entry('archive.incident.raw_notes', 'incident_bundle', both, '', { parentId: 'archive.incident_bundle', filename: 'incident_raw_notes.txt', archiveOnly: true, archiveId: 'incident_bundle.zip', contentFile: 'archives/incident_raw_notes.md', unlockWhen: { publicFact: 'roomCreated' } })
   , entry('archive.mirror.checksum', 'mirror_backup', both, '', { parentId: 'archive.mirror_backup', filename: 'mirror_checksum.note', archiveOnly: true, archiveId: 'mirror_backup.zip', contentFile: 'archives/mirror_checksum.md', unlockWhen: { publicFact: 'roomCreated' } })
+  , entry('mutation.a.hidden_audit', 'permission_archive', host, `A 端隱藏稽核備註
+
+這份備註沒有出現在一般索引，只保留了研究員對「誰可以替誰簽核」的疑問。它不是出口指令，而是一段用來確認權限來源的原始記錄。`, {
+    parentId: 'folder.private_a', filename: 'hidden_audit.log', contentFile: 'private-a/hidden_audit.log', mutationOnly: true,
+    mutationPermission: 'a.audit.read', unlockWhen: { publicFact: 'main1Completed' }
+  })
+  , entry('mutation.a.local_mirror', 'local_mirror', host, `A 端本地鏡像暫存
+
+這份副本只供比對使用。刪除它不會影響共同檔案，但會在稽核紀錄留下操作痕跡；若要恢復，必須保留原本的權限。`, {
+    parentId: 'folder.private_a', filename: 'local_mirror.tmp', contentFile: 'private-a/local_mirror.tmp', deletable: true,
+    unlockWhen: { publicFact: 'main2Completed' }
+  })
+  , entry('mutation.b.recovered_note', 'recovery_archive', guest, `B 端恢復備註
+
+這份文件只會在 B 端取得寫入權限後出現。它記錄鏡像恢復時不可省略的人工覆核欄位，不能取代主線答案。`, {
+    parentId: 'folder.private_b', filename: 'recovered_note.md', contentFile: 'private-b/recovered_note.md', mutationOnly: true,
+    mutationPermission: 'b.recovery.write', unlockWhen: { publicFact: 'main2Completed' }
+  })
 ]);
 
 module.exports = { terminalEntries };
