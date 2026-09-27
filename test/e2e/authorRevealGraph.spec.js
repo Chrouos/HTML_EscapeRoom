@@ -11,6 +11,7 @@ test('author Story Map renders human stages, swimlanes, and a late truth node', 
   await expect(page.locator('[data-story-lane="B"]')).toBeVisible();
   await expect(page.locator('[data-story-lane="ECHO"]')).toBeVisible();
   await expect(page.locator('[data-story-node="archive.history_timeline"]')).toContainText('找到 ORPHEUS 完整歷史');
+  await expect(page.locator('[data-story-node="runtime"]')).toContainText('依完整紀錄判定結局');
 });
 
 test('stage and viewpoint filters keep the map focused on human story concepts', async ({ page }) => {
