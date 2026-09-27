@@ -20,12 +20,23 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - name: Fix reconciliation script quoting
-        run: >-
-          python -c 'from pathlib import Path; p=Path("scripts/reconcile-master-runtime.js"); s=p.read_text(); s=s.replace("ws.appliedMutationIds.push(`${mutation.command}:${target.id}`);", "ws.appliedMutationIds.push(mutation.command + \":\" + target.id);").replace("const mutationId = `${mutation.command}:${target.id}`;", "const mutationId = mutation.command + \":\" + target.id;"); p.write_text(s)'
+      - name: Normalize reconciliation generator
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          p = Path('scripts/reconcile-master-runtime.js')
+          s = p.read_text()
+          s = s.replace("ws.appliedMutationIds.push(`${mutation.command}:${target.id}`);", "ws.appliedMutationIds.push(mutation.command + ':' + target.id);")
+          s = s.replace("const mutationId = `${mutation.command}:${target.id}`;", "const mutationId = mutation.command + ':' + target.id;")
+          s = s.replace("    hintsByRole: { A: {}, B: {} },\n", '')
+          s = s.replace("filename: 'hidden_audit.log', mutationOnly: true,", "filename: 'hidden_audit.log', contentFile: 'private-a/hidden_audit.log', mutationOnly: true,")
+          s = s.replace("filename: 'local_mirror.tmp', deletable: true,", "filename: 'local_mirror.tmp', contentFile: 'private-a/local_mirror.tmp', deletable: true,")
+          s = s.replace("filename: 'recovered_note.md', mutationOnly: true,", "filename: 'recovered_note.md', contentFile: 'private-b/recovered_note.md', mutationOnly: true,")
+          p.write_text(s)
+          PY
       - name: Apply reconciliation patch
         run: node scripts/reconcile-master-runtime.js
-      - name: Normalize generated source and file-backed mutation records
+      - name: Normalize generated source and create mutation files
         run: |
           python <<'PY'
           from pathlib import Path
@@ -36,22 +47,7 @@ jobs:
               ']);\n\nmodule.exports = { terminalEntries };]);\n\nmodule.exports = { terminalEntries };',
               ']);\n\nmodule.exports = { terminalEntries };'
           )
-          source = source.replace(
-              "parentId: 'folder.private_a', filename: 'hidden_audit.log', mutationOnly: true,",
-              "parentId: 'folder.private_a', filename: 'hidden_audit.log', contentFile: 'private-a/hidden_audit.log', mutationOnly: true,"
-          )
-          source = source.replace(
-              "parentId: 'folder.private_a', filename: 'local_mirror.tmp', deletable: true,",
-              "parentId: 'folder.private_a', filename: 'local_mirror.tmp', contentFile: 'private-a/local_mirror.tmp', deletable: true,"
-          )
-          source = source.replace(
-              "parentId: 'folder.private_b', filename: 'recovered_note.md', mutationOnly: true,",
-              "parentId: 'folder.private_b', filename: 'recovered_note.md', contentFile: 'private-b/recovered_note.md', mutationOnly: true,"
-          )
           terminal.write_text(source)
-
-          room_state = Path('game/createRoomState.js')
-          room_state.write_text(room_state.read_text().replace("    hintsByRole: { A: {}, B: {} },\n", ''))
 
           files = {
               'game/content/files/private-a/hidden_audit.log': '''A 端隱藏稽核備註
@@ -71,6 +67,12 @@ jobs:
               path = Path(filename)
               path.parent.mkdir(parents=True, exist_ok=True)
               path.write_text(content)
+
+          room_state = Path('game/createRoomState.js').read_text()
+          assert 'hintsByRole:' not in room_state, 'initial room shape unexpectedly contains hintsByRole'
+          generated = terminal.read_text()
+          for expected in ('private-a/hidden_audit.log', 'private-a/local_mirror.tmp', 'private-b/recovered_note.md'):
+              assert expected in generated, f'missing generated contentFile: {expected}'
           PY
       - name: Install dependencies
         run: npm ci
