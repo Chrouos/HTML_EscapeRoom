@@ -74,6 +74,11 @@ const storyGraphMetadata = Object.freeze({
     summary: '兩個實例提交最後狀態後，由既有 runtime ending engine 決定結果。',
     storyType: 'ACTION', stage: 'R6', lane: 'shared', importance: 'critical'
   },
+  'endingResolution:runtime': {
+    label: '依完整紀錄判定結局',
+    summary: '遊戲在這裡依真正的 runtime 規則決定結果；Story Map 不複製判定條件。',
+    storyType: 'ACTION', stage: 'R6', lane: 'shared', importance: 'major'
+  },
   'ending:cooperative_escape': {
     label: '共同存續', storyType: 'ENDING', stage: 'R6', lane: 'shared', importance: 'critical'
   },
