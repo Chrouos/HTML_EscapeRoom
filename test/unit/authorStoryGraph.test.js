@@ -136,6 +136,21 @@ test('technical prerequisites remain inspectable without becoming visible cards'
   assert.equal(story.nodes.some(node => node.id === 'fact:main5Completed'), false);
 });
 
+test('runtime ending resolution is a visible human story node without copied conditions', () => {
+  const technical = buildTechnicalStoryGraph({ contentBundle: content, endingCatalog: endings });
+  const story = buildStoryMapModel(technical, storyGraphMetadata);
+  const resolver = story.nodes.find(node => node.id === 'endingResolution:runtime');
+
+  assert.ok(resolver);
+  assert.equal(resolver.label, '依完整紀錄判定結局');
+  assert.equal(resolver.storyType, 'ACTION');
+  assert.equal(resolver.stage, 'R6');
+  assert.equal(resolver.technical.endingResolution, 'runtime-calculated');
+  assert.equal(Object.hasOwn(resolver.technical, 'condition'), false);
+  assert.ok(story.edges.some(edge => edge.from === 'action:commit_finale' && edge.to === resolver.id));
+  assert.ok(story.edges.some(edge => edge.from === resolver.id && edge.to === 'ending:cooperative_escape'));
+});
+
 test('ending cards stay human-readable and exact resolution remains runtime-calculated', () => {
   const technical = buildTechnicalStoryGraph({ contentBundle: content, endingCatalog: endings });
   const story = buildStoryMapModel(technical, storyGraphMetadata);
