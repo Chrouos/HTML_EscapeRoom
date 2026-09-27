@@ -20,6 +20,9 @@ jobs:
         with:
           node-version: 20
           cache: npm
+      - name: Fix reconciliation script quoting
+        run: >-
+          python -c 'from pathlib import Path; p=Path("scripts/reconcile-master-runtime.js"); s=p.read_text(); s=s.replace("ws.appliedMutationIds.push(`${mutation.command}:${target.id}`);", "ws.appliedMutationIds.push(mutation.command + \":\" + target.id);").replace("const mutationId = `${mutation.command}:${target.id}`;", "const mutationId = mutation.command + \":\" + target.id;"); p.write_text(s)'
       - name: Apply reconciliation patch
         run: node scripts/reconcile-master-runtime.js
       - name: Install dependencies
