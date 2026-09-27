@@ -1644,3 +1644,30 @@
     padding-inline: 3px;
   }
 }
+
+.workstation-document-media {
+  margin: 0;
+  padding: 12px 14px 0;
+}
+
+.workstation-document-media img {
+  display: block;
+  width: min(100%, 560px);
+  max-height: 260px;
+  object-fit: cover;
+  border: 1px solid #315b57;
+  filter: saturate(.72) contrast(1.05);
+  opacity: .9;
+}
+
+.workstation-document-media.is-atmosphere img {
+  max-height: 190px;
+  opacity: .72;
+}
+
+.workstation-document-media figcaption {
+  max-width: 560px;
+  padding-top: 6px;
+  color: #789a98;
+  font: 10px/1.55 var(--mono);
+}

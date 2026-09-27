@@ -306,7 +306,26 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
         content.dataset.workstationEntryContent = '';
         content.textContent = typeof opened.content === 'string' ? opened.content
           : typeof opened.text === 'string' ? opened.text : '';
-        documentPanel.append(documentTitle, content);
+        documentPanel.append(documentTitle);
+        if (opened.imageUrl) {
+          const figure = document.createElement('figure');
+          figure.className = `workstation-document-media is-${opened.imageRole === 'atmosphere' ? 'atmosphere' : 'clue'}`;
+          figure.dataset.workstationDocumentMedia = '';
+          const image = document.createElement('img');
+          image.src = opened.imageUrl;
+          image.alt = typeof opened.imageAlt === 'string' ? opened.imageAlt : '';
+          image.loading = 'lazy';
+          image.decoding = 'async';
+          image.addEventListener('error', () => figure.remove());
+          figure.append(image);
+          if (typeof opened.imageCaption === 'string' && opened.imageCaption.trim()) {
+            const caption = document.createElement('figcaption');
+            caption.textContent = opened.imageCaption;
+            figure.append(caption);
+          }
+          documentPanel.append(figure);
+        }
+        documentPanel.append(content);
         if (opened.archive?.id) {
           const archiveForm = document.createElement('form');
           archiveForm.dataset.workstationArchiveForm = opened.archive.id;
@@ -591,7 +610,7 @@ export function createWorkstation(root, { onOperation, onPuzzleAction } = {}) {
     suggestions.dataset.terminalSuggestions = '';
     suggestions.hidden = true;
     suggestions.setAttribute('role', 'listbox');
-    const suggestionCommands = ['HELP', 'SEARCH <node>', 'SCAN <filename>', 'UNZIP <filename>', 'HINT', 'SEND <text>'];
+    const suggestionCommands = ['HELP', 'SEARCH <node>', 'SCAN <filename>', 'UNZIP <filename>', 'UNLOCK <filename>', 'DELETE <filename>', 'ADD <filename>', 'RESTORE <filename>', 'HINT', 'SEND <text>'];
     const suggestionButtons = suggestionCommands.map(command => {
       const suggestion = createButton(command, { 'data-terminal-suggestion': command });
       suggestion.addEventListener('click', () => {

@@ -24,6 +24,7 @@ app.set('views', path.resolve(__dirname, 'views'));
 app.set('view engine', 'ejs');
 
 app.use('/css', express.static(path.join(__dirname, 'public', 'css')));
+app.use('/images', express.static(path.join(__dirname, 'public', 'images')));
 app.use('/public', express.static(path.join(__dirname, 'public')));
 app.use(logger('dev', {
   skip: (request) => request.app.get('env') === 'test'
