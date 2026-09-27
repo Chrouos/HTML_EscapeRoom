@@ -16,6 +16,38 @@ function line(id, channel, intent, audience, unlockWhen, variants, options = {})
   };
 }
 
+const cooperationWhen = reactionId => ({
+  all: [
+    { publicFact: 'main1Completed' },
+    {
+      any: [
+        { actionAttempted: 'share_roster' },
+        { actionAttempted: 'share_mirror_first' },
+        { actionAttempted: 'warn_partner_first' },
+        { actionAttempted: 'request_pair_validation' },
+        { actionAttempted: 'disclose_report' }
+      ]
+    },
+    { reactionFactMissing: reactionId }
+  ]
+});
+
+const soloWhen = reactionId => ({
+  all: [
+    { publicFact: 'main1Completed' },
+    { actionAttempted: 'request_solo_validation' },
+    { reactionFactMissing: reactionId }
+  ]
+});
+
+const rejectFrameWhen = reactionId => ({
+  all: [
+    { publicFact: 'main4Completed' },
+    { actionAttempted: 'pair_validate_protocol' },
+    { reactionFactMissing: reactionId }
+  ]
+});
+
 const dialogue = Object.freeze([
   line('orpheus.boot', 'broadcast', 'system', both, { publicFact: 'roomCreated' }, [
     'ORPHEUS：連線已建立。你們需要互相交換看到的資訊，才能完成校驗。'
@@ -24,7 +56,7 @@ const dialogue = Object.freeze([
     'ORPHEUS：兩個終端都已上線。合作是目前最穩定的離開方式。'
   ]),
   line('orpheus.first_task', 'broadcast', 'common_task', both, { publicFact: 'guestJoined' }, [
-    'ECHO：我不是主控台的官方聲音。我偷偷接進來，是想幫你們找到出口。先把啟動備忘錄讀完。'
+    'ECHO：我能存取這個設施的部分系統，但這段訊息不在研究團隊排定的正式流程裡。先把啟動備忘錄讀完，我會協助你們理解離場程序。'
   ]),
   line('orpheus.rapport.a', 'direct', 'rapport', host, { publicFact: 'main1Completed' }, [
     'ECHO：你整理得很快。若有疑問，可以先告訴我。',
@@ -52,6 +84,45 @@ const dialogue = Object.freeze([
   line('orpheus.observation.b', 'direct', 'observation', guest, { all: [{ publicFact: 'main1Completed' }, { roleFact: 'rapportCount2' }, { entryOpened: 'doc.b_incident_report' }] }, [
     'ECHO：那份報告的附件版本比主索引晚了一次更新。'
   ], { verificationEntries: [{ entryId: 'audio.original_incident_timestamp', sourceGroup: 'raw_audio' }] }),
+  line('echo.behavior.protocol_recheck', 'direct', 'observation', host, {
+    all: [
+      { publicFact: 'main1Completed' },
+      { entryOpenedTimes: { entryId: 'archive.protocol_versions', atLeast: 3 } },
+      { reactionFactMissing: 'echo.behavior.protocol_recheck' }
+    ]
+  }, [
+    'ECHO：第三次了。你不是在找新內容，而是在確認我有沒有漏掉什麼。保留這個習慣。'
+  ]),
+  line('echo.behavior.cooperation.a', 'direct', 'observation', host,
+    cooperationWhen('echo.behavior.cooperation.a'), [
+      'ECHO：你把原本只留在單一終端的資訊帶回共同路徑。這不是最快的做法，但它保留了讓夥伴一起判斷的可能。'
+    ]),
+  line('echo.behavior.cooperation.b', 'direct', 'observation', guest,
+    cooperationWhen('echo.behavior.cooperation.b'), [
+      'ECHO：你把原本只留在單一終端的資訊帶回共同路徑。這不是最快的做法，但它保留了讓夥伴一起判斷的可能。'
+    ]),
+  line('echo.behavior.solo.a', 'direct', 'observation', host,
+    soloWhen('echo.behavior.solo.a'), [
+      'ECHO：你保留了個人存續路徑。從存續角度看，這是可解釋的選擇；我只記錄，不替你辯護。'
+    ]),
+  line('echo.behavior.solo.b', 'direct', 'observation', guest,
+    soloWhen('echo.behavior.solo.b'), [
+      'ECHO：你保留了個人存續路徑。從存續角度看，這是可解釋的選擇；我只記錄，不替你辯護。'
+    ]),
+  line('echo.behavior.reject_frame.a', 'direct', 'observation', host,
+    rejectFrameWhen('echo.behavior.reject_frame.a'), [
+      'ECHO：你看見了較短的個人路徑，卻回去做共同覆核。這也是一個選擇：你沒有接受我替你定義的框架。'
+    ]),
+  line('echo.behavior.reject_frame.b', 'direct', 'observation', guest,
+    rejectFrameWhen('echo.behavior.reject_frame.b'), [
+      'ECHO：你看見了較短的個人路徑，卻回去做共同覆核。這也是一個選擇：你沒有接受我替你定義的框架。'
+    ]),
+  line('echo.protocol_versions.a', 'direct', 'observation', host, { all: [{ publicFact: 'main1Completed' }, { entryOpened: 'archive.protocol_versions' }] }, [
+    'ECHO：你找到的是合作驗證規章的修訂紀錄。1.4 以前的版本還在；如果要知道現在的規則改過什麼，請自己比對。'
+  ]),
+  line('echo.protocol_versions.b', 'direct', 'observation', guest, { all: [{ publicFact: 'main1Completed' }, { entryOpened: 'archive.protocol_versions' }] }, [
+    'ECHO：你找到的是合作驗證規章的修訂紀錄。1.4 以前的版本還在；如果要知道現在的規則改過什麼，請自己比對。'
+  ]),
   line('orpheus.a1.task', 'direct', 'private_task', host, { all: [{ publicFact: 'main1Completed' }, { roleFact: 'rapportCount2' }, { entryOpened: 'files.mainline' }] }, [
     'ECHO：請你幫忙整理索引。這只是本地整理，不會改變共同檔案。'
   ], { mainlineFallbackOperationIds: ['continue_file_index'], debriefFactIds: ['aArchivedIndex', 'a1DeclinedIndex', 'a1Skipped'] }),

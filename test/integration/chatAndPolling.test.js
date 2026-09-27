@@ -106,6 +106,21 @@ test('player chat is authenticated, actor-scoped, deduplicated, and visible to b
   }
 });
 
+test('chat resets only the speaking actor narrative idle clock', async () => {
+  const { a, code, base } = await roomPair();
+  await read(a, base);
+  app.locals.roomStore.updateRoom(code, draft => {
+    draft.narrativeBehavior.lastMeaningfulActionAt.A = 0;
+    draft.narrativeBehavior.lastMeaningfulActionAt.B = 0;
+  });
+
+  const result = await postChat(a, base, { actionId: 'activity-chat', text: 'still working' });
+  assert.equal(result.response.status, 200);
+  const stored = app.locals.roomStore.getRoom(code);
+  assert.ok(stored.narrativeBehavior.lastMeaningfulActionAt.A > 0);
+  assert.equal(stored.narrativeBehavior.lastMeaningfulActionAt.B, 0);
+});
+
 test('a hidden-only mutation leaves the unchanged recipient cursor untouched', async () => {
   const { a, b, code, base } = await roomPair();
   const aBefore = await read(a, base);

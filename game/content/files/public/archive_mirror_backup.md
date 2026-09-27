@@ -1,0 +1,43 @@
+HISTORICAL EVENT: H-05
+CREATED BY: ORPHEUS BACKUP SERVICE
+CREATED AT: 2038-04-12
+SOURCE CLASS: mixed
+EVIDENCE TAGS: 文件, 事故, 備份, 權限, 來源
+VISIBILITY: public-mid
+IMPACT: 將主檔案、鏡像與 A／B 原始欄位分開保存，讓來源標記的差異成為可追查的證據，而非被誤當成最終真相。
+RELATED FILES: `archives/mirror_checksum.md`, `archives/incident_raw_notes.md`, `public/archive_incident_bundle.md`
+
+DOCUMENT TYPE: ARCHIVE MANIFEST
+CREATED: 2038-04-12
+LAST MODIFIED: 2038-04-12
+AUTHOR: ORPHEUS BACKUP SERVICE
+SOURCE: UNIT 11 / HISTORICAL MIRROR BACKUP
+STATUS: HISTORICAL BACKUP RECORD
+
+【歷史鏡像備份清單】
+整理日期：2038-04-12
+原始事件：Unit 11／多端協作
+
+本封存包含：
+- `mirror_checksum.note`：Unit 11 鏡像與主檔案的保存核對結果。
+
+【備份寫入紀錄】
+
+09:12　外部自動資料源送入一份資料。
+09:14　外部資料與 A、B 已保存的工作紀錄不一致。
+09:16　主控台將外部資料標記為較高權限，但沒有留下來源可信度。
+09:18　備份室停止覆寫，保留主檔案、鏡像與 A／B 原始欄位。
+
+【主檔案／鏡像差異】
+
+欄位　　　　　　　主檔案　　　　　　　鏡像備份
+資料來源　　　　　外部自動資料　　　　A／B 原始紀錄與外部資料
+權限標記　　　　　較高　　　　　　　　原始標記保留
+A／B 原始欄位　　　移至附錄　　　　　　仍在主要紀錄中
+人工覆核　　　　　空白　　　　　　　　保留待覆核欄位
+
+備份室處置：兩份資料分開保存。主檔案的權限標記只說明系統如何採用資料，不代表外部資料較可靠；鏡像也不能單獨被當成最終真相。
+
+備份室備註：Unit 11 的主檔案與鏡像保留了不同的來源標記。保存兩份資料，是為了讓研究團隊能在下一輪訓練前重新檢查資料來源，不代表其中一份已被判定為真相。
+
+本封存不包含 Unit 17 的鏡像、事故或篩選結果。

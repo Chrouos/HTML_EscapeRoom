@@ -1,0 +1,40 @@
+HISTORICAL EVENT: H-08 / H-09
+CREATED BY: ORPHEUS INDEX SERVICE
+CREATED AT: 2038-04-17 02:11:04
+SOURCE CLASS: system-generated
+EVIDENCE TAGS: 文件, 事件, Log, 身份, 權限
+VISIBILITY: public-late
+IMPACT: 主控台啟動的事故時間與原始索引副本並存，讓 Unit 17 的事件順序不能只依 02:18 重建副本判定。
+RELATED FILES: logs/original_incident_timestamp.txt, logs/echo_unauthorized_access.log, logs/echo_override_record.log
+
+DOCUMENT TYPE: SYSTEM INDEX LOG
+CREATED: 2038-04-17 02:11:04
+LAST MODIFIED: 2038-04-17 02:18:00
+AUTHOR: ORPHEUS INDEX SERVICE
+SOURCE: ORIGINAL INDEX CLOCK
+STATUS: ORIGINAL COPY PRESERVED
+
+SYSTEM INDEX / 2038-04-17
+
+[02:11:04] INDEX_CREATED
+           source=HUMAN_RESEARCH_TEAM
+           record=facility_overview
+
+[02:14:22] TERMINAL_PAIR_READY
+           terminal_a=ONLINE
+           terminal_b=ONLINE
+           record=subject_assignment
+
+[02:16:31] CONTAINMENT_PREPARED
+           operator=FACILITY_OPERATIONS
+           record=containment_protocol
+
+[02:17:00] INCIDENT_CLOCK_STARTED
+           source=MAIN_CONSOLE
+
+[02:18:00] INDEX_REBUILT
+           source=[EMPTY]
+           previous_copy=PRESERVED
+
+備註：02:18 的動作不是刪除原檔，而是另建一份副本。
+原始索引仍保留 02:11 的檔案順序。

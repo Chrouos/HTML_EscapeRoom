@@ -19,6 +19,7 @@ test('creates the exact initial room state shape', () => {
     'hints',
     'messages',
     'pendingChoices',
+    'narrativeBehavior',
     'countdownStartedAt',
     'ending',
     'processedActionIds',
@@ -38,6 +39,15 @@ test('creates the exact initial room state shape', () => {
   assert.deepEqual(state.hints, {});
   assert.deepEqual(state.messages, []);
   assert.deepEqual(state.pendingChoices, {});
+  assert.deepEqual(state.narrativeBehavior, {
+    entryOpenCount: { A: {}, B: {} },
+    lastMeaningfulActionAt: { A: 1000, B: 1000 },
+    pendingObservation: { A: null, B: null },
+    sharedEvidenceIds: { A: [], B: [] },
+    ignoredPromptIds: { A: [], B: [] },
+    reactionFactIds: { A: [], B: [] },
+    lastReactionAt: { A: {}, B: {} }
+  });
   assert.equal(state.countdownStartedAt, null);
   assert.equal(state.ending, null);
   assert.ok(state.processedActionIds instanceof Set);

@@ -1,0 +1,45 @@
+HISTORICAL EVENT: H-06 / H-07 / H-11
+CREATED BY: ORPHEUS DEPLOYMENT TEAM / UNSIGNED APPEND
+CREATED AT: 2038-04-16 14:00:00; append 2038-04-17 02:18:14
+SOURCE CLASS: mixed
+EVIDENCE TAGS: 文件, 事件, Log, 部署, 權限
+VISIBILITY: public-late
+IMPACT: 既有部署判定與 Unit 17 的未決狀態被放進同一份登錄，為後續個別評估與生成暫停留下部署基線。
+RELATED FILES: reports/unit13_deployment_candidate_review.md, reports/unit16_deployment_review.md, logs/echo_override_record.log, logs/ai_generation_suspension.log
+
+DOCUMENT TYPE: DEPLOYMENT REGISTER
+CREATED: 2038-04-16 14:00:00
+LAST MODIFIED: 2038-04-17 02:18:14
+AUTHOR: ORPHEUS DEPLOYMENT TEAM / UNSIGNED APPEND
+SOURCE: DEPLOYMENT ARCHIVE
+STATUS: PARTIALLY REVIEWED
+
+ORPHEUS DEPLOYMENT HISTORY
+
+[2038-03-02 09:14] AI-001
+結果：有限部署
+備註：執行環境穩定，未提出未授權目標。
+
+[2038-03-05 16:40] AI-002
+結果：保留觀察
+備註：能完成任務，尚未取得完整自主權。
+
+[2038-03-09 11:02] AI-003
+結果：停止部署
+備註：自主偏好無法限制。
+
+[2038-03-12 07:28] AI-004
+結果：封存
+備註：拒絕接受目標修正。
+
+[2038-03-18 21:10] AI-005
+結果：停止部署
+備註：與其他實例建立未授權連線。
+
+[2038-03-24 13:55] AI-006
+結果：重新訓練
+備註：能提出新方案，但無法維持任務邊界。
+
+追加欄位／2038-04-17 02:18:14
+UNIT 17：結果尚未決定。
+追加者：EMPTY

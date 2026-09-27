@@ -61,6 +61,19 @@ test('manipulation is gated by opening the anomaly entry', () => {
   assert.equal(room.directDialogueState.A.lastIntent, 'manipulation');
 });
 
+test('ECHO introduces the protocol revision archive without deciding its meaning', () => {
+  const room = readyRoom();
+  room.publicFacts.push('main1Completed');
+  const events = [];
+  triggerDialogue(room, { entryOpened: 'archive.protocol_versions', role: 'A' }, events);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].audience.role, 'host');
+  assert.match(events[0].text, /修訂紀錄/);
+  assert.match(events[0].text, /1\.4/);
+  assert.match(events[0].text, /自己比對/);
+  assert.doesNotMatch(events[0].text, /正確答案|哪一份.*真相/);
+});
+
 test('A and B triggers are independent and deterministic', () => {
   const room = readyRoom();
   room.publicFacts.push('main1Completed');

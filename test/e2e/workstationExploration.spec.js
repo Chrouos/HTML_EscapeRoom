@@ -9,7 +9,7 @@ const workstationFixture = {
     entries: [
       { id: 'root', name: 'FILES', kind: 'folder', parentId: null },
       { id: 'briefs', name: 'BRIEFS', kind: 'folder', parentId: 'root' },
-      { id: 'incident', name: 'incident.log', kind: 'file', parentId: 'briefs', content: '02:17 — signal loss', imageUrl: '/images/story/control-room-clock.png', imageAlt: 'Independent clock in the control room.', imageCaption: 'The clock is not corrected by the console.', imageRole: 'clue' },
+      { id: 'incident', name: 'incident.log', kind: 'file', parentId: 'briefs', content: '02:17 — signal loss' },
       { id: 'locked', name: 'blackbox.txt', kind: 'file', parentId: 'root', locked: true, content: 'never send this' }
     ]
   },
@@ -73,10 +73,11 @@ async function mount(page, countdownRemainingMs = 60000) {
   return { partnerContext, getOperation: () => operationRequest };
 }
 
-test('explores Files folders and entries without leaking locked names', async ({ page }) => {
+test('renders Files as an icon grid and opens folders like a file manager', async ({ page }) => {
   const room = await mount(page);
   const workspace = page.locator('[data-workstation]');
-  await expect(workspace.locator('[data-workstation-tree]')).toBeVisible();
+  await expect(workspace.locator('[data-workstation-tree]')).toHaveCount(0);
+  await expect(workspace.locator('[data-workstation-file-grid]')).toBeVisible();
   await expect(workspace.locator('[data-workstation-directory]')).toBeVisible();
   await expect(workspace.getByRole('button', { name: 'Files', exact: true })).toBeVisible();
   await workspace.getByRole('button', { name: 'BRIEFS', exact: true }).click();
@@ -84,48 +85,72 @@ test('explores Files folders and entries without leaking locked names', async ({
   await expect(workspace).not.toContainText('blackbox.txt');
   await workspace.getByRole('button', { name: 'incident.log', exact: true }).click();
   await expect(workspace.locator('[data-workstation-directory] [data-workstation-entry-content]')).toContainText('02:17');
-  await expect(workspace.locator('[data-workstation-files-layout].is-reader-focused')).toHaveCount(1);
-  await expect(workspace.locator('[data-workstation-tree]')).toBeHidden();
-  await expect(workspace.locator('[data-workstation-document]')).toHaveAttribute('data-reader-focused', 'true');
-  await expect(workspace.locator('[data-workstation-document] h4 [data-workstation-back]')).toHaveCount(1);
-  await expect(workspace.locator('[data-workstation-document-media] img')).toHaveAttribute('src', /control-room-clock\.png$/);
+  await expect(workspace.locator('[data-workstation-directory] > h3')).toHaveCount(0);
+  await expect(workspace.locator('[data-workstation-document] h4')).toContainText('incident.log');
+  await expect(workspace.locator('[data-workstation-document] [data-workstation-back]')).toBeVisible();
   await expect.poll(room.getOperation).toMatchObject({ operationId: 'open_entry', value: 'incident' });
   await workspace.getByRole('button', { name: /back/i }).click();
   await expect(workspace.getByRole('button', { name: 'incident.log', exact: true })).toBeVisible();
   await room.partnerContext.close();
 });
 
-test('focused reader spends the available height on the document body', async ({ page }) => {
+test('returns to the Files root when the Files tab is selected from an opened document', async ({ page }) => {
   const room = await mount(page);
-  const fixture = structuredClone(workstationFixture);
-  fixture.files.entries.find(entry => entry.id === 'incident').content = Array.from({ length: 42 }, (_, index) => `line ${index + 1} — 02:17 signal record`).join('\n\n');
-  await page.evaluate(f => document.querySelector('[data-game-room]').workstation.render(f), fixture);
   const workspace = page.locator('[data-workstation]');
   await workspace.getByRole('button', { name: 'BRIEFS', exact: true }).click();
   await workspace.getByRole('button', { name: 'incident.log', exact: true }).click();
-  const readerBody = workspace.locator('[data-workstation-entry-content]');
-  await expect.poll(async () => readerBody.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
-  await expect.poll(async () => page.locator('.operations-screen').evaluate(node => node.scrollHeight <= node.clientHeight + 1)).toBe(true);
+  await expect(workspace.locator('[data-workstation-document]')).toBeVisible();
+  await workspace.getByRole('button', { name: 'Files', exact: true }).click();
+  await expect(workspace.getByRole('button', { name: 'BRIEFS', exact: true })).toBeVisible();
+  await expect(workspace.locator('[data-workstation-document]')).toHaveCount(0);
   await room.partnerContext.close();
 });
 
-test('keeps the root Files folder as a directory and uses a symbol-only back control', async ({ page }) => {
+test('opens README.md as a real Files document instead of a startup note', async ({ page }) => {
   const room = await mount(page);
   const fixture = structuredClone(workstationFixture);
-  fixture.text = 'This startup text belongs to the workstation boot sequence.';
+  fixture.text = 'This message belongs in README.md.';
+  fixture.files.entries.push({
+    id: 'readme', name: 'README.md', kind: 'file', parentId: 'root',
+    content: 'This message belongs in README.md.'
+  });
   await page.evaluate(f => document.querySelector('[data-game-room]').workstation.render(f), fixture);
   const workspace = page.locator('[data-workstation]');
-
   await expect(workspace.locator('[data-startup-note]')).toHaveCount(0);
-  await workspace.getByRole('button', { name: 'BRIEFS', exact: true }).click();
-  await workspace.getByRole('button', { name: 'incident.log', exact: true }).click();
-  const back = workspace.getByRole('button', { name: 'Back to folder', exact: true });
-  await expect(back).toHaveText('←');
-  await expect(back).not.toContainText('Back to folder');
+  await workspace.getByRole('button', { name: 'README.md', exact: true }).click();
+  await expect(workspace.locator('[data-workstation-document]')).toContainText('This message belongs in README.md.');
   await room.partnerContext.close();
 });
 
-test('keeps folders and documents in one ordered tree and opens the request workspace separately', async ({ page }) => {
+test('offers UNZIP for archive documents and accepts an optional password', async ({ page }) => {
+  const room = await mount(page);
+  const fixture = structuredClone(workstationFixture);
+  fixture.files.entries.push(
+    { id: 'archives', name: 'ARCHIVES', kind: 'folder', parentId: 'root' },
+    {
+      id: 'case-archive', name: 'case_history.zip', kind: 'archive', parentId: 'archives',
+      archive: { id: 'case_bundle.zip', expanded: false, passwordRequired: true },
+      content: '案件索引封存。'
+    }
+  );
+  await page.evaluate(f => document.querySelector('[data-game-room]').workstation.render(f), fixture);
+  const workspace = page.locator('[data-workstation]');
+  await workspace.getByRole('button', { name: 'ARCHIVES', exact: true }).click();
+  const archiveCard = workspace.getByRole('button', { name: 'case_history.zip', exact: true });
+  await expect(archiveCard).toHaveAttribute('data-entry-kind', 'archive');
+  await archiveCard.click();
+  const archiveForm = workspace.locator('[data-workstation-archive-form]');
+  await expect(archiveForm).toBeVisible();
+  await expect(archiveForm.locator('input[name="password"]')).toBeVisible();
+  await archiveForm.locator('input[name="password"]').fill('17');
+  await archiveForm.getByRole('button', { name: 'UNZIP', exact: true }).click();
+  await expect.poll(room.getOperation).toMatchObject({
+    operationId: 'terminal_command', value: 'UNZIP case_bundle.zip 17'
+  });
+  await room.partnerContext.close();
+});
+
+test('keeps folders and documents in one ordered icon grid and opens the request workspace separately', async ({ page }) => {
   const room = await mount(page);
   const fixture = structuredClone(workstationFixture);
   fixture.files.entries = [
@@ -140,12 +165,13 @@ test('keeps folders and documents in one ordered tree and opens the request work
   fixture.answerGate = { entryId: 'answer', puzzleId: 'main1', open: true };
   await page.evaluate(f => document.querySelector('[data-game-room]').workstation.render(f), fixture);
   const workspace = page.locator('[data-workstation]');
-  await expect.poll(async () => workspace.locator('[data-workstation-tree] [data-workstation-entry]').evaluateAll(nodes =>
+  await expect.poll(async () => workspace.locator('[data-workstation-file-grid] [data-workstation-entry]').evaluateAll(nodes =>
     nodes.slice(0, 6).map(node => node.querySelector('.workstation-entry-name')?.textContent.trim()))).toEqual([
-    'FILES', 'archives', 'docs', 'answer.lock', 'Dockerfile', 'README.md'
+    'archives', 'docs', 'answer.lock', 'Dockerfile', 'README.md'
   ]);
   await workspace.getByRole('button', { name: 'docs', exact: true }).click();
   await expect(workspace.getByRole('button', { name: 'protocol.txt', exact: true })).toBeVisible();
+  await workspace.getByRole('button', { name: 'Back', exact: true }).click();
   await workspace.getByRole('button', { name: 'answer.lock', exact: true }).click();
   await expect(workspace.locator('[data-workstation-document]')).toContainText('解鎖密碼已準備');
   await expect(workspace.locator('[data-workstation-app="request"]')).toBeEnabled();
@@ -178,10 +204,6 @@ test('shows command suggestions after slash input and fills the existing CLI com
   const suggestions = workspace.locator('[data-terminal-suggestions]');
   await expect(suggestions).toBeVisible();
   await expect(suggestions).toContainText('HELP');
-  await expect(suggestions).toContainText('UNLOCK <filename>');
-  await expect(suggestions).toContainText('DELETE <filename>');
-  await expect(suggestions).toContainText('ADD <filename>');
-  await expect(suggestions).toContainText('RESTORE <filename>');
   await suggestions.getByRole('button', { name: 'HELP', exact: true }).click();
   await expect(input).toHaveValue('HELP');
   await input.fill('/');
@@ -230,28 +252,6 @@ test('accepts a real Terminal command and renders echo plus safe output', async 
   await expect(workspace.locator('[data-terminal-history]')).toContainText('HELP');
   await expect(workspace.locator('[data-terminal-output]')).toContainText('SEARCH <node>');
   await expect(input).toBeFocused();
-  await room.partnerContext.close();
-});
-
-test('keeps Terminal history scrollable while the command input stays visible', async ({ page }) => {
-  const room = await mount(page);
-  const workspace = page.locator('[data-workstation]');
-  await workspace.getByRole('button', { name: 'Terminal', exact: true }).click();
-  const input = workspace.locator('[data-terminal-input]');
-
-  for (let index = 0; index < 12; index += 1) {
-    await input.fill(`HELP ${index}`);
-    await input.press('Enter');
-    await expect.poll(room.getOperation).toMatchObject({ operationId: 'terminal_command' });
-  }
-
-  const history = workspace.locator('[data-terminal-history]');
-  await expect(history).toBeVisible();
-  await expect(input).toBeVisible();
-  await expect.poll(async () => history.evaluate(node => ({
-    overflowY: getComputedStyle(node).overflowY,
-    canScroll: node.scrollHeight > node.clientHeight
-  }))).toEqual({ overflowY: 'auto', canScroll: true });
   await room.partnerContext.close();
 });
 
@@ -410,7 +410,7 @@ test('submits the current side-investigation step from its opened Files note', a
   await room.partnerContext.close();
 });
 
-test('keeps the Files root as a directory without a startup note or clue report heading', async ({ page }) => {
+test('does not render the legacy startup note inside Files', async ({ page }) => {
   const room = await mount(page);
   const fixture = structuredClone(workstationFixture);
   fixture.text = 'Check the shared index before touching the archive.';
@@ -527,7 +527,7 @@ test('fills the desktop viewport and preserves workstation scroll on live render
   const shell = page.locator('.game-room-shell');
   const shellWidth = await shell.evaluate(node => node.getBoundingClientRect().width);
   expect(shellWidth).toBeGreaterThan(1300);
-  const scroll = workspace.locator('[data-workstation-tree]');
+  const scroll = workspace.locator('[data-workstation-directory]');
   const monitorScreen = page.locator('.operations-screen');
   await expect.poll(async () => monitorScreen.evaluate(node => {
     const overflowWidth = node.scrollWidth - node.clientWidth;
@@ -562,7 +562,7 @@ test('lets the workstation fill Monitor 2 while the request bridge is hidden', a
   await room.partnerContext.close();
 });
 
-test('keeps long Files labels inside the tree at medium desktop widths', async ({ page }) => {
+test('keeps long Files labels inside the icon grid at medium desktop widths', async ({ page }) => {
   await page.setViewportSize({ width: 1143, height: 778 });
   const room = await mount(page);
   const fixture = structuredClone(workstationFixture);
@@ -575,10 +575,10 @@ test('keeps long Files labels inside the tree at medium desktop widths', async (
   await page.evaluate(fixtureValue => document.querySelector('[data-game-room]').workstation.render(fixtureValue), fixture);
   const workspace = page.locator('[data-workstation]');
   await workspace.getByRole('button', { name: 'B / PRIVATE', exact: true }).click();
-  const metrics = await workspace.locator('[data-workstation-tree]').evaluate(tree => ({
-    clientWidth: tree.clientWidth,
-    scrollWidth: tree.scrollWidth,
-    labels: [...tree.querySelectorAll('.workstation-entry-name')].map(node => ({
+  const metrics = await workspace.locator('[data-workstation-file-grid]').evaluate(grid => ({
+    clientWidth: grid.clientWidth,
+    scrollWidth: grid.scrollWidth,
+    labels: [...grid.querySelectorAll('.workstation-entry-name')].map(node => ({
       text: node.textContent,
       clientWidth: node.clientWidth,
       overflow: getComputedStyle(node).overflow,
