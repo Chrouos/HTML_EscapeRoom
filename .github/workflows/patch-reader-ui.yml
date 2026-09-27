@@ -1,0 +1,40 @@
+name: Patch Reader UI
+
+on:
+  push:
+    branches:
+      - feat/reactive-narrative-reveal-20260924-active
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: "${{ github.event.head_commit.message == 'chore: run reader ui reconciliation' }}"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply UI patch
+        run: node scripts/patch-reader-ui.js
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run regression test
+        run: npx playwright test test/e2e/workstationReaderMedia.spec.js
+      - name: Run full project check
+        run: npm run check
+      - name: Commit reconciled UI
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/patch-reader-ui.yml scripts/patch-reader-ui.js
+          git add public/js/workstation.js public/css/workstation.css
+          git commit -m "fix: preserve reader media and terminal mutation UI"
+          git push origin HEAD:feat/reactive-narrative-reveal-20260924-active
