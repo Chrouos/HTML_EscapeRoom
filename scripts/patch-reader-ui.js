@@ -19,39 +19,44 @@ if (!appSource.includes("app.use('/images', express.static(path.join(__dirname, 
 }
 
 const jsPath = 'public/js/workstation.js';
+// Anchor the visible icon-grid Reader branch explicitly. A legacy Reader branch
+// remains later in this file, so matching only the generic content block could
+// patch code that never renders in the current Files UI.
 const readerBefore = [
-  "      const content = document.createElement('pre');",
-  "      content.dataset.workstationEntryContent = '';",
-  "      content.textContent = typeof opened.content === 'string' ? opened.content",
-  "        : typeof opened.text === 'string' ? opened.text : '';",
-  "      documentPanel.append(documentTitle, content);"
+  "        documentTitle.append(entryIcon(opened), document.createTextNode(entryName(opened)), back);",
+  "        const content = document.createElement('pre');",
+  "        content.dataset.workstationEntryContent = '';",
+  "        content.textContent = typeof opened.content === 'string' ? opened.content",
+  "          : typeof opened.text === 'string' ? opened.text : '';",
+  "        documentPanel.append(documentTitle, content);"
 ].join('\n');
 
 const readerAfter = [
-  "      const content = document.createElement('pre');",
-  "      content.dataset.workstationEntryContent = '';",
-  "      content.textContent = typeof opened.content === 'string' ? opened.content",
-  "        : typeof opened.text === 'string' ? opened.text : '';",
-  "      documentPanel.append(documentTitle);",
-  "      if (opened.imageUrl) {",
-  "        const figure = document.createElement('figure');",
-  "        figure.className = `workstation-document-media is-${opened.imageRole === 'atmosphere' ? 'atmosphere' : 'clue'}`;",
-  "        figure.dataset.workstationDocumentMedia = '';",
-  "        const image = document.createElement('img');",
-  "        image.src = opened.imageUrl;",
-  "        image.alt = typeof opened.imageAlt === 'string' ? opened.imageAlt : '';",
-  "        image.loading = 'lazy';",
-  "        image.decoding = 'async';",
-  "        image.addEventListener('error', () => figure.remove());",
-  "        figure.append(image);",
-  "        if (typeof opened.imageCaption === 'string' && opened.imageCaption.trim()) {",
-  "          const caption = document.createElement('figcaption');",
-  "          caption.textContent = opened.imageCaption;",
-  "          figure.append(caption);",
+  "        documentTitle.append(entryIcon(opened), document.createTextNode(entryName(opened)), back);",
+  "        const content = document.createElement('pre');",
+  "        content.dataset.workstationEntryContent = '';",
+  "        content.textContent = typeof opened.content === 'string' ? opened.content",
+  "          : typeof opened.text === 'string' ? opened.text : '';",
+  "        documentPanel.append(documentTitle);",
+  "        if (opened.imageUrl) {",
+  "          const figure = document.createElement('figure');",
+  "          figure.className = `workstation-document-media is-${opened.imageRole === 'atmosphere' ? 'atmosphere' : 'clue'}`;",
+  "          figure.dataset.workstationDocumentMedia = '';",
+  "          const image = document.createElement('img');",
+  "          image.src = opened.imageUrl;",
+  "          image.alt = typeof opened.imageAlt === 'string' ? opened.imageAlt : '';",
+  "          image.loading = 'lazy';",
+  "          image.decoding = 'async';",
+  "          image.addEventListener('error', () => figure.remove());",
+  "          figure.append(image);",
+  "          if (typeof opened.imageCaption === 'string' && opened.imageCaption.trim()) {",
+  "            const caption = document.createElement('figcaption');",
+  "            caption.textContent = opened.imageCaption;",
+  "            figure.append(caption);",
+  "          }",
+  "          documentPanel.append(figure);",
   "        }",
-  "        documentPanel.append(figure);",
-  "      }",
-  "      documentPanel.append(content);"
+  "        documentPanel.append(content);"
 ].join('\n');
 replaceExact(jsPath, readerBefore, readerAfter);
 
