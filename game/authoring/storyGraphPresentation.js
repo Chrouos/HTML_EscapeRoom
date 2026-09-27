@@ -147,7 +147,9 @@ function technicalDetails(graph, node) {
     prerequisites,
     rawType: node.technicalType
   };
-  if (node.technicalType === 'ENDING') details.endingResolution = 'runtime-calculated';
+  if (node.technicalType === 'ENDING' || node.technicalType === 'ENDING_RESOLUTION') {
+    details.endingResolution = 'runtime-calculated';
+  }
   return details;
 }
 
