@@ -25,9 +25,9 @@ jobs:
           python -c 'from pathlib import Path; p=Path("scripts/reconcile-master-runtime.js"); s=p.read_text(); s=s.replace("ws.appliedMutationIds.push(`${mutation.command}:${target.id}`);", "ws.appliedMutationIds.push(mutation.command + \":\" + target.id);").replace("const mutationId = `${mutation.command}:${target.id}`;", "const mutationId = mutation.command + \":\" + target.id;"); p.write_text(s)'
       - name: Apply reconciliation patch
         run: node scripts/reconcile-master-runtime.js
-      - name: Normalize inserted template quotes
+      - name: Normalize generated source
         run: >-
-          python -c 'from pathlib import Path; p=Path("game/content/terminalEntries.js"); s=p.read_text(); p.write_text(s.replace("\\`", "`"))'
+          python -c 'from pathlib import Path; p=Path("game/content/terminalEntries.js"); s=p.read_text().replace("\\`", "`"); s=s.replace("]);\n\nmodule.exports = { terminalEntries };]);\n\nmodule.exports = { terminalEntries };", "]);\n\nmodule.exports = { terminalEntries };"); p.write_text(s)'
       - name: Install dependencies
         run: npm ci
       - name: Validate content
