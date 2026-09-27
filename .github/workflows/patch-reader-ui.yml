@@ -35,6 +35,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git rm .github/workflows/patch-reader-ui.yml scripts/patch-reader-ui.js
-          git add public/js/workstation.js public/css/workstation.css
+          git add app.js public/js/workstation.js public/css/workstation.css
           git commit -m "fix: preserve reader media and terminal mutation UI"
           git push origin HEAD:feat/reactive-narrative-reveal-20260924-active

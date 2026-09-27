@@ -8,6 +8,16 @@ function replaceExact(path, before, after) {
   fs.writeFileSync(path, source.slice(0, first) + after + source.slice(first + before.length));
 }
 
+const appPath = 'app.js';
+const appSource = fs.readFileSync(appPath, 'utf8');
+if (!appSource.includes("app.use('/images', express.static(path.join(__dirname, 'public', 'images')));")) {
+  replaceExact(
+    appPath,
+    "app.use('/css', express.static(path.join(__dirname, 'public', 'css')));\napp.use('/public', express.static(path.join(__dirname, 'public')));",
+    "app.use('/css', express.static(path.join(__dirname, 'public', 'css')));\napp.use('/images', express.static(path.join(__dirname, 'public', 'images')));\napp.use('/public', express.static(path.join(__dirname, 'public')));"
+  );
+}
+
 const jsPath = 'public/js/workstation.js';
 const readerBefore = [
   "      const content = document.createElement('pre');",
@@ -86,4 +96,4 @@ if (!css.includes('.workstation-document-media {')) {
   ].join('\n'));
 }
 
-console.log('Reader media and Terminal suggestions patch applied.');
+console.log('Reader media, image route, and Terminal suggestions patch applied.');
