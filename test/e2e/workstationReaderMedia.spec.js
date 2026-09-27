@@ -46,6 +46,10 @@ const stateFixture = {
 };
 
 async function mount(page) {
+  // This test owns the workstation snapshot. Close the real live stream so a
+  // room event cannot overwrite the fixture while the Reader assertions run.
+  await page.routeWebSocket('**/live*', socket => socket.close());
+
   await page.goto('/');
   await page.locator('form[action="/rooms"] button').click();
   const roomUrl = page.url();
