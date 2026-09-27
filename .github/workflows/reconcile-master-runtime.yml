@@ -40,39 +40,24 @@ jobs:
         run: |
           python <<'PY'
           from pathlib import Path
-
           terminal = Path('game/content/terminalEntries.js')
           source = terminal.read_text().replace('\\`', '`')
-          source = source.replace(
-              ']);\n\nmodule.exports = { terminalEntries };]);\n\nmodule.exports = { terminalEntries };',
-              ']);\n\nmodule.exports = { terminalEntries };'
-          )
+          source = source.replace(']);\n\nmodule.exports = { terminalEntries };]);\n\nmodule.exports = { terminalEntries };', ']);\n\nmodule.exports = { terminalEntries };')
           terminal.write_text(source)
-
           files = {
-              'game/content/files/private-a/hidden_audit.log': '''A 端隱藏稽核備註
-
-這份備註沒有出現在一般索引，只保留了研究員對「誰可以替誰簽核」的疑問。它不是出口指令，而是一段用來確認權限來源的原始記錄。
-''',
-              'game/content/files/private-a/local_mirror.tmp': '''A 端本地鏡像暫存
-
-這份副本只供比對使用。刪除它不會影響共同檔案，但會在稽核紀錄留下操作痕跡；若要恢復，必須保留原本的權限。
-''',
-              'game/content/files/private-b/recovered_note.md': '''B 端恢復備註
-
-這份文件只會在 B 端取得寫入權限後出現。它記錄鏡像恢復時不可省略的人工覆核欄位，不能取代主線答案。
-'''
+              'game/content/files/private-a/hidden_audit.log': 'A 端隱藏稽核備註\n\n這份備註沒有出現在一般索引，只保留了研究員對「誰可以替誰簽核」的疑問。它不是出口指令，而是一段用來確認權限來源的原始記錄。\n',
+              'game/content/files/private-a/local_mirror.tmp': 'A 端本地鏡像暫存\n\n這份副本只供比對使用。刪除它不會影響共同檔案，但會在稽核紀錄留下操作痕跡；若要恢復，必須保留原本的權限。\n',
+              'game/content/files/private-b/recovered_note.md': 'B 端恢復備註\n\n這份文件只會在 B 端取得寫入權限後出現。它記錄鏡像恢復時不可省略的人工覆核欄位，不能取代主線答案。\n'
           }
           for filename, content in files.items():
               path = Path(filename)
               path.parent.mkdir(parents=True, exist_ok=True)
               path.write_text(content)
-
           room_state = Path('game/createRoomState.js').read_text()
           assert 'hintsByRole:' not in room_state, 'initial room shape unexpectedly contains hintsByRole'
           generated = terminal.read_text()
           for expected in ('private-a/hidden_audit.log', 'private-a/local_mirror.tmp', 'private-b/recovered_note.md'):
-              assert expected in generated, f'missing generated contentFile: {expected}'
+              assert expected in generated, 'missing generated contentFile: ' + expected
           PY
       - name: Install dependencies
         run: npm ci
