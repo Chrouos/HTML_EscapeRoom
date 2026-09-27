@@ -164,27 +164,124 @@ function brokenReferenceDiagnostics(contentBundle = {}) {
   return result;
 }
 
-function unreachableDiagnostics(contentBundle = {}) {
-  const result = [];
-  const producedPublicFacts = new Set();
-  for (const operation of contentBundle.operations || []) {
-    for (const fact of operation.effects?.publicFacts || []) producedPublicFacts.add(fact);
+function predicateMayBeReachable(predicate, reachable) {
+  if (!predicate || typeof predicate !== 'object' || Array.isArray(predicate)) return true;
+  if (Array.isArray(predicate.all)) {
+    return predicate.all.every(item => predicateMayBeReachable(item, reachable));
+  }
+  if (Array.isArray(predicate.any)) {
+    return predicate.any.some(item => predicateMayBeReachable(item, reachable));
+  }
+  if (predicate.not !== undefined) {
+    // Negative guards constrain runtime eligibility but do not create a positive
+    // authoring dependency. Ignore them here to keep reachability conservative.
+    return true;
+  }
+  if (predicate.publicFact !== undefined) {
+    return reachable.publicFacts.has(predicate.publicFact);
+  }
+  if (predicate.entryOpened !== undefined) {
+    return reachable.entries.has(predicate.entryOpened);
+  }
+  if (predicate.entryOpenedTimes !== undefined) {
+    return reachable.entries.has(predicate.entryOpenedTimes.entryId);
+  }
+  if (predicate.actionAttempted !== undefined) {
+    return reachable.actions.has(predicate.actionAttempted);
   }
 
-  for (const owner of predicateOwners(contentBundle)) {
-    const missingFacts = collectPredicateLeaves(owner.predicate, [])
-      .map(leaf => leaf.publicFact)
-      .filter(Boolean)
-      .filter(fact => !producedPublicFacts.has(fact));
+  // roleFact, chapter, elapsed-time, and reaction state can be produced by
+  // runtime behavior that this static authoring graph intentionally does not
+  // model. Treat them as potentially satisfiable to avoid false warnings.
+  return true;
+}
 
-    if (!missingFacts.length) continue;
+function derivePositiveReachability(contentBundle = {}) {
+  const reachable = {
+    publicFacts: new Set(['roomCreated']),
+    entries: new Set(),
+    actions: new Set()
+  };
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+
+    for (const entry of contentBundle.terminalEntries || []) {
+      if (reachable.entries.has(entry.id)) continue;
+      if (!predicateMayBeReachable(entry.unlockWhen, reachable)) continue;
+      reachable.entries.add(entry.id);
+      changed = true;
+    }
+
+    for (const operation of contentBundle.operations || []) {
+      if (reachable.actions.has(operation.operationId)) continue;
+      if (!predicateMayBeReachable(operation.unlockWhen, reachable)) continue;
+
+      reachable.actions.add(operation.operationId);
+      changed = true;
+
+      for (const fact of operation.effects?.publicFacts || []) {
+        if (reachable.publicFacts.has(fact)) continue;
+        reachable.publicFacts.add(fact);
+      }
+      for (const entryId of operation.effects?.unlockEntryIds || []) {
+        if (reachable.entries.has(entryId)) continue;
+        reachable.entries.add(entryId);
+      }
+    }
+  }
+
+  return reachable;
+}
+
+function blockedPositivePrerequisites(predicate, reachable, result = []) {
+  if (!predicate || typeof predicate !== 'object' || Array.isArray(predicate)) return result;
+  if (Array.isArray(predicate.all)) {
+    for (const item of predicate.all) blockedPositivePrerequisites(item, reachable, result);
+    return result;
+  }
+  if (Array.isArray(predicate.any)) {
+    for (const item of predicate.any) blockedPositivePrerequisites(item, reachable, result);
+    return result;
+  }
+  if (predicate.not !== undefined) return result;
+
+  if (predicate.publicFact !== undefined && !reachable.publicFacts.has(predicate.publicFact)) {
+    result.push({ label: predicate.publicFact, nodeId: `fact:${predicate.publicFact}` });
+  }
+  if (predicate.entryOpened !== undefined && !reachable.entries.has(predicate.entryOpened)) {
+    result.push({ label: predicate.entryOpened, nodeId: `file:${predicate.entryOpened}` });
+  }
+  if (predicate.entryOpenedTimes !== undefined && !reachable.entries.has(predicate.entryOpenedTimes.entryId)) {
+    result.push({ label: predicate.entryOpenedTimes.entryId, nodeId: `file:${predicate.entryOpenedTimes.entryId}` });
+  }
+  if (predicate.actionAttempted !== undefined && !reachable.actions.has(predicate.actionAttempted)) {
+    result.push({ label: predicate.actionAttempted, nodeId: `action:${predicate.actionAttempted}` });
+  }
+  return result;
+}
+
+function unreachableDiagnostics(contentBundle = {}) {
+  const result = [];
+  const reachable = derivePositiveReachability(contentBundle);
+
+  for (const owner of predicateOwners(contentBundle)) {
+    if (predicateMayBeReachable(owner.predicate, reachable)) continue;
+
+    const blocked = blockedPositivePrerequisites(owner.predicate, reachable, []);
+    const uniqueBlocked = [...new Map(blocked.map(item => [item.nodeId, item])).values()];
     const nodeId = ownerNodeId(owner.kind, owner.item);
+    const detail = uniqueBlocked.length
+      ? uniqueBlocked.map(item => item.label).join('、')
+      : '目前的前置條件';
+
     result.push(diagnostic(
       'UNREACHABLE',
       'warning',
       nodeId,
-      `找不到能產生 ${[...new Set(missingFacts)].join('、')} 的已知故事路徑。`,
-      [...new Set(missingFacts)].map(fact => `fact:${fact}`)
+      `找不到能從初始故事狀態抵達 ${detail} 的正向故事路徑。`,
+      uniqueBlocked.map(item => item.nodeId)
     ));
   }
 
