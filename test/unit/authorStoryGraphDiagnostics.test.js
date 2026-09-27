@@ -37,6 +37,33 @@ test('an impossible public fact prerequisite is reported as unreachable', () => 
   assert.ok(result.some(item => item.code === 'UNREACHABLE' && item.nodeId === 'file:archive.history_timeline'));
 });
 
+test('a producer cycle without a root is still unreachable', () => {
+  const bundle = cloneContent();
+  const entry = bundle.terminalEntries.find(item => item.id === 'archive.history_timeline');
+  entry.unlockWhen = { publicFact: 'cycleA' };
+  bundle.operations.push(
+    {
+      operationId: 'produce_cycle_a',
+      kind: 'mainline',
+      unlockWhen: { publicFact: 'cycleB' },
+      effects: {
+        publicFacts: ['cycleA'], roleFacts: [], unlockEntryIds: [], completeNodeIds: [], appendContentIds: []
+      }
+    },
+    {
+      operationId: 'produce_cycle_b',
+      kind: 'mainline',
+      unlockWhen: { publicFact: 'cycleA' },
+      effects: {
+        publicFacts: ['cycleB'], roleFacts: [], unlockEntryIds: [], completeNodeIds: [], appendContentIds: []
+      }
+    }
+  );
+
+  const result = diagnoseStoryGraph({ contentBundle: bundle, endingCatalog: endings });
+  assert.ok(result.some(item => item.code === 'UNREACHABLE' && item.nodeId === 'file:archive.history_timeline'));
+});
+
 test('isolated visible story content is reported without treating endings as orphans', () => {
   const result = diagnoseStoryGraph({
     contentBundle: { terminalEntries: [], operations: [], dialogue: [], privateMissions: [], debrief: [] },
