@@ -29,6 +29,11 @@ test('broken authored references are reported in human language', () => {
   assert.match(broken.message, /missing\.story\.entry/);
 });
 
+test('canonical story has no unreachable warnings', () => {
+  const result = diagnoseStoryGraph({ contentBundle: cloneContent(), endingCatalog: endings });
+  assert.deepEqual(result.filter(item => item.code === 'UNREACHABLE'), []);
+});
+
 test('an impossible public fact prerequisite is reported as unreachable', () => {
   const bundle = cloneContent();
   const entry = bundle.terminalEntries.find(item => item.id === 'archive.history_timeline');
