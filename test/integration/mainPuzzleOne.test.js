@@ -32,6 +32,11 @@ async function action(jar, code, body) {
   return { status: response.status, body: await response.json() };
 }
 
+async function roomState(jar, code) {
+  const response = await jar.fetch(`${server.baseUrl}/api/rooms/${code}/state`);
+  return { status: response.status, body: await response.json() };
+}
+
 test('action API rejects missing identity and malformed actions without mutation', async () => {
   const { a, code } = await roomPair();
   const before = app.locals.roomStore.getRoom(code);
@@ -131,6 +136,34 @@ test('two roles solve Main 1; retries and completed steps cannot advance twice',
   assert.deepEqual(again.body.state.intercom, done.body.state.intercom);
 });
 
+test('ECHO gives a folder direction at opening and observes the next step', async () => {
+  const { a, code } = await roomPair();
+  const opening = await (await a.fetch(`${server.baseUrl}/api/rooms/${code}/state`)).json();
+  const openingTexts = opening.state.intercom.map(message => message.text);
+  assert.ok(openingTexts.some(text => text.includes('FILES') && text.includes('CASE FILES')));
+
+  const identity = await action(a, code, {
+    actionId: 'echo-navigation-identity', puzzleId: 'main1', stepId: 'identity', value: 'ORPHEUS-17'
+  });
+  assert.equal(identity.status, 200);
+  assert.equal(identity.body.state.publicProgress.stepId, 'startup');
+  assert.ok(identity.body.state.intercom.some(message =>
+    message.text.includes('A / PRIVATE') && message.text.includes('B / PRIVATE')));
+});
+
+test('private answer failures stay on the submitting player', async () => {
+  const { a, b, code } = await roomPair();
+  const failed = await action(a, code, {
+    actionId: 'private-failure-a', puzzleId: 'main1', stepId: 'identity', value: 'wrong'
+  });
+  assert.equal(failed.status, 200);
+  assert.ok(failed.body.state.intercom.some(message => message.text.includes('資料不符')));
+
+  const bState = await roomState(b, code);
+  assert.equal(bState.status, 200);
+  assert.doesNotMatch(JSON.stringify(bState.body.state.intercom), /資料不符/);
+});
+
 test('a public action advances both actor cursors and returns no audience metadata', async () => {
   const { a, b, code } = await roomPair();
   const endpoint = `${server.baseUrl}/api/rooms/${code}/state`;
@@ -195,4 +228,23 @@ test('terminal command route accepts authenticated HINT and rejects unsafe UNZIP
     actionId: 'terminal-unsafe', operationId: 'terminal_command', value: 'UNZIP ../secret.zip'
   });
   assert.equal(unsafe.status, 400);
+});
+
+test('Terminal mutation permissions stay private across the production route', async () => {
+  const { a, b, code } = await roomPair();
+  await action(a, code, { actionId: 'mutation-main1', operationId: 'complete_main1' });
+  await action(a, code, { actionId: 'mutation-open-a-report', operationId: 'open_entry', value: 'doc.a_incident_report' });
+  await action(b, code, { actionId: 'mutation-open-b-report', operationId: 'open_entry', value: 'doc.b_incident_report' });
+  const verified = await action(a, code, { actionId: 'mutation-verify-incident', operationId: 'verify_incident_timestamp' });
+  assert.equal(verified.status, 200);
+
+  const unlocked = await action(a, code, {
+    actionId: 'mutation-unlock-audit', operationId: 'terminal_command', value: 'UNLOCK hidden_audit.log'
+  });
+  assert.equal(unlocked.status, 200);
+  assert.match(unlocked.body.publicResult.output, /稽核|掛載/);
+  const aState = await roomState(a, code);
+  const bState = await roomState(b, code);
+  assert.ok(aState.body.state.workstation.files.entries.some(entry => entry.name === 'hidden_audit.log'));
+  assert.doesNotMatch(JSON.stringify(bState.body.state), /hidden_audit\.log|a\.audit\.read/);
 });
